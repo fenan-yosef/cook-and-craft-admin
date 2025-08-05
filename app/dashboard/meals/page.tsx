@@ -23,6 +23,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Search, MoreHorizontal, Plus, Edit, Trash2, Utensils, Zap, Eye } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { ProfileAvatar } from "@/components/profile-avatar"
 
 interface Recipe {
   id: number
@@ -255,6 +256,11 @@ export default function MealsPage() {
         <SidebarTrigger className="-ml-1" />
         <Separator orientation="vertical" className="mr-2 h-4" />
         <h1 className="text-lg font-semibold">Meals Management</h1>
+        <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="flex h-14 items-center justify-end px-4">
+            <ProfileAvatar />
+          </div>
+        </header>
       </header>
 
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">

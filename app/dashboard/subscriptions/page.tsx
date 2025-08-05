@@ -33,6 +33,7 @@ import {
   Clock,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { ProfileAvatar } from "@/components/profile-avatar"
 
 interface Subscription {
   id: number
@@ -219,6 +220,11 @@ export default function SubscriptionsPage() {
         <SidebarTrigger className="-ml-1" />
         <Separator orientation="vertical" className="mr-2 h-4" />
         <h1 className="text-lg font-semibold">Subscriptions Management</h1>
+        <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="flex h-14 items-center justify-end px-4">
+            <ProfileAvatar />
+          </div>
+        </header>
       </header>
 
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">

@@ -5,6 +5,9 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
 import { Users, ShoppingCart, MessageSquare, Calendar } from "lucide-react"
 import { useEffect, useState } from "react"
+import { ProfileAvatar } from "@/components/profile-avatar"
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
+import { redirect } from "next/navigation"
 
 interface DashboardStats {
   totalUsers: number
@@ -43,6 +46,11 @@ export default function DashboardPage() {
         <SidebarTrigger className="-ml-1" />
         <Separator orientation="vertical" className="mr-2 h-4" />
         <h1 className="text-lg font-semibold">Dashboard</h1>
+        <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="flex h-14 items-center justify-end px-4">
+            <ProfileAvatar />
+          </div>
+        </header>
       </div>
 
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">

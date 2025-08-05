@@ -12,6 +12,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Search, MoreHorizontal, UserCheck, UserX } from "lucide-react"
 import { apiService } from "@/lib/api-service"
 import { useToast } from "@/hooks/use-toast"
+import { ProfileAvatar } from "@/components/profile-avatar"
 
 interface User {
   id: number
@@ -113,6 +114,11 @@ export default function UsersPage() {
         <SidebarTrigger className="-ml-1" />
         <Separator orientation="vertical" className="mr-2 h-4" />
         <h1 className="text-lg font-semibold">Users Management</h1>
+        <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="flex h-14 items-center justify-end px-4">
+            <ProfileAvatar />
+          </div>
+        </header>
       </header>
 
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
