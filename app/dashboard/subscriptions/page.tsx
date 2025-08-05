@@ -216,17 +216,6 @@ export default function SubscriptionsPage() {
 
   return (
     <div className="flex flex-col">
-      <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
-        <SidebarTrigger className="-ml-1" />
-        <Separator orientation="vertical" className="mr-2 h-4" />
-        <h1 className="text-lg font-semibold">Subscriptions Management</h1>
-        <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="flex h-14 items-center justify-end px-4">
-            <ProfileAvatar />
-          </div>
-        </header>
-      </header>
-
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
         <div className="flex items-center justify-between">
           <h2 className="text-3xl font-bold tracking-tight">Subscriptions</h2>
@@ -525,3 +514,4 @@ export default function SubscriptionsPage() {
     </div>
   )
 }
+           

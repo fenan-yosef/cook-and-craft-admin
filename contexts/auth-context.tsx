@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext, useState, useEffect } from "react"
+import { createContext, useContext, useState, useEffect, useCallback } from "react"
 import { apiService } from "@/lib/api-service"
 import { isTokenExpired, clearAuthData } from "@/lib/auth-utils"
 
@@ -154,13 +154,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const updateUser = (userData: Partial<User>) => {
-    if (user) {
-      const updatedUser = { ...user, ...userData }
-      setUser(updatedUser)
-      localStorage.setItem("user", JSON.stringify(updatedUser))
-    }
-  }
+  const updateUser = useCallback((userData: Partial<User>) => {
+    setUser(prevUser => {
+      if (prevUser) {
+        // Prevent infinite loops by checking if an update is actually needed
+        const isChanged = Object.keys(userData).some(
+          key => userData[key as keyof User] !== prevUser[key as keyof User]
+        )
+
+        if (isChanged) {
+          const updatedUser = { ...prevUser, ...userData }
+          localStorage.setItem("user", JSON.stringify(updatedUser))
+          return updatedUser
+        }
+      }
+      return prevUser
+    })
+  }, [])
 
   const logout = () => {
     clearAuthData()

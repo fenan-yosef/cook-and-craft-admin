@@ -1,13 +1,9 @@
 "use client"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { SidebarTrigger } from "@/components/ui/sidebar"
-import { Separator } from "@/components/ui/separator"
 import { Users, ShoppingCart, MessageSquare, Calendar } from "lucide-react"
 import { useEffect, useState } from "react"
 import { ProfileAvatar } from "@/components/profile-avatar"
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
-import { redirect } from "next/navigation"
 
 interface DashboardStats {
   totalUsers: number
@@ -42,17 +38,6 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col">
-      <div className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
-        <SidebarTrigger className="-ml-1" />
-        <Separator orientation="vertical" className="mr-2 h-4" />
-        <h1 className="text-lg font-semibold">Dashboard</h1>
-        <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="flex h-14 items-center justify-end px-4">
-            <ProfileAvatar />
-          </div>
-        </header>
-      </div>
-
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
         <div className="flex items-center justify-between space-y-2">
           <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
@@ -173,3 +158,4 @@ export default function DashboardPage() {
     </div>
   )
 }
+                

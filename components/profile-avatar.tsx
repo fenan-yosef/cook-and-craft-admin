@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useAuth } from "@/contexts/auth-context"
+import { apiService } from "@/lib/api-service"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -26,7 +27,7 @@ import { useToast } from "@/hooks/use-toast"
 import { User, Settings, LogOut, Edit } from "lucide-react"
 
 export function ProfileAvatar() {
-  const { user, logout } = useAuth()
+  const { user, logout, updateUser } = useAuth()
   const { toast } = useToast()
   const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
@@ -37,6 +38,58 @@ export function ProfileAvatar() {
     newPassword: "",
     confirmPassword: "",
   })
+  const [isFetchingProfile, setIsFetchingProfile] = useState(true)
+
+  const fetchProfile = useCallback(async () => {
+    if (!user) {
+      setIsFetchingProfile(false)
+      return
+    }
+    setIsFetchingProfile(true)
+    try {
+      const response = await apiService.get("/admins/profile")
+      const adminProfile = response.data
+      if (adminProfile) {
+        const fullName = `${adminProfile.adminFirstName || ""} ${adminProfile.adminLastName || ""}`.trim()
+        const updatedUser = {
+          id: adminProfile.adminId,
+          name: fullName || user.name,
+          email: adminProfile.adminEmail || user.email,
+          role: user.role, // Keep existing role
+        }
+        updateUser(updatedUser) // Update user in AuthContext
+        setProfileData({
+          ...profileData,
+          name: updatedUser.name,
+          email: updatedUser.email,
+        })
+      }
+    } catch (error) {
+      console.error("Failed to fetch admin profile:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load profile data.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsFetchingProfile(false)
+    }
+  }, [user, updateUser, toast, profileData])
+
+  useEffect(() => {
+    fetchProfile()
+  }, [fetchProfile])
+
+  useEffect(() => {
+    // Update profileData state when user context changes
+    if (user) {
+      setProfileData((prev) => ({
+        ...prev,
+        name: user.name,
+        email: user.email,
+      }))
+    }
+  }, [user])
 
   if (!user) return null
 
@@ -56,7 +109,7 @@ export function ProfileAvatar() {
         if (profileData.newPassword !== profileData.confirmPassword) {
           toast({
             title: "Error",
-            description: "New passwords don't match",
+            description: "New passwords don't match.",
             variant: "destructive",
           })
           return
@@ -64,32 +117,34 @@ export function ProfileAvatar() {
         if (profileData.newPassword.length < 8) {
           toast({
             title: "Error",
-            description: "Password must be at least 8 characters long",
+            description: "Password must be at least 8 characters long.",
             variant: "destructive",
           })
           return
         }
       }
 
-      // In a real app, you would make an API call here
-      // await apiService.put("/admin/profile", {
-      //   name: profileData.name,
+      // In a real app, you would make an API call here to update the profile
+      // For example:
+      // await apiService.put("/admins/profile", {
+      //   first_name: profileData.name.split(' ')[0], // Assuming name can be split
+      //   last_name: profileData.name.split(' ')[1] || '',
       //   email: profileData.email,
       //   current_password: profileData.currentPassword,
       //   new_password: profileData.newPassword,
-      // })
+      // });
 
-      // Update local user data
+      // Simulate API call success and update local user data
       const updatedUser = {
         ...user,
         name: profileData.name,
         email: profileData.email,
       }
-      localStorage.setItem("user", JSON.stringify(updatedUser))
+      updateUser(updatedUser) // Update user in AuthContext and localStorage
 
       toast({
         title: "Success",
-        description: "Profile updated successfully",
+        description: "Profile updated successfully.",
       })
 
       setIsEditing(false)
@@ -100,9 +155,10 @@ export function ProfileAvatar() {
         confirmPassword: "",
       })
     } catch (error) {
+      console.error("Profile update error:", error)
       toast({
         title: "Error",
-        description: "Failed to update profile",
+        description: "Failed to update profile.",
         variant: "destructive",
       })
     }
@@ -126,7 +182,9 @@ export function ProfileAvatar() {
           <Button variant="ghost" className="relative h-8 w-8 rounded-full">
             <Avatar className="h-8 w-8">
               <AvatarImage src="/placeholder.svg" alt={user.name} />
-              <AvatarFallback className="bg-primary text-primary-foreground">{getInitials(user.name)}</AvatarFallback>
+              <AvatarFallback className="bg-primary text-primary-foreground">
+                {isFetchingProfile ? "..." : getInitials(user.name)}
+              </AvatarFallback>
             </Avatar>
           </Button>
         </DropdownMenuTrigger>
