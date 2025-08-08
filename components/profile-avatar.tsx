@@ -1,8 +1,7 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { apiService } from "@/lib/api-service"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -38,47 +37,6 @@ export function ProfileAvatar() {
     newPassword: "",
     confirmPassword: "",
   })
-  const [isFetchingProfile, setIsFetchingProfile] = useState(true)
-
-  const fetchProfile = useCallback(async () => {
-    if (!user) {
-      setIsFetchingProfile(false)
-      return
-    }
-    setIsFetchingProfile(true)
-    try {
-      const response = await apiService.get("/admins/profile")
-      const adminProfile = response.data
-      if (adminProfile) {
-        const fullName = `${adminProfile.adminFirstName || ""} ${adminProfile.adminLastName || ""}`.trim()
-        const updatedUser = {
-          id: adminProfile.adminId,
-          name: fullName || user.name,
-          email: adminProfile.adminEmail || user.email,
-          role: user.role, // Keep existing role
-        }
-        updateUser(updatedUser) // Update user in AuthContext
-        setProfileData({
-          ...profileData,
-          name: updatedUser.name,
-          email: updatedUser.email,
-        })
-      }
-    } catch (error) {
-      console.error("Failed to fetch admin profile:", error)
-      toast({
-        title: "Error",
-        description: "Failed to load profile data.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsFetchingProfile(false)
-    }
-  }, [user, updateUser, toast, profileData])
-
-  useEffect(() => {
-    fetchProfile()
-  }, [fetchProfile])
 
   useEffect(() => {
     // Update profileData state when user context changes
@@ -94,6 +52,7 @@ export function ProfileAvatar() {
   if (!user) return null
 
   const getInitials = (name: string) => {
+    if (!name) return "NA"
     return name
       .split(" ")
       .map((n) => n[0])
@@ -183,7 +142,7 @@ export function ProfileAvatar() {
             <Avatar className="h-8 w-8">
               <AvatarImage src="/placeholder.svg" alt={user.name} />
               <AvatarFallback className="bg-primary text-primary-foreground">
-                {isFetchingProfile ? "..." : getInitials(user.name)}
+                {getInitials(user.name)}
               </AvatarFallback>
             </Avatar>
           </Button>

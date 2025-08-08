@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
@@ -13,6 +13,16 @@ import { Search, MoreHorizontal, Plus, Edit, Trash2 } from "lucide-react"
 import { apiService } from "@/lib/api-service"
 import { useToast } from "@/hooks/use-toast"
 import { ProfileAvatar } from "@/components/profile-avatar"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { fi } from "date-fns/locale"
 
 interface Product {
   id: number
@@ -22,6 +32,7 @@ interface Product {
   stock: number
   status: "active" | "inactive"
   created_at: string
+  images?: string[] // Add images field (array of URLs)
 }
 
 export default function ProductsPage() {
@@ -29,6 +40,21 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const { toast } = useToast()
+
+  // Add Product Modal State
+  const [isAddOpen, setIsAddOpen] = useState(false)
+  const [addLoading, setAddLoading] = useState(false)
+  const [addForm, setAddForm] = useState({
+    name: "",
+    description: "",
+    price: "",
+    quantity: "",
+    is_active: false,
+    is_private: false,
+    images: [] as File[],
+  })
+  const [imagePreviews, setImagePreviews] = useState<string[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetchProducts()
@@ -38,7 +64,18 @@ export default function ProductsPage() {
     try {
       setLoading(true)
       const response = await apiService.get("/admins/products")
-      setProducts(response.data)
+      const mappedProducts: Product[] = (response.data || []).map((item: any) => ({
+        id: item.productId,
+        name: item.productName,
+        description: item.productSku,
+        price: item.productPrice,
+        stock: item.productAvailableQuantity,
+        status: item.isProductActive ? "active" : "inactive",
+        created_at: item.createdAt || new Date().toISOString(),
+        // Use the correct property for image URL (adjust as per your API, e.g. imageUrl, url, or path)
+        images: item.productImages?.map((img: any) => img.imageUrl || img.url || img.path || img) || [],
+      }))
+      setProducts(mappedProducts)
     } catch (error) {
       // Mock data for demonstration
       const mockProducts: Product[] = [
@@ -50,6 +87,7 @@ export default function ProductsPage() {
           stock: 150,
           status: "active",
           created_at: "2024-01-15T10:30:00Z",
+          images: [],
         },
         {
           id: 2,
@@ -59,6 +97,7 @@ export default function ProductsPage() {
           stock: 0,
           status: "inactive",
           created_at: "2024-01-10T09:15:00Z",
+          images: [],
         },
       ]
       setProducts(mockProducts)
@@ -67,10 +106,92 @@ export default function ProductsPage() {
     }
   }
 
+  // Handle Add Product Form Changes
+  const handleAddChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const target = e.target as HTMLInputElement
+    const { name, value, type } = target
+    setAddForm((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? target.checked : value,
+    }))
+  }
+
+  // Handle Images
+  const handleImagesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    setAddForm((prev) => ({
+      ...prev,
+      images: files,
+    }))
+    // Preview
+    setImagePreviews(files.map((file) => URL.createObjectURL(file)))
+  }
+
+  // Reset Add Product Form
+  const resetAddForm = () => {
+    setAddForm({
+      name: "",
+      description: "",
+      price: "",
+      quantity: "",
+      is_active: false,
+      is_private: false,
+      images: [],
+    })
+    setImagePreviews([])
+    if (fileInputRef.current) fileInputRef.current.value = ""
+  }
+
+  // Submit Add Product
+  const handleAddProduct = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setAddLoading(true)
+    try {
+      const formData = new FormData()
+      formData.append("name", addForm.name)
+      formData.append("description", addForm.description)
+      formData.append("price", addForm.price)
+      formData.append("quantity", addForm.quantity)
+      formData.append("is_active", addForm.is_active ? "1" : "0")
+      formData.append("is_private", addForm.is_private ? "1" : "0")
+      addForm.images.forEach((file) => formData.append("images[]", file))
+
+      // Use fetch directly for multipart/form-data
+      const res = await fetch("https://cook-craft.dhcb.io/api/products", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}`,
+        },
+        body: formData,
+      })
+
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.message || "Failed to add product")
+      }
+
+      toast({
+        title: "Success",
+        description: "Product added successfully.",
+      })
+      setIsAddOpen(false)
+      resetAddForm()
+      fetchProducts()
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message || "Failed to add product.",
+        variant: "destructive",
+      })
+    } finally {
+      setAddLoading(false)
+    }
+  }
+
   const filteredProducts = products.filter(
     (product) =>
-      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.description.toLowerCase().includes(searchTerm.toLowerCase()),
+      (product.name?.toLowerCase() ?? "").includes(searchTerm.toLowerCase()) ||
+      (product.description?.toLowerCase() ?? "").includes(searchTerm.toLowerCase()),
   )
 
   return (
@@ -78,11 +199,121 @@ export default function ProductsPage() {
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
         <div className="flex items-center justify-between">
           <h2 className="text-3xl font-bold tracking-tight">Products</h2>
-          <Button>
+          <Button onClick={() => setIsAddOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Add Product
           </Button>
         </div>
+
+        {/* Add Product Modal */}
+        <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) resetAddForm() }}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Add Product</DialogTitle>
+              <DialogDescription>Fill in the product details below.</DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleAddProduct} className="space-y-4">
+              <div>
+                <Label htmlFor="name">Name</Label>
+                <Input
+                  id="name"
+                  name="name"
+                  value={addForm.name}
+                  onChange={handleAddChange}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="description">Description</Label>
+                <Input
+                  id="description"
+                  name="description"
+                  value={addForm.description}
+                  onChange={handleAddChange}
+                  required
+                />
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <Label htmlFor="price">Price</Label>
+                  <Input
+                    id="price"
+                    name="price"
+                    type="number"
+                    min="0"
+                    value={addForm.price}
+                    onChange={handleAddChange}
+                    required
+                  />
+                </div>
+                <div className="flex-1">
+                  <Label htmlFor="quantity">Quantity</Label>
+                  <Input
+                    id="quantity"
+                    name="quantity"
+                    type="number"
+                    min="0"
+                    value={addForm.quantity}
+                    onChange={handleAddChange}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <input
+                    id="is_active"
+                    name="is_active"
+                    type="checkbox"
+                    checked={addForm.is_active}
+                    onChange={handleAddChange}
+                  />
+                  <Label htmlFor="is_active">Active</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="is_private"
+                    name="is_private"
+                    type="checkbox"
+                    checked={addForm.is_private}
+                    onChange={handleAddChange}
+                  />
+                  <Label htmlFor="is_private">Private</Label>
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="images">Images</Label>
+                <Input
+                  id="images"
+                  name="images"
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  onChange={handleImagesChange}
+                  ref={fileInputRef}
+                />
+                <div className="flex gap-2 mt-2 flex-wrap">
+                  {imagePreviews.map((src, idx) => (
+                    <img
+                      key={idx}
+                      src={src}
+                      alt={`preview-${idx}`}
+                      className="w-16 h-16 object-cover rounded border"
+                    />
+                  ))}
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={addLoading}>
+                  {addLoading ? "Adding..." : "Add Product"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
 
         <Card>
           <CardHeader>
@@ -106,7 +337,7 @@ export default function ProductsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
-                  <TableHead>Description</TableHead>
+                  <TableHead>Image</TableHead>
                   <TableHead>Price</TableHead>
                   <TableHead>Stock</TableHead>
                   <TableHead>Status</TableHead>
@@ -131,8 +362,20 @@ export default function ProductsPage() {
                   filteredProducts.map((product) => (
                     <TableRow key={product.id}>
                       <TableCell className="font-medium">{product.name}</TableCell>
-                      <TableCell className="max-w-xs truncate">{product.description}</TableCell>
-                      <TableCell>${product.price.toFixed(2)}</TableCell>
+                      <TableCell>
+                        {product.images && product.images.length > 0 ? (
+                          <img
+                            src={product.images[0]}
+                            alt={product.name}
+                            className="w-12 h-12 object-cover rounded border"
+                          />
+                        ) : (
+                          <span className="text-xs text-muted-foreground">No Image</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {typeof product.price === "number" ? `$${product.price.toFixed(2)}` : "N/A"}
+                      </TableCell>
                       <TableCell>
                         <Badge variant={product.stock > 0 ? "default" : "destructive"}>{product.stock}</Badge>
                       </TableCell>
@@ -170,4 +413,3 @@ export default function ProductsPage() {
     </div>
   )
 }
-                    

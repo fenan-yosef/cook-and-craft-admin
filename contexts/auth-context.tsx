@@ -1,192 +1,137 @@
 "use client"
 
-import type React from "react"
-import { createContext, useContext, useState, useEffect, useCallback } from "react"
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react"
 import { apiService } from "@/lib/api-service"
-import { isTokenExpired, clearAuthData } from "@/lib/auth-utils"
 
-interface User {
+type User = {
   id: number
   name: string
   email: string
   role: string
 }
 
-interface AuthContextType {
+type AuthContextType = {
   user: User | null
+  isLoading: boolean
   login: (email: string, password: string) => Promise<void>
   logout: () => void
-  updateUser: (userData: Partial<User>) => void
-  isLoading: boolean
+  updateUser: (user: User) => void
+  token: string | null
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+const AUTH_TOKEN_KEY = "auth_token"
+const AUTH_USER_KEY = "auth_user"
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
+  const [token, setToken] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
+  // Load token and user from localStorage on mount
   useEffect(() => {
-    // Check if user is already logged in
-    const token = localStorage.getItem("token")
-    const savedUser = localStorage.getItem("user")
-
-    if (token && savedUser) {
-      // Check if token is expired
-      if (isTokenExpired(token)) {
-        clearAuthData()
+    const storedToken = typeof window !== "undefined" ? localStorage.getItem(AUTH_TOKEN_KEY) : null
+    const storedUser = typeof window !== "undefined" ? localStorage.getItem(AUTH_USER_KEY) : null
+    if (storedToken) {
+      setToken(storedToken)
+      apiService.setAuthToken(storedToken)
+    }
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser))
         setIsLoading(false)
-        return
+      } catch {
+        setUser(null)
+        setIsLoading(false)
       }
-
-      try {
-        apiService.setAuthToken(token)
-        setUser(JSON.parse(savedUser))
-      } catch (error) {
-        console.error("Error parsing saved user data:", error)
-        clearAuthData()
-      }
+    } else if (storedToken) {
+      // Fetch profile only once if user not in cache
+      fetchProfile(storedToken)
+    } else {
+      setIsLoading(false)
     }
-    setIsLoading(false)
+    // eslint-disable-next-line
   }, [])
 
-  const login = async (email: string, password: string) => {
+  const fetchProfile = useCallback(async (tokenToUse: string) => {
+    setIsLoading(true)
     try {
-      console.log("Attempting login with:", { email, endpoint: "https://cook-craft.dhcb.io/api/admins/sign-in" })
-
-      const response = await fetch("https://cook-craft.dhcb.io/api/admins/sign-in", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          Accept: "application/json",
-        },
-        body: new URLSearchParams({
-          email: email,
-          password: password,
-        }),
-      })
-
-      console.log("Response status:", response.status)
-      console.log("Response headers:", Object.fromEntries(response.headers.entries()))
-
-      // Get response text first to see what we're actually receiving
-      const responseText = await response.text()
-      console.log("Raw response:", responseText)
-
-      if (!response.ok) {
-        let errorMessage = `HTTP ${response.status}: ${response.statusText}`
-
-        try {
-          const errorData = JSON.parse(responseText)
-          errorMessage = errorData.message || errorData.error || errorMessage
-        } catch (parseError) {
-          // If response isn't JSON, use the raw text or status
-          errorMessage = responseText || errorMessage
+      apiService.setAuthToken(tokenToUse)
+      const response = await apiService.get("/admins/profile")
+      const adminProfile = response.data
+      if (adminProfile) {
+        const fullName = `${adminProfile.adminFirstName || ""} ${adminProfile.adminLastName || ""}`.trim()
+        const loadedUser: User = {
+          id: adminProfile.adminId,
+          name: fullName || adminProfile.adminEmail,
+          email: adminProfile.adminEmail,
+          role: adminProfile.adminRole || "admin",
         }
-
-        throw new Error(errorMessage)
+        setUser(loadedUser)
+        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(loadedUser))
       }
-
-      // Try to parse the response as JSON
-      let data
-      try {
-        data = JSON.parse(responseText)
-      } catch (parseError) {
-        console.error("Failed to parse response as JSON:", parseError)
-        throw new Error("Invalid response format from server")
-      }
-
-      console.log("Parsed response data:", data)
-
-      // Handle the specific response structure where token is directly in data field
-      let token, adminData
-
-      // Check if data field contains the token directly as a string
-      if (typeof data.data === "string" && data.data.includes("|")) {
-        // This looks like a Laravel Sanctum token
-        token = data.data
-        adminData = null // No admin data provided in this format
-      } else if (data.token) {
-        token = data.token
-        adminData = data.admin || data.user || data.data
-      } else if (data.access_token) {
-        token = data.access_token
-        adminData = data.admin || data.user || data.data
-      } else if (data.data && typeof data.data === "object" && data.data.token) {
-        token = data.data.token
-        adminData = data.data.admin || data.data.user || data.data
-      } else {
-        console.error("No token found in response:", data)
-        throw new Error("No authentication token received from server")
-      }
-
-      if (!token) {
-        throw new Error("Authentication token not found in response")
-      }
-
-      console.log("Login successful, token received:", token.substring(0, 10) + "...")
-
-      localStorage.setItem("token", token)
-      apiService.setAuthToken(token)
-
-      // Create user object with fallbacks
-      const userData = {
-        id: adminData?.id || 1,
-        name: adminData?.name || adminData?.first_name || "Admin User",
-        email: adminData?.email || email,
-        role: "admin",
-      }
-
-      localStorage.setItem("user", JSON.stringify(userData))
-      setUser(userData)
-    } catch (error) {
-      console.error("Login error details:", error)
-      clearAuthData()
-
-      // Provide more specific error messages
-      if (error instanceof TypeError && error.message.includes("fetch")) {
-        throw new Error("Network error: Unable to connect to the server. Please check your internet connection.")
-      } else if (error instanceof Error) {
-        throw error
-      } else {
-        throw new Error("An unexpected error occurred during login")
-      }
+    } catch {
+      setUser(null)
+      localStorage.removeItem(AUTH_USER_KEY)
+      localStorage.removeItem(AUTH_TOKEN_KEY)
+      setToken(null)
+    } finally {
+      setIsLoading(false)
     }
-  }
-
-  const updateUser = useCallback((userData: Partial<User>) => {
-    setUser(prevUser => {
-      if (prevUser) {
-        // Prevent infinite loops by checking if an update is actually needed
-        const isChanged = Object.keys(userData).some(
-          key => userData[key as keyof User] !== prevUser[key as keyof User]
-        )
-
-        if (isChanged) {
-          const updatedUser = { ...prevUser, ...userData }
-          localStorage.setItem("user", JSON.stringify(updatedUser))
-          return updatedUser
-        }
-      }
-      return prevUser
-    })
   }, [])
 
-  const logout = () => {
-    clearAuthData()
-    apiService.setAuthToken(null)
-    setUser(null)
-    // Redirect to login page
-    window.location.href = "/login"
-  }
+  // Update login to perform the API call and store token
+  const login = useCallback(async (email: string, password: string) => {
+    setIsLoading(true)
+    try {
+      // Use correct field names for API
+      const response = await apiService.postFormData("/admins/sign-in", {
+        email,
+        password,
+      })
+      console.log("API login response:", response)
+      if (!response.data) throw new Error("No data received from API")
+      // Extract token from correct field
+      const token = response.data // fallback for your API
+      if (!token) throw new Error("No token received from API")
+      setToken(token)
+      apiService.setAuthToken(token)
+      localStorage.setItem(AUTH_TOKEN_KEY, token)
+      await fetchProfile(token)
+    } catch (err: any) {
+      setUser(null)
+      setToken(null)
+      localStorage.removeItem(AUTH_TOKEN_KEY)
+      localStorage.removeItem(AUTH_USER_KEY)
+      throw err
+    } finally {
+      setIsLoading(false)
+    }
+  }, [fetchProfile])
 
-  return <AuthContext.Provider value={{ user, login, logout, updateUser, isLoading }}>{children}</AuthContext.Provider>
+  const logout = useCallback(() => {
+    setUser(null)
+    setToken(null)
+    localStorage.removeItem(AUTH_TOKEN_KEY)
+    localStorage.removeItem(AUTH_USER_KEY)
+    apiService.setAuthToken(null)
+  }, [])
+
+  const updateUser = useCallback((updatedUser: User) => {
+    setUser(updatedUser)
+    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(updatedUser))
+  }, [])
+
+  return (
+    <AuthContext.Provider value={{ user, isLoading, login, logout, updateUser, token }}>
+      {children}
+    </AuthContext.Provider>
+  )
 }
 
 export function useAuth() {
   const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider")
-  }
+  if (!context) throw new Error("useAuth must be used within AuthProvider")
   return context
 }
