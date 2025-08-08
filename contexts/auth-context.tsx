@@ -85,15 +85,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(async (email: string, password: string) => {
     setIsLoading(true)
     try {
-      // Use correct field names for API
       const response = await apiService.postFormData("/admins/sign-in", {
         email,
         password,
       })
       console.log("API login response:", response)
-      if (!response.data) throw new Error("No data received from API")
-      // Extract token from correct field
-      const token = response.data // fallback for your API
+      // Extract token from response.data.adminToken
+      const token = response.data?.adminToken
       if (!token) throw new Error("No token received from API")
       setToken(token)
       apiService.setAuthToken(token)
@@ -133,5 +131,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext)
   if (!context) throw new Error("useAuth must be used within AuthProvider")
+return context
   return context
 }
