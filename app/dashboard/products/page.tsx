@@ -56,6 +56,23 @@ export default function ProductsPage() {
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Edit Product Modal State
+  const [isEditOpen, setIsEditOpen] = useState(false)
+  const [editLoading, setEditLoading] = useState(false)
+  const [editForm, setEditForm] = useState({
+    id: "",
+    name: "",
+    description: "",
+    price: "",
+    quantity: "",
+    is_active: false,
+    is_private: false,
+    images: [] as File[],
+    existingImages: [] as string[],
+  })
+  const [editImagePreviews, setEditImagePreviews] = useState<string[]>([])
+  const editFileInputRef = useRef<HTMLInputElement>(null)
+
   useEffect(() => {
     fetchProducts()
   }, [])
@@ -188,6 +205,101 @@ export default function ProductsPage() {
     }
   }
 
+  // Open Edit Modal and pre-fill fields
+  const openEditModal = (product: Product) => {
+    setEditForm({
+      id: String(product.id),
+      name: product.name,
+      description: product.description,
+      price: String(product.price),
+      quantity: String(product.stock),
+      is_active: product.status === "active",
+      is_private: false, // You may need to map this from API if available
+      images: [],
+      existingImages: product.images || [],
+    })
+    setEditImagePreviews(product.images || [])
+    setIsEditOpen(true)
+  }
+
+  // Handle Edit Product Form Changes
+  const handleEditChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const target = e.target as HTMLInputElement
+    const { name, value, type } = target
+    setEditForm((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? target.checked : value,
+    }))
+  }
+
+  // Handle Edit Images
+  const handleEditImagesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    setEditForm((prev) => ({
+      ...prev,
+      images: files,
+    }))
+    setEditImagePreviews([
+      ...(editForm.existingImages || []),
+      ...files.map((file) => URL.createObjectURL(file)),
+    ])
+  }
+
+  // Reset Edit Product Form
+  const resetEditForm = () => {
+    setEditForm({
+      id: "",
+      name: "",
+      description: "",
+      price: "",
+      quantity: "",
+      is_active: false,
+      is_private: false,
+      images: [],
+      existingImages: [],
+    })
+    setEditImagePreviews([])
+    if (editFileInputRef.current) editFileInputRef.current.value = ""
+  }
+
+  // Submit Edit Product
+  const handleEditProduct = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setEditLoading(true)
+    try {
+      const payload = {
+        name: editForm.name,
+        description: editForm.description,
+        price: Number(editForm.price),
+        quantity: Number(editForm.quantity),
+        is_active: editForm.is_active ? 1 : 0,
+        is_private: editForm.is_private ? 1 : 0,
+        // images: not supported in JSON PATCH, only for FormData
+      }
+
+      // Use /products/{id} endpoint for PATCH
+      const response = await apiService.patchJson(`/products/${editForm.id}`, payload)
+      console.log("PATCH response:", response)
+
+      toast({
+        title: "Success",
+        description: "Product updated successfully.",
+      })
+      setIsEditOpen(false)
+      resetEditForm()
+      fetchProducts()
+    } catch (err: any) {
+      console.error("Product update error:", err)
+      toast({
+        title: "Error",
+        description: err.message || "Failed to update product.",
+        variant: "destructive",
+      })
+    } finally {
+      setEditLoading(false)
+    }
+  }
+
   const filteredProducts = products.filter(
     (product) =>
       (product.name?.toLowerCase() ?? "").includes(searchTerm.toLowerCase()) ||
@@ -315,6 +427,116 @@ export default function ProductsPage() {
           </DialogContent>
         </Dialog>
 
+        {/* Edit Product Modal */}
+        <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if (!open) resetEditForm() }}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Edit Product</DialogTitle>
+              <DialogDescription>Update the product details below.</DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleEditProduct} className="space-y-4">
+              <div>
+                <Label htmlFor="edit_name">Name</Label>
+                <Input
+                  id="edit_name"
+                  name="name"
+                  value={editForm.name}
+                  onChange={handleEditChange}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit_description">Description</Label>
+                <Input
+                  id="edit_description"
+                  name="description"
+                  value={editForm.description}
+                  onChange={handleEditChange}
+                  required
+                />
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <Label htmlFor="edit_price">Price</Label>
+                  <Input
+                    id="edit_price"
+                    name="price"
+                    type="number"
+                    min="0"
+                    value={editForm.price}
+                    onChange={handleEditChange}
+                    required
+                  />
+                </div>
+                <div className="flex-1">
+                  <Label htmlFor="edit_quantity">Quantity</Label>
+                  <Input
+                    id="edit_quantity"
+                    name="quantity"
+                    type="number"
+                    min="0"
+                    value={editForm.quantity}
+                    onChange={handleEditChange}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <input
+                    id="edit_is_active"
+                    name="is_active"
+                    type="checkbox"
+                    checked={editForm.is_active}
+                    onChange={handleEditChange}
+                  />
+                  <Label htmlFor="edit_is_active">Active</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="edit_is_private"
+                    name="is_private"
+                    type="checkbox"
+                    checked={editForm.is_private}
+                    onChange={handleEditChange}
+                  />
+                  <Label htmlFor="edit_is_private">Private</Label>
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="edit_images">Images</Label>
+                <Input
+                  id="edit_images"
+                  name="images"
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  onChange={handleEditImagesChange}
+                  ref={editFileInputRef}
+                />
+                <div className="flex gap-2 mt-2 flex-wrap">
+                  {editImagePreviews.map((src, idx) => (
+                    <img
+                      key={idx}
+                      src={src}
+                      alt={`preview-edit-${idx}`}
+                      className="w-16 h-16 object-cover rounded border"
+                    />
+                  ))}
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={editLoading}>
+                  {editLoading ? "Saving..." : "Save Changes"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
         <Card>
           <CardHeader>
             <CardTitle>All Products</CardTitle>
@@ -391,7 +613,7 @@ export default function ProductsPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openEditModal(product)}>
                               <Edit className="mr-2 h-4 w-4" />
                               Edit
                             </DropdownMenuItem>

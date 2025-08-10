@@ -101,6 +101,26 @@ class ApiService {
     return response.json()
   }
 
+  async patchJson(endpoint: string, data: any) {
+    const response = await fetch(`${this.baseURL}${endpoint}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: this.authToken ? `Bearer ${this.authToken}` : "",
+      },
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`PATCH API Error: ${response.status} - ${errorText}`)
+      throw new Error(errorText || `HTTP error! status: ${response.status}`)
+    }
+
+    return response.json()
+  }
+
   async put(endpoint: string, data?: any) {
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       method: "PUT",
