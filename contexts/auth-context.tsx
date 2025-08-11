@@ -1,7 +1,7 @@
-"use client"
+
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react"
-import { apiService } from "@/lib/api-service"
+import { apiService } from "../lib/api-service"
 
 type User = {
   id: number
@@ -24,15 +24,15 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 const AUTH_TOKEN_KEY = "auth_token"
 const AUTH_USER_KEY = "auth_user"
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null)
   const [token, setToken] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   // Load token and user from localStorage on mount
   useEffect(() => {
-    const storedToken = typeof window !== "undefined" ? localStorage.getItem(AUTH_TOKEN_KEY) : null
-    const storedUser = typeof window !== "undefined" ? localStorage.getItem(AUTH_USER_KEY) : null
+    const storedToken = localStorage.getItem(AUTH_TOKEN_KEY)
+    const storedUser = localStorage.getItem(AUTH_USER_KEY)
     if (storedToken) {
       setToken(storedToken)
       apiService.setAuthToken(storedToken)
