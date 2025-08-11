@@ -1,11 +1,12 @@
 import React from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import DashboardLayout from "./DashboardLayout";
+import DashboardPage from "./DashboardPage";
 import ProductsPage from "./ProductsPage";
 import UsersPage from "./UsersPage";
 import ReportsPage from "./ReportsPage";
 import SubscriptionsPage from "./SubscriptionsPage";
 import LoginPage from "./LoginPage";
-import DashboardLayout from "./DashboardLayout";
 import CouponsPage from "./CouponsPage";
 import DeliveryZonesPage from "./DeliveryZonesPage";
 import MealsPage from "./MealsPage";
@@ -19,20 +20,20 @@ const App: React.FC = () => (
   <Router>
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route element={<DashboardLayout />}>
-        <Route path="/products" element={<ProductsPage />} />
-        <Route path="/users" element={<UsersPage />} />
-        <Route path="/reports" element={<ReportsPage />} />
-        <Route path="/subscriptions" element={<SubscriptionsPage />} />
-        <Route path="/recipes" element={<RecipesPage />} />
-        <Route path="/preferences" element={<PreferencesPage />} />
-        <Route path="/posts" element={<PostsPage />} />
-        <Route path="/orders" element={<OrdersPage />} />
-        <Route path="/metrics" element={<MetricsPage />} />
-        <Route path="/meals" element={<MealsPage />} />
-        <Route path="/delivery-zones" element={<DeliveryZonesPage />} />
-        <Route path="/coupons" element={<CouponsPage />} />
-        <Route path="/" element={<Navigate to="/products" replace />} />
+      <Route path="/" element={<DashboardLayout />}>
+        <Route index element={<DashboardPage />} />
+        <Route path="products" element={<ProductsPage />} />
+        <Route path="users" element={<UsersPage />} />
+        <Route path="reports" element={<ReportsPage />} />
+        <Route path="subscriptions" element={<SubscriptionsPage />} />
+        <Route path="coupons" element={<CouponsPage />} />
+        <Route path="delivery-zones" element={<DeliveryZonesPage />} />
+        <Route path="meals" element={<MealsPage />} />
+        <Route path="metrics" element={<MetricsPage />} />
+        <Route path="orders" element={<OrdersPage />} />
+        <Route path="posts" element={<PostsPage />} />
+        <Route path="preferences" element={<PreferencesPage />} />
+        <Route path="recipes" element={<RecipesPage />} />
       </Route>
     </Routes>
   </Router>
