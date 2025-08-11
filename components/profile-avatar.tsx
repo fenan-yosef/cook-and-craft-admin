@@ -26,7 +26,7 @@ import { useToast } from "@/hooks/use-toast"
 import { User, Settings, LogOut, Edit } from "lucide-react"
 
 export function ProfileAvatar() {
-  const { user, logout, updateUser } = useAuth()
+  const { user, logout, updateUser } = useAuth() || {};
   const { toast } = useToast()
   const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
@@ -99,7 +99,7 @@ export function ProfileAvatar() {
         name: profileData.name,
         email: profileData.email,
       }
-      updateUser(updatedUser) // Update user in AuthContext and localStorage
+      updateUser?.(updatedUser) // Update user in AuthContext and localStorage
 
       toast({
         title: "Success",

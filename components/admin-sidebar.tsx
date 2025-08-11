@@ -108,7 +108,9 @@ const menuItems = [
 
 export function AdminSidebar() {
   const pathname = usePathname()
-  const { user, logout } = useAuth()
+  const auth = useAuth()
+  const user = auth?.user
+  const logout = auth?.logout
 
   return (
     <Sidebar>
@@ -185,7 +187,13 @@ export function AdminSidebar() {
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <Button variant="ghost" className="w-full justify-start" onClick={logout}>
+            <Button
+              variant="ghost"
+              className="w-full justify-start"
+              onClick={() => {
+                if (logout) logout();
+              }}
+            >
               <LogOut className="mr-2 h-4 w-4" />
               Logout
             </Button>
