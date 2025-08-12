@@ -7,15 +7,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Search, MoreHorizontal, MapPin, Edit, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { apiService } from "@/lib/api-service";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 
 interface DeliveryZone {
   id: number;
   name: string;
-  city: string;
-  postal_code: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
+  scope: string;
+  locations: { latitude: number; longitude: number }[];
+  fee: number;
+  isEnabled: boolean;
+  days: string[];
 }
 
 export default function DeliveryZonesPage() {
@@ -24,41 +27,41 @@ export default function DeliveryZonesPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
 
+  // Add Zone modal state
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [addLoading, setAddLoading] = useState(false);
+  const [addForm, setAddForm] = useState({ name: "", scope: "", locationsCsv: "", fee: "", isEnabled: false, daysCsv: "" });
+  // Edit Zone modal state
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
+  const [editForm, setEditForm] = useState({ id: "", name: "", scope: "", locationsCsv: "", fee: "", isEnabled: false, daysCsv: "" });
+
   useEffect(() => {
+    const token = localStorage.getItem("auth_token") || "";
+    apiService.setAuthToken(token);
     fetchZones();
   }, []);
 
   const fetchZones = async () => {
     try {
       setLoading(true);
-      // Mock data for demonstration
-      const mockZones: DeliveryZone[] = [
-        {
-          id: 1,
-          name: "Downtown",
-          city: "New York",
-          postal_code: "10001",
-          is_active: true,
-          created_at: "2025-08-01T10:00:00Z",
-          updated_at: "2025-08-01T10:00:00Z",
-        },
-        {
-          id: 2,
-          name: "Uptown",
-          city: "New York",
-          postal_code: "10002",
-          is_active: false,
-          created_at: "2025-08-02T11:00:00Z",
-          updated_at: "2025-08-02T11:00:00Z",
-        },
-      ];
-      setZones(mockZones);
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to fetch delivery zones",
-        variant: "destructive",
-      });
+      const response = await apiService.get("/delivery-zones");
+      if (Array.isArray(response.data)) {
+        const mapped = response.data.map((item: any) => ({
+          id: item.deliveryZoneId,
+          name: item.deliveryZoneName,
+          scope: item.deliveryZoneScope,
+          locations: item.deliveryZoneGeographicalLocation || [],
+          fee: item.deliveryZoneFee,
+          isEnabled: Boolean(item.isDeliveryZoneEnabled),
+          days: item.deliveryZoneDays || [],
+        }));
+        setZones(mapped);
+      } else {
+        throw new Error(response.message || "Failed to fetch zones");
+      }
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Failed to fetch delivery zones", variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -67,19 +70,114 @@ export default function DeliveryZonesPage() {
   const filteredZones = zones.filter(
     (zone) =>
       zone.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      zone.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      zone.postal_code.includes(searchTerm)
+      zone.scope.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Open Edit Zone modal
+  const openEditModal = (zone: DeliveryZone) => {
+    setEditForm({
+      id: String(zone.id),
+      name: zone.name,
+      scope: zone.scope,
+      locationsCsv: zone.locations.map(l=>`${l.latitude},${l.longitude}`).join('; '),
+      fee: String(zone.fee),
+      isEnabled: zone.isEnabled,
+      daysCsv: zone.days.join(', '),
+    });
+    setIsEditOpen(true);
+  };
 
   return (
     <div className="flex flex-col">
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
         <div className="flex items-center justify-between">
           <h2 className="text-3xl font-bold tracking-tight">Delivery Zones</h2>
-          <Button>
+          <Button onClick={() => setIsAddOpen(true)}>
             <MapPin className="mr-2 h-4 w-4" /> Add Zone
           </Button>
         </div>
+        {/* Add Zone Modal */}
+        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>Add Delivery Zone</DialogTitle>
+              <DialogDescription>Enter new zone details</DialogDescription>
+            </DialogHeader>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              setAddLoading(true);
+              try {
+                const locations = addForm.locationsCsv.split(';').map(s => {
+                  const [lat, lng] = s.split(',').map(v=>v.trim());
+                  return { latitude: parseFloat(lat), longitude: parseFloat(lng) };
+                });
+                const days = addForm.daysCsv.split(',').map(d=>d.trim());
+                const payload = {
+                  deliveryZoneName: addForm.name,
+                  deliveryZoneScope: addForm.scope,
+                  deliveryZoneGeographicalLocation: locations,
+                  deliveryZoneFee: parseFloat(addForm.fee),
+                  isDeliveryZoneEnabled: addForm.isEnabled ? 1 : 0,
+                  deliveryZoneDays: days,
+                };
+                await apiService.post('/delivery-zones', payload);
+                toast({ title: 'Success', description: 'Zone added.' });
+                setIsAddOpen(false);
+                fetchZones();
+              } catch (err: any) {
+                toast({ title: 'Error', description: err.message || 'Failed to add zone', variant: 'destructive' });
+              } finally { setAddLoading(false); }
+            }} className="space-y-4">
+              <div><Label htmlFor="name">Name</Label><Input id="name" name="name" value={addForm.name} onChange={e=>setAddForm(prev=>({...prev,name:e.target.value}))} required/></div>
+              <div><Label htmlFor="scope">Scope</Label><Input id="scope" name="scope" value={addForm.scope} onChange={e=>setAddForm(prev=>({...prev,scope:e.target.value}))} required/></div>
+              <div><Label htmlFor="locationsCsv">Locations (lat,lng;...)</Label><Input id="locationsCsv" name="locationsCsv" value={addForm.locationsCsv} onChange={e=>setAddForm(prev=>({...prev,locationsCsv:e.target.value}))} placeholder="lat1,lng1; lat2,lng2" required/></div>
+              <div><Label htmlFor="fee">Fee</Label><Input id="fee" name="fee" type="number" value={addForm.fee} onChange={e=>setAddForm(prev=>({...prev,fee:e.target.value}))} required/></div>
+              <div className="flex items-center gap-2"><input id="isEnabled" name="isEnabled" type="checkbox" checked={addForm.isEnabled} onChange={e=>setAddForm(prev=>({...prev,isEnabled:e.target.checked}))}/><Label htmlFor="isEnabled">Enabled</Label></div>
+              <div><Label htmlFor="daysCsv">Days (comma separated)</Label><Input id="daysCsv" name="daysCsv" value={addForm.daysCsv} onChange={e=>setAddForm(prev=>({...prev,daysCsv:e.target.value}))}/></div>
+              <DialogFooter><Button variant="outline" onClick={()=>setIsAddOpen(false)}>Cancel</Button><Button type="submit" disabled={addLoading}>{addLoading?'Adding...':'Add'}</Button></DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Zone Modal */}
+        <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>Edit Delivery Zone</DialogTitle>
+              <DialogDescription>Update zone details</DialogDescription>
+            </DialogHeader>
+            <form onSubmit={async e => {
+              e.preventDefault();
+              setEditLoading(true);
+              try {
+                const locations = editForm.locationsCsv.split(';').map(s => { const [lat,lng]=s.split(','); return { latitude: parseFloat(lat), longitude: parseFloat(lng) }; });
+                const days = editForm.daysCsv.split(',').map(d=>d.trim());
+                const payload = {
+                  deliveryZoneName: editForm.name,
+                  deliveryZoneScope: editForm.scope,
+                  deliveryZoneGeographicalLocation: locations,
+                  deliveryZoneFee: parseFloat(editForm.fee),
+                  isDeliveryZoneEnabled: editForm.isEnabled ? 1 : 0,
+                  deliveryZoneDays: days,
+                };
+                await apiService.patch(`/delivery-zones/${editForm.id}`, payload);
+                toast({ title: 'Success', description: 'Zone updated.' });
+                setIsEditOpen(false);
+                fetchZones();
+              } catch(err:any) {
+                toast({ title: 'Error', description: err.message || 'Failed to update zone', variant: 'destructive' });
+              } finally { setEditLoading(false); }
+            }} className="space-y-4">
+              <div><Label htmlFor="edit_name">Name</Label><Input id="edit_name" name="name" value={editForm.name} onChange={e=>setEditForm(prev=>({...prev,name:e.target.value}))} required/></div>
+              <div><Label htmlFor="edit_scope">Scope</Label><Input id="edit_scope" name="scope" value={editForm.scope} onChange={e=>setEditForm(prev=>({...prev,scope:e.target.value}))} required/></div>
+              <div><Label htmlFor="edit_locationsCsv">Locations (lat,lng;...)</Label><Input id="edit_locationsCsv" name="locationsCsv" value={editForm.locationsCsv} onChange={e=>setEditForm(prev=>({...prev,locationsCsv:e.target.value}))} required/></div>
+              <div><Label htmlFor="edit_fee">Fee</Label><Input id="edit_fee" name="fee" type="number" value={editForm.fee} onChange={e=>setEditForm(prev=>({...prev,fee:e.target.value}))} required/></div>
+              <div className="flex items-center gap-2"><input id="edit_isEnabled" name="isEnabled" type="checkbox" checked={editForm.isEnabled} onChange={e=>setEditForm(prev=>({...prev,isEnabled:e.target.checked}))}/><Label htmlFor="edit_isEnabled">Enabled</Label></div>
+              <div><Label htmlFor="edit_daysCsv">Days (comma separated)</Label><Input id="edit_daysCsv" name="daysCsv" value={editForm.daysCsv} onChange={e=>setEditForm(prev=>({...prev,daysCsv:e.target.value}))}/></div>
+              <DialogFooter><Button variant="outline" onClick={()=>setIsEditOpen(false)}>Cancel</Button><Button type="submit" disabled={editLoading}>{editLoading?'Saving...':'Save'}</Button></DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
 
         <Card>
           <CardHeader>
@@ -103,22 +201,24 @@ export default function DeliveryZonesPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
-                  <TableHead>City</TableHead>
-                  <TableHead>Postal Code</TableHead>
+                  <TableHead>Scope</TableHead>
+                  <TableHead>Locations</TableHead>
+                  <TableHead>Fee</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Days</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center">
+                    <TableCell colSpan={7} className="text-center">
                       Loading...
                     </TableCell>
                   </TableRow>
                 ) : filteredZones.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center">
+                    <TableCell colSpan={7} className="text-center">
                       No zones found
                     </TableCell>
                   </TableRow>
@@ -126,13 +226,21 @@ export default function DeliveryZonesPage() {
                   filteredZones.map((zone) => (
                     <TableRow key={zone.id}>
                       <TableCell>{zone.name}</TableCell>
-                      <TableCell>{zone.city}</TableCell>
-                      <TableCell>{zone.postal_code}</TableCell>
+                      <TableCell>{zone.scope}</TableCell>
                       <TableCell>
-                        <Badge className={zone.is_active ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>
-                          {zone.is_active ? "Active" : "Inactive"}
+                        {zone.locations.map((loc, idx) => (
+                          <div key={idx} className="text-sm">
+                            {loc.latitude}, {loc.longitude}
+                          </div>
+                        ))}
+                      </TableCell>
+                      <TableCell>${zone.fee.toFixed(2)}</TableCell>
+                      <TableCell>
+                        <Badge variant={zone.isEnabled ? "default" : "destructive"}>
+                          {zone.isEnabled ? "Enabled" : "Disabled"}
                         </Badge>
                       </TableCell>
+                      <TableCell>{zone.days.join(", ") || "-"}</TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -141,7 +249,7 @@ export default function DeliveryZonesPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openEditModal(zone)}>
                               <Edit className="mr-2 h-4 w-4" /> Edit
                             </DropdownMenuItem>
                             <DropdownMenuItem className="text-red-600">
