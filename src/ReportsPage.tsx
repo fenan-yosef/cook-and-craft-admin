@@ -24,7 +24,11 @@ const ReportsPage: React.FC = () => {
     <div className="p-8">
       <h1 className="text-2xl font-bold mb-4">Reports</h1>
       {/* Add your reports table and UI here */}
-    <div><h2>Reports</h2><p>This is the Reports page.</p></div>;
+      <div>
+        <h2>Reports</h2>
+        <p>This is the Reports page.</p>
+      </div>
+    </div>
   );
 };
 
