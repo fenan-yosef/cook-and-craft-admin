@@ -87,6 +87,28 @@ class ApiService {
     return response.json()
   }
 
+  async postMultipart(endpoint: string, formData: FormData) {
+    console.log(`Making multipart POST request to: ${this.baseURL}${endpoint}`)
+    const response = await fetch(`${this.baseURL}${endpoint}`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        ...(this.authToken && { Authorization: `Bearer ${this.authToken}` }),
+      },
+      body: formData,
+    })
+
+    console.log(`Response status: ${response.status}`)
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`API Error: ${response.status} - ${errorText}`)
+      throw new Error(errorText || `HTTP error! status: ${response.status}`)
+    }
+
+    return response.json()
+  }
+
   async patch(endpoint: string, data?: any) {
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       method: "PATCH",
