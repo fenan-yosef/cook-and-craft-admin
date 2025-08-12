@@ -108,17 +108,22 @@ export default function DeliveryZonesPage() {
               setAddLoading(true);
               try {
                 const locations = addForm.locationsCsv.split(';').map(s => {
-                  const [lat, lng] = s.split(',').map(v=>v.trim());
-                  return { latitude: parseFloat(lat), longitude: parseFloat(lng) };
-                });
+                   const [lat, lng] = s.split(',').map(v=>v.trim());
+                   return { latitude: parseFloat(lat), longitude: parseFloat(lng) };
+                 });
+                if (locations.length < 4) {
+                  toast({ title: 'Error', description: 'Please enter at least 4 locations.', variant: 'destructive' });
+                  setAddLoading(false);
+                  return;
+                }
                 const days = addForm.daysCsv.split(',').map(d=>d.trim());
                 const payload = {
-                  deliveryZoneName: addForm.name,
-                  deliveryZoneScope: addForm.scope,
-                  deliveryZoneGeographicalLocation: locations,
-                  deliveryZoneFee: parseFloat(addForm.fee),
-                  isDeliveryZoneEnabled: addForm.isEnabled ? 1 : 0,
-                  deliveryZoneDays: days,
+                  name: addForm.name,
+                  scope: addForm.scope,
+                  geographical_location: locations,
+                  fee: parseFloat(addForm.fee),
+                  is_enabled: addForm.isEnabled ? 1 : 0,
+                  days: days,
                 };
                 await apiService.post('/delivery-zones', payload);
                 toast({ title: 'Success', description: 'Zone added.' });
@@ -151,14 +156,19 @@ export default function DeliveryZonesPage() {
               setEditLoading(true);
               try {
                 const locations = editForm.locationsCsv.split(';').map(s => { const [lat,lng]=s.split(','); return { latitude: parseFloat(lat), longitude: parseFloat(lng) }; });
+                if (locations.length < 4) {
+                  toast({ title: 'Error', description: 'Please enter at least 4 locations.', variant: 'destructive' });
+                  setEditLoading(false);
+                  return;
+                }
                 const days = editForm.daysCsv.split(',').map(d=>d.trim());
                 const payload = {
-                  deliveryZoneName: editForm.name,
-                  deliveryZoneScope: editForm.scope,
-                  deliveryZoneGeographicalLocation: locations,
-                  deliveryZoneFee: parseFloat(editForm.fee),
-                  isDeliveryZoneEnabled: editForm.isEnabled ? 1 : 0,
-                  deliveryZoneDays: days,
+                  name: editForm.name,
+                  scope: editForm.scope,
+                  geographical_location: locations,
+                  fee: parseFloat(editForm.fee),
+                  is_enabled: editForm.isEnabled ? 1 : 0,
+                  days: days,
                 };
                 await apiService.patch(`/delivery-zones/${editForm.id}`, payload);
                 toast({ title: 'Success', description: 'Zone updated.' });
