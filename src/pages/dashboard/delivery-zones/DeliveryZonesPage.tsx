@@ -108,15 +108,15 @@ export default function DeliveryZonesPage() {
               setAddLoading(true);
               try {
                 const locations = addForm.locationsCsv.split(';').map(s => {
-                   const [lat, lng] = s.split(',').map(v=>v.trim());
-                   return { latitude: parseFloat(lat), longitude: parseFloat(lng) };
-                 });
+                  const [lat, lng] = s.split(',').map(v => v.trim());
+                  return { latitude: parseFloat(lat), longitude: parseFloat(lng) };
+                });
                 if (locations.length < 4) {
                   toast({ title: 'Error', description: 'Please enter at least 4 locations.', variant: 'destructive' });
                   setAddLoading(false);
                   return;
                 }
-                const days = addForm.daysCsv.split(',').map(d=>d.trim());
+                const days = addForm.daysCsv.split(',').map(d => d.trim());
                 const payload = {
                   name: addForm.name,
                   scope: addForm.scope,
@@ -130,12 +130,21 @@ export default function DeliveryZonesPage() {
                 setIsAddOpen(false);
                 fetchZones();
               } catch (err: any) {
-                toast({ title: 'Error', description: err.message || 'Failed to add zone', variant: 'destructive' });
+                const res = err?.response?.data || err?.response;
+                if (res?.message === 'Validation failed.' && res?.error) {
+                  // Show only validation errors from backend (object of arrays)
+                  const errorMessages = Object.values(res.error)
+                    .flat()
+                    .join(' ');
+                  toast({ title: 'Validation Error', description: errorMessages, variant: 'destructive' });
+                } else {
+                  toast({ title: 'Error', description: err.message || 'Failed to add zone', variant: 'destructive' });
+                }
               } finally { setAddLoading(false); }
             }} className="space-y-4">
               <div><Label htmlFor="name">Name</Label><Input id="name" name="name" value={addForm.name} onChange={e=>setAddForm(prev=>({...prev,name:e.target.value}))} required/></div>
               <div><Label htmlFor="scope">Scope</Label><Input id="scope" name="scope" value={addForm.scope} onChange={e=>setAddForm(prev=>({...prev,scope:e.target.value}))} required/></div>
-              <div><Label htmlFor="locationsCsv">Locations (lat,lng;...)</Label><Input id="locationsCsv" name="locationsCsv" value={addForm.locationsCsv} onChange={e=>setAddForm(prev=>({...prev,locationsCsv:e.target.value}))} placeholder="lat1,lng1; lat2,lng2" required/></div>
+              <div><Label htmlFor="locationsCsv">Locations (lat,lng;...)</Label><Input id="locationsCsv" name="locationsCsv" value={addForm.locationsCsv} onChange={e=>setAddForm(prev=>({...prev,locationsCsv:e.target.value}))} placeholder="31.2304,121.4737; 30.0444,31.2357; 29.9765,31.1313; 29.9820,31.1325" required/></div>
               <div><Label htmlFor="fee">Fee</Label><Input id="fee" name="fee" type="number" value={addForm.fee} onChange={e=>setAddForm(prev=>({...prev,fee:e.target.value}))} required/></div>
               <div className="flex items-center gap-2"><input id="isEnabled" name="isEnabled" type="checkbox" checked={addForm.isEnabled} onChange={e=>setAddForm(prev=>({...prev,isEnabled:e.target.checked}))}/><Label htmlFor="isEnabled">Enabled</Label></div>
               <div><Label htmlFor="daysCsv">Days (comma separated)</Label><Input id="daysCsv" name="daysCsv" value={addForm.daysCsv} onChange={e=>setAddForm(prev=>({...prev,daysCsv:e.target.value}))}/></div>
@@ -155,13 +164,16 @@ export default function DeliveryZonesPage() {
               e.preventDefault();
               setEditLoading(true);
               try {
-                const locations = editForm.locationsCsv.split(';').map(s => { const [lat,lng]=s.split(','); return { latitude: parseFloat(lat), longitude: parseFloat(lng) }; });
+                const locations = editForm.locationsCsv.split(';').map(s => {
+                  const [lat, lng] = s.split(',').map(v => v.trim());
+                  return { latitude: parseFloat(lat), longitude: parseFloat(lng) };
+                });
                 if (locations.length < 4) {
                   toast({ title: 'Error', description: 'Please enter at least 4 locations.', variant: 'destructive' });
                   setEditLoading(false);
                   return;
                 }
-                const days = editForm.daysCsv.split(',').map(d=>d.trim());
+                const days = editForm.daysCsv.split(',').map(d => d.trim());
                 const payload = {
                   name: editForm.name,
                   scope: editForm.scope,
@@ -174,8 +186,17 @@ export default function DeliveryZonesPage() {
                 toast({ title: 'Success', description: 'Zone updated.' });
                 setIsEditOpen(false);
                 fetchZones();
-              } catch(err:any) {
-                toast({ title: 'Error', description: err.message || 'Failed to update zone', variant: 'destructive' });
+              } catch (err: any) {
+                const res = err?.response?.data || err?.response;
+                if (res?.message === 'Validation failed.' && res?.error) {
+                  // Show only validation errors from backend (object of arrays)
+                  const errorMessages = Object.values(res.error)
+                    .flat()
+                    .join(' ');
+                  toast({ title: 'Validation Error', description: errorMessages, variant: 'destructive' });
+                } else {
+                  toast({ title: 'Error', description: err.message || 'Failed to update zone', variant: 'destructive' });
+                }
               } finally { setEditLoading(false); }
             }} className="space-y-4">
               <div><Label htmlFor="edit_name">Name</Label><Input id="edit_name" name="name" value={editForm.name} onChange={e=>setEditForm(prev=>({...prev,name:e.target.value}))} required/></div>
