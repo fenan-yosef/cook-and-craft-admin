@@ -1,7 +1,7 @@
 
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react"
-import { apiService } from "../lib/api-service"
+import { apiService } from "../src/lib/api-service"
 
 type User = {
   id: number

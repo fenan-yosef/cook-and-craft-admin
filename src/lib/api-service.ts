@@ -48,6 +48,31 @@ class ApiService {
     return response.json()
   }
 
+  // PATCH with application/x-www-form-urlencoded body
+  async patchFormData(endpoint: string, data: Record<string, string>) {
+    console.log(`Making form PATCH request to: ${this.baseURL}${endpoint}`)
+
+    const response = await fetch(`${this.baseURL}${endpoint}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+        ...(this.authToken && { Authorization: `Bearer ${this.authToken}` }),
+      },
+      body: new URLSearchParams(data),
+    })
+
+    console.log(`Response status: ${response.status}`)
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`API Error: ${response.status} - ${errorText}`)
+      throw new Error(errorText || `HTTP error! status: ${response.status}`)
+    }
+
+    return response.json()
+  }
+
   async get(endpoint: string) {
     console.log(`Making GET request to: ${this.baseURL}${endpoint}`)
 
@@ -82,6 +107,28 @@ class ApiService {
       const errorText = await response.text()
       console.error(`API Error: ${response.status} - ${errorText}`)
       throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    return response.json()
+  }
+
+  async postMultipart(endpoint: string, formData: FormData) {
+    console.log(`Making multipart POST request to: ${this.baseURL}${endpoint}`)
+    const response = await fetch(`${this.baseURL}${endpoint}`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        ...(this.authToken && { Authorization: `Bearer ${this.authToken}` }),
+      },
+      body: formData,
+    })
+
+    console.log(`Response status: ${response.status}`)
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`API Error: ${response.status} - ${errorText}`)
+      throw new Error(errorText || `HTTP error! status: ${response.status}`)
     }
 
     return response.json()
