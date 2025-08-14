@@ -31,7 +31,7 @@ const questionTypeColors = {
   rating: "bg-orange-100 text-orange-800",
 }
 
-export default function PreferencesPage() {
+export default function QuestionsPage() {
   const [questions, setQuestions] = useState<PreferenceQuestion[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")

@@ -5,6 +5,7 @@ import {
   Package,
   MessageSquare,
   Calendar,
+  Settings,
   LogOut,
   ChevronRight,
 } from "lucide-react"
@@ -85,20 +86,48 @@ const menuItems = [
     icon: Calendar,
     items: [
       {
+        title: "User Subscriptions",
+        icon: Users,
+        items: [
+          {
+           title: "Subscription Intervals",
+           url: "/dashboard/subscription-intervals",
+          },
+          {
+           title: "Subscriptions",
+           url: "/dashboard/subscriptions",
+          },
+          {
+            title: "Subscription and Meal Selections",
+            url: "/dashboard/subscription-meal-selections",
+          },
+        ],
+      },
+      {
+        title: "User Preferences",
+        icon: Settings,
+        items: [
+          {
+            title: "Questions",
+            url: "/dashboard/questions",
+          },
+          {
+            title: "Answers",
+            url: "/dashboard/answers",
+          },
+          {
+            title: "User Answers",
+            url: "/dashboard/user-answers",
+          },
+        ],
+      },
+      {
         title: "Recipes",
         url: "/dashboard/recipes",
       },
       {
         title: "Meals",
         url: "/dashboard/meals",
-      },
-      {
-        title: "Subscriptions",
-        url: "/dashboard/subscriptions",
-      },
-      {
-        title: "Preferences",
-        url: "/dashboard/preferences",
       },
     ],
   },
@@ -151,11 +180,36 @@ export function AdminSidebar() {
                         <SidebarMenuSub>
                           {item.items.map((subItem) => (
                             <SidebarMenuSubItem key={subItem.title}>
-                              <SidebarMenuSubButton asChild isActive={location.pathname === subItem.url}>
-                                <Link to={subItem.url}>
-                                  <span>{subItem.title}</span>
-                                </Link>
-                              </SidebarMenuSubButton>
+                              {subItem.items ? (
+                                <Collapsible defaultOpen className="group/collapsible">
+                                  <CollapsibleTrigger asChild>
+                                    <SidebarMenuSubButton>
+                                      {subItem.icon && <subItem.icon />}
+                                      <span>{subItem.title}</span>
+                                      <ChevronRight className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-90" />
+                                    </SidebarMenuSubButton>
+                                  </CollapsibleTrigger>
+                                  <CollapsibleContent>
+                                    <SidebarMenuSub>
+                                      {subItem.items.map((nested) => (
+                                        <SidebarMenuSubItem key={nested.title}>
+                                          <SidebarMenuSubButton asChild isActive={location.pathname === nested.url!}>
+                                            <Link to={nested.url!}>
+                                              <span>{nested.title}</span>
+                                            </Link>
+                                          </SidebarMenuSubButton>
+                                        </SidebarMenuSubItem>
+                                      ))}
+                                    </SidebarMenuSub>
+                                  </CollapsibleContent>
+                                </Collapsible>
+                              ) : (
+                                <SidebarMenuSubButton asChild isActive={location.pathname === subItem.url!}>
+                                  <Link to={subItem.url!}>
+                                    <span>{subItem.title}</span>
+                                  </Link>
+                                </SidebarMenuSubButton>
+                              )}
                             </SidebarMenuSubItem>
                           ))}
                         </SidebarMenuSub>
