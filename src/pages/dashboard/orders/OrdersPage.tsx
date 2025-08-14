@@ -6,8 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, MoreHorizontal, Eye, Package, Truck, CheckCircle, XCircle } from "lucide-react";
+import { Search, MoreHorizontal, Eye, XCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { apiService } from "@/lib/api-service";
 
 interface Order {
   id: number;
@@ -34,48 +35,40 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  // Fixed page for now; pagination controls can be added later
+  const page = 1;
   const { toast } = useToast();
 
   useEffect(() => {
     fetchOrders();
-  }, []);
+  }, [page]);
 
   const fetchOrders = async () => {
     try {
       setLoading(true);
-      // Mock data for demonstration
-      const mockOrders: Order[] = [
-        {
-          id: 1,
-          user_id: 101,
-          user_name: "John Doe",
-          user_email: "john.doe@example.com",
-          status: "pending",
-          total: 120.5,
-          items_count: 3,
-          created_at: "2025-08-01T10:00:00Z",
-          updated_at: "2025-08-01T10:00:00Z",
-        },
-        {
-          id: 2,
-          user_id: 102,
-          user_name: "Jane Smith",
-          user_email: "jane.smith@example.com",
-          status: "shipped",
-          total: 75.0,
-          items_count: 2,
-          created_at: "2025-08-02T11:00:00Z",
-          updated_at: "2025-08-02T11:00:00Z",
-        },
-      ];
+      // Ensure auth token on apiService
+      const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+  if (token) apiService.setAuthToken(token);
 
-      setOrders(mockOrders);
+      // Fetch orders with pagination
+      const response = await apiService.get(`/orders?page=${page}`);
+      const payload = response.data;
+      // Map order data
+      const apiOrders = Array.isArray(payload.data) ? payload.data : [];
+      const mapped: Order[] = apiOrders.map((u: any) => ({
+        id: u.id,
+        user_id: u.user_id,
+        user_name: u.user_name,
+        user_email: u.user_email,
+        status: u.status,
+        total: u.total,
+        items_count: u.items_count,
+        created_at: u.created_at,
+        updated_at: u.updated_at,
+      }));
+  setOrders(mapped);
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to fetch orders",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Failed to fetch orders", variant: "destructive" });
     } finally {
       setLoading(false);
     }
