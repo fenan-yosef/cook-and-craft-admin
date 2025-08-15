@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Search, Plus } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { apiService } from "@/lib/api-service"
 
 interface PreferenceQuestion {
   id: number
@@ -52,59 +53,38 @@ export default function QuestionsPage() {
   const fetchPreferences = async () => {
     try {
       setLoading(true)
-      // Mock data for demonstration
-      const mockQuestions: PreferenceQuestion[] = [
-        {
-          id: 1,
-          question: "What type of cuisine do you prefer?",
-          description: "Select your favorite cuisine types to personalize your meal recommendations",
-          question_type: "multiple_choice",
-          is_required: true,
-          is_active: true,
-          order_index: 1,
-          created_at: "2024-01-15T10:30:00Z",
-          updated_at: "2024-01-15T10:30:00Z",
-        },
-        {
-          id: 2,
-          question: "Do you have any dietary restrictions?",
-          description: "Help us customize meals according to your dietary needs",
-          question_type: "multiple_choice",
-          is_required: true,
-          is_active: true,
-          order_index: 2,
-          created_at: "2024-01-15T10:35:00Z",
-          updated_at: "2024-01-15T10:35:00Z",
-        },
-        {
-          id: 3,
-          question: "How would you rate your cooking skill level?",
-          description: "This helps us suggest recipes with appropriate difficulty levels",
-          question_type: "rating",
-          is_required: false,
-          is_active: true,
-          order_index: 3,
-          created_at: "2024-01-15T10:40:00Z",
-          updated_at: "2024-01-15T10:40:00Z",
-        },
-        {
-          id: 4,
-          question: "Any specific ingredients you'd like to avoid?",
-          description: "Tell us about any ingredients you prefer not to have in your meals",
-          question_type: "text",
-          is_required: false,
-          is_active: true,
-          order_index: 4,
-          created_at: "2024-01-15T10:45:00Z",
-          updated_at: "2024-01-15T10:45:00Z",
-        },
-      ]
+      // Ensure auth token is applied to API service
+      const storedToken = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
+      if (storedToken) {
+        apiService.setAuthToken(storedToken)
+      }
 
-      setQuestions(mockQuestions)
+      // Fetch from API: GET /preference_questions
+      const response = await apiService.get("/preference_questions")
+      const data = Array.isArray(response?.data) ? response.data : []
+
+      // Map backend shape to local UI model
+      const mapped: PreferenceQuestion[] = data.map((item: any, idx: number) => ({
+        id: Number(item.ID),
+        question: String(item.Question ?? ""),
+        description: "",
+        question_type: (item.Multiple ? "multiple_choice" : "single_choice") as
+          | "single_choice"
+          | "multiple_choice"
+          | "text"
+          | "rating",
+        is_required: true, // Backend payload has no explicit field; defaulting to true
+        is_active: Boolean(item.Active),
+        order_index: Number(item.Sort_Order ?? idx + 1),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }))
+
+      setQuestions(mapped)
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to fetch preferences",
+        description: "Failed to fetch preference questions",
         variant: "destructive",
       })
     } finally {
@@ -155,7 +135,7 @@ export default function QuestionsPage() {
     <div className="flex flex-col">
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-3xl font-bold tracking-tight">Preferences</h2>
+          <h2 className="text-3xl font-bold tracking-tight">Questions</h2>
           <Button onClick={() => setIsCreateQuestionDialogOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Add Question
