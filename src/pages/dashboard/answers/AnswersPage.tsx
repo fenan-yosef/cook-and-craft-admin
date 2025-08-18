@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Search, Plus } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { apiService } from "@/lib/api-service"
 
 interface PreferenceAnswers {
   id: number
@@ -46,61 +47,31 @@ export default function AnswersPage() {
   const { toast } = useToast()
 
   useEffect(() => {
+    // set auth token from localStorage and fetch answers
+    const token = localStorage.getItem('auth_token')
+    apiService.setAuthToken(token)
     fetchPreferences()
   }, [])
 
   const fetchPreferences = async () => {
     try {
       setLoading(true)
-      // Mock data for demonstration
-      const mockanswers: PreferenceAnswers[] = [
-        {
-          id: 1,
-          Answers: "What type of cuisine do you prefer?",
-          description: "Select your favorite cuisine types to personalize your meal recommendations",
-          Answers_type: "multiple_choice",
+      // Fetch real data from API
+      const response = await apiService.get('/preference_answers')
+      const items = response.data as Array<{ ID: number; Question: string; Answer: string; Sort: number }>
+      setanswers(
+        items.map((item) => ({
+          id: item.ID,
+          Answers: item.Answer,
+          description: item.Question,
+          Answers_type: 'single_choice', // default or adjust as needed
           is_required: true,
           is_active: true,
-          order_index: 1,
-          created_at: "2024-01-15T10:30:00Z",
-          updated_at: "2024-01-15T10:30:00Z",
-        },
-        {
-          id: 2,
-          Answers: "Do you have any dietary restrictions?",
-          description: "Help us customize meals according to your dietary needs",
-          Answers_type: "multiple_choice",
-          is_required: true,
-          is_active: true,
-          order_index: 2,
-          created_at: "2024-01-15T10:35:00Z",
-          updated_at: "2024-01-15T10:35:00Z",
-        },
-        {
-          id: 3,
-          Answers: "How would you rate your cooking skill level?",
-          description: "This helps us suggest recipes with appropriate difficulty levels",
-          Answers_type: "rating",
-          is_required: false,
-          is_active: true,
-          order_index: 3,
-          created_at: "2024-01-15T10:40:00Z",
-          updated_at: "2024-01-15T10:40:00Z",
-        },
-        {
-          id: 4,
-          Answers: "Any specific ingredients you'd like to avoid?",
-          description: "Tell us about any ingredients you prefer not to have in your meals",
-          Answers_type: "text",
-          is_required: false,
-          is_active: true,
-          order_index: 4,
-          created_at: "2024-01-15T10:45:00Z",
-          updated_at: "2024-01-15T10:45:00Z",
-        },
-      ]
-
-      setanswers(mockanswers)
+          order_index: item.Sort,
+          created_at: '',
+          updated_at: '',
+        }))
+      )
     } catch (error) {
       toast({
         title: "Error",

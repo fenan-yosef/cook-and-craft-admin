@@ -2,14 +2,13 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
-import { Search, Plus } from "lucide-react"
+import { Search, Plus, MoreVertical, Eye, Pencil, Trash } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { apiService } from "@/lib/api-service"
 
@@ -23,20 +22,19 @@ interface PreferenceQuestion {
   order_index: number
   created_at: string
   updated_at: string
+  answers?: any[]
+  multiple?: boolean
 }
 
-const questionTypeColors = {
-  single_choice: "bg-blue-100 text-blue-800",
-  multiple_choice: "bg-green-100 text-green-800",
-  text: "bg-purple-100 text-purple-800",
-  rating: "bg-orange-100 text-orange-800",
-}
+// Removed badge-based type coloring; table shows backend fields directly
 
 export default function QuestionsPage() {
   const [questions, setQuestions] = useState<PreferenceQuestion[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [isCreateQuestionDialogOpen, setIsCreateQuestionDialogOpen] = useState(false)
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
+  const [selectedQuestion, setSelectedQuestion] = useState<PreferenceQuestion | null>(null)
   const [newQuestion, setNewQuestion] = useState({
     question: "",
     description: "",
@@ -73,11 +71,13 @@ export default function QuestionsPage() {
           | "multiple_choice"
           | "text"
           | "rating",
-        is_required: true, // Backend payload has no explicit field; defaulting to true
+        is_required: true,
         is_active: Boolean(item.Active),
         order_index: Number(item.Sort_Order ?? idx + 1),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
+        answers: Array.isArray(item.answers) ? item.answers : [],
+        multiple: Boolean(item.Multiple),
       }))
 
       setQuestions(mapped)
@@ -99,9 +99,11 @@ export default function QuestionsPage() {
         {
           id: questions.length + 1,
           ...newQuestion,
+          multiple: newQuestion.question_type === "multiple_choice",
           order_index: questions.length + 1,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
+          answers: [],
         },
       ])
       toast({
@@ -164,9 +166,10 @@ export default function QuestionsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Question</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Required</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Multiple</TableHead>
+                  <TableHead>Active</TableHead>
+                  <TableHead>Sort Order</TableHead>
+                  <TableHead>Answers</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -191,34 +194,36 @@ export default function QuestionsPage() {
                         <div className="text-sm text-muted-foreground">{q.description}</div>
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          className={`${
-                            questionTypeColors[q.question_type]
-                          } hover:bg-opacity-80`}
-                        >
-                          {q.question_type.replace("_", " ")}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Switch checked={q.is_required} disabled />
+                        <Switch checked={!!q.multiple} disabled />
                       </TableCell>
                       <TableCell>
                         <Switch checked={q.is_active} disabled />
                       </TableCell>
+                      <TableCell>{q.order_index}</TableCell>
+                      <TableCell>{q.answers?.length ?? 0}</TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" className="h-8 w-8 p-0">
-                              <Search className="h-4 w-4" />
+                              <MoreVertical className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setSelectedQuestion(q)
+                                setIsViewDialogOpen(true)
+                              }}
+                            >
+                              <Eye className="mr-2 h-4 w-4" />
+                              View
+                            </DropdownMenuItem>
                             <DropdownMenuItem>
-                              <Search className="mr-2 h-4 w-4" />
+                              <Pencil className="mr-2 h-4 w-4" />
                               Edit
                             </DropdownMenuItem>
                             <DropdownMenuItem className="text-red-600">
-                              <Search className="mr-2 h-4 w-4" />
+                              <Trash className="mr-2 h-4 w-4" />
                               Delete
                             </DropdownMenuItem>
                           </DropdownMenuContent>
@@ -282,6 +287,64 @@ export default function QuestionsPage() {
               Cancel
             </Button>
             <Button onClick={handleCreateQuestion}>Create</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Question Dialog */}
+      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Question Details</DialogTitle>
+            <DialogDescription>Full question data including answers.</DialogDescription>
+          </DialogHeader>
+          {selectedQuestion && (
+            <div className="space-y-4">
+              <div>
+                <Label>Question</Label>
+                <div className="mt-1">{selectedQuestion.question}</div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Multiple</Label>
+                  <div className="mt-1">{selectedQuestion.multiple ? "Yes" : "No"}</div>
+                </div>
+                <div>
+                  <Label>Active</Label>
+                  <div className="mt-1">{selectedQuestion.is_active ? "Active" : "Inactive"}</div>
+                </div>
+                <div>
+                  <Label>Sort Order</Label>
+                  <div className="mt-1">{selectedQuestion.order_index}</div>
+                </div>
+                <div>
+                  <Label>Required</Label>
+                  <div className="mt-1">{selectedQuestion.is_required ? "Yes" : "No"}</div>
+                </div>
+              </div>
+              <div>
+                <Label>Answers ({selectedQuestion.answers?.length ?? 0})</Label>
+                <div className="mt-2 space-y-2">
+                  {selectedQuestion.answers && selectedQuestion.answers.length > 0 ? (
+                    selectedQuestion.answers.map((ans: any, idx: number) => (
+                      <div
+                        key={idx}
+                        className="rounded-md border p-3 text-sm bg-muted/30"
+                      >
+                        {typeof ans === "string" || typeof ans === "number"
+                          ? String(ans)
+                          : <pre className="whitespace-pre-wrap text-xs">{JSON.stringify(ans, null, 2)}</pre>}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-sm text-muted-foreground">No answers</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

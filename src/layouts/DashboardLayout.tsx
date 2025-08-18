@@ -17,14 +17,22 @@ const getTitleFromPathname = (pathname: string) => {
       return "Users Management"
     case "subscriptions":
       return "Subscriptions Management"
+    case "subscription-meal-selections":
+      return "Subscription and Meal Selection Management"
+    case "subscription-intervals":
+      return "Subscription Intervals Management"
     case "reports":
       return "Reports Management"
     case "recipes":
       return "Recipes Management"
     case "products":
       return "Products Management"
-    case "preferences":
-      return "Preferences Management"
+    case "questions":
+      return "Questions Management"
+    case "answers":
+      return "Answers Management"
+    case "user-answers":
+      return "User Answers Management"
     case "posts":
       return "Posts Management"
     case "orders":

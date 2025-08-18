@@ -86,7 +86,7 @@ const menuItems = [
     icon: Calendar,
     items: [
       {
-        title: "User Subscriptions",
+        title: "UserSubscriptions",
         icon: Users,
         items: [
           {
@@ -104,7 +104,7 @@ const menuItems = [
         ],
       },
       {
-        title: "User Preferences",
+        title: "UserPreferences",
         icon: Settings,
         items: [
           {
