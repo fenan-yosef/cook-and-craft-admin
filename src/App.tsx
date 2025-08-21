@@ -47,7 +47,7 @@ function App() {
             <Route path="preferences" element={<PreferencesPage />} />
             <Route path="user-answers" element={<UserAnswersPage />} />
             <Route path="subscription-intervals" element={<SubscriptionIntervalsPage />} />
-            <Route path="subscription-and-meal-selections" element={<SubscriptionAndMealSelections />} />
+            <Route path="subscription-meal-selections" element={<SubscriptionAndMealSelections />} />
           </Route>
         </Routes>
         <Toaster />
