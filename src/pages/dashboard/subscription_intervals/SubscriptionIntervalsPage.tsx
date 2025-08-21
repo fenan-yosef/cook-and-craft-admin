@@ -1,4 +1,4 @@
-  import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,19 +18,17 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 
-interface Product {
+interface Interval {
   id: number
-  name: string
-  description: string
-  price: number
-  stock: number
+  title: string
+  start_date: string
+  end_date: string
   status: "active" | "inactive"
-  created_at: string
-  images?: string[] // Add images field (array of URLs)
+  price_per_serving_cents: number
 }
 
 export default function SubscriptionIntervalsPage() {
-  const [products, setProducts] = useState<Product[]>([])
+  const [intervals, setIntervals] = useState<Interval[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const { toast } = useToast()
@@ -39,79 +37,55 @@ export default function SubscriptionIntervalsPage() {
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [addLoading, setAddLoading] = useState(false)
   const [addForm, setAddForm] = useState({
-    name: "",
-    description: "",
-    price: "",
-    quantity: "",
+    title: "",
+    start_date: "",
+    end_date: "",
     is_active: false,
-    is_private: false,
-    images: [] as File[],
+    price_per_serving_cents: "",
   })
-  const [imagePreviews, setImagePreviews] = useState<string[]>([])
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Edit Product Modal State
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editLoading, setEditLoading] = useState(false)
   const [editForm, setEditForm] = useState({
     id: "",
-    name: "",
-    description: "",
-    price: "",
-    quantity: "",
+    title: "",
+    start_date: "",
+    end_date: "",
     is_active: false,
-    is_private: false,
-    images: [] as File[],
-    existingImages: [] as string[],
+    price_per_serving_cents: "",
   })
-  const [editImagePreviews, setEditImagePreviews] = useState<string[]>([])
-  const editFileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    fetchProducts()
+    fetchIntervals()
   }, [])
 
-  const fetchProducts = async () => {
+  const fetchIntervals = async () => {
     try {
       setLoading(true)
-      const response = await apiService.get("/admins/products")
-      const mappedProducts: Product[] = (response.data || []).map((item: any) => ({
-        id: item.productId,
-        name: item.productName,
-        description: item.productSku,
-        price: item.productPrice,
-        stock: item.productAvailableQuantity,
-        status: item.isProductActive ? "active" : "inactive",
-        created_at: item.createdAt || new Date().toISOString(),
-        // Use the correct property for image URL (adjust as per your API, e.g. imageUrl, url, or path)
-        images: item.productImages?.map((img: any) => img.imageUrl || img.url || img.path || img) || [],
+      const response = await apiService.get("/subscription_intervals")
+  const mappedIntervals: Interval[] = (response.data || []).map((item: any) => ({
+        id: item.id,
+        title: item.title,
+        start_date: item.start_date,
+        end_date: item.end_date,
+        status: item.status,
+        price_per_serving_cents: item.price_per_serving_cents,
       }))
-      setProducts(mappedProducts)
+      setIntervals(mappedIntervals)
     } catch (error) {
       // Mock data for demonstration
-      const mockProducts: Product[] = [
+      const mockIntervals: Interval[] = [
         {
           id: 1,
-          name: "Premium Coffee Beans",
-          description: "High-quality arabica coffee beans",
-          price: 29.99,
-          stock: 150,
+          title: "aa",
+          start_date: "2025-09-01",
+          end_date: "2025-10-14",
           status: "active",
-          created_at: "2024-01-15T10:30:00Z",
-          images: [],
-        },
-        {
-          id: 2,
-          name: "Organic Tea Set",
-          description: "Collection of organic herbal teas",
-          price: 45.0,
-          stock: 0,
-          status: "inactive",
-          created_at: "2024-01-10T09:15:00Z",
-          images: [],
+          price_per_serving_cents: 0,
         },
       ]
-      setProducts(mockProducts)
+      setIntervals(mockIntervals)
     } finally {
       setLoading(false)
     }
@@ -127,30 +101,15 @@ export default function SubscriptionIntervalsPage() {
     }))
   }
 
-  // Handle Images
-  const handleImagesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || [])
-    setAddForm((prev) => ({
-      ...prev,
-      images: files,
-    }))
-    // Preview
-    setImagePreviews(files.map((file) => URL.createObjectURL(file)))
-  }
-
   // Reset Add Product Form
   const resetAddForm = () => {
     setAddForm({
-      name: "",
-      description: "",
-      price: "",
-      quantity: "",
+      title: "",
+      start_date: "",
+      end_date: "",
       is_active: false,
-      is_private: false,
-      images: [],
+      price_per_serving_cents: "",
     })
-    setImagePreviews([])
-    if (fileInputRef.current) fileInputRef.current.value = ""
   }
 
   // Submit Add Product
@@ -158,40 +117,28 @@ export default function SubscriptionIntervalsPage() {
     e.preventDefault()
     setAddLoading(true)
     try {
-      const formData = new FormData()
-      formData.append("name", addForm.name)
-      formData.append("description", addForm.description)
-      formData.append("price", addForm.price)
-      formData.append("quantity", addForm.quantity)
-      formData.append("is_active", addForm.is_active ? "1" : "0")
-      formData.append("is_private", addForm.is_private ? "1" : "0")
-      addForm.images.forEach((file) => formData.append("images[]", file))
-
-      // Use fetch directly for multipart/form-data
-      const res = await fetch("https://cook-craft.dhcb.io/api/products", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}`,
-        },
-        body: formData,
-      })
-
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.message || "Failed to add product")
+      const payload = {
+        title: addForm.title,
+        start_date: addForm.start_date,
+        end_date: addForm.end_date,
+        status: addForm.is_active ? "active" : "inactive",
+        price_per_serving_cents: Number(addForm.price_per_serving_cents) * 100,
       }
+
+      // Send POST request via apiService
+      await apiService.post("/subscription_intervals", payload)
 
       toast({
         title: "Success",
-        description: "Product added successfully.",
+        description: "Interval added successfully.",
       })
       setIsAddOpen(false)
       resetAddForm()
-      fetchProducts()
+      fetchIntervals()
     } catch (err: any) {
       toast({
         title: "Error",
-        description: err.message || "Failed to add product.",
+        description: err.message || "Failed to add interval.",
         variant: "destructive",
       })
     } finally {
@@ -200,19 +147,15 @@ export default function SubscriptionIntervalsPage() {
   }
 
   // Open Edit Modal and pre-fill fields
-  const openEditModal = (product: Product) => {
+  const openEditModal = (interval: Interval) => {
     setEditForm({
-      id: String(product.id),
-      name: product.name,
-      description: product.description,
-      price: String(product.price),
-      quantity: String(product.stock),
-      is_active: product.status === "active",
-      is_private: false, // You may need to map this from API if available
-      images: [],
-      existingImages: product.images || [],
+      id: String(interval.id),
+      title: interval.title,
+      start_date: interval.start_date,
+      end_date: interval.end_date,
+      is_active: interval.status === "active",
+      price_per_serving_cents: (interval.price_per_serving_cents / 100).toString(),
     })
-    setEditImagePreviews(product.images || [])
     setIsEditOpen(true)
   }
 
@@ -226,34 +169,16 @@ export default function SubscriptionIntervalsPage() {
     }))
   }
 
-  // Handle Edit Images
-  const handleEditImagesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || [])
-    setEditForm((prev) => ({
-      ...prev,
-      images: files,
-    }))
-    setEditImagePreviews([
-      ...(editForm.existingImages || []),
-      ...files.map((file) => URL.createObjectURL(file)),
-    ])
-  }
-
   // Reset Edit Product Form
   const resetEditForm = () => {
     setEditForm({
       id: "",
-      name: "",
-      description: "",
-      price: "",
-      quantity: "",
+      title: "",
+      start_date: "",
+      end_date: "",
       is_active: false,
-      is_private: false,
-      images: [],
-      existingImages: [],
+      price_per_serving_cents: "",
     })
-    setEditImagePreviews([])
-    if (editFileInputRef.current) editFileInputRef.current.value = ""
   }
 
   // Submit Edit Product
@@ -261,32 +186,29 @@ export default function SubscriptionIntervalsPage() {
     e.preventDefault()
     setEditLoading(true)
     try {
-      const payload = {
-        name: editForm.name,
-        description: editForm.description,
-        price: Number(editForm.price),
-        quantity: Number(editForm.quantity),
-        is_active: editForm.is_active ? 1 : 0,
-        is_private: editForm.is_private ? 1 : 0,
-        // images: not supported in JSON PATCH, only for FormData
-      }
+      // Build form data and POST with _method=put
+      const formData = new FormData()
+      formData.append("title", editForm.title)
+      formData.append("start_date", editForm.start_date)
+      formData.append("end_date", editForm.end_date)
+      formData.append("status", editForm.is_active ? "active" : "inactive")
+      formData.append("price_per_serving_cents", String(Number(editForm.price_per_serving_cents) * 100))
 
-      // Use /products/{id} endpoint for PATCH
-      const response = await apiService.patchJson(`/products/${editForm.id}`, payload)
-      console.log("PATCH response:", response)
+      const response = await apiService.postMultipart(`/subscription_intervals/${editForm.id}?_method=put`, formData)
+      console.log("PUT override response:", response)
 
       toast({
         title: "Success",
-        description: "Product updated successfully.",
+        description: "Interval updated successfully.",
       })
       setIsEditOpen(false)
       resetEditForm()
-      fetchProducts()
+      fetchIntervals()
     } catch (err: any) {
-      console.error("Product update error:", err)
+      console.error("Interval update error:", err)
       toast({
         title: "Error",
-        description: err.message || "Failed to update product.",
+        description: err.message || "Failed to update interval.",
         variant: "destructive",
       })
     } finally {
@@ -294,10 +216,8 @@ export default function SubscriptionIntervalsPage() {
     }
   }
 
-  const filteredProducts = products.filter(
-    (product) =>
-      (product.name?.toLowerCase() ?? "").includes(searchTerm.toLowerCase()) ||
-      (product.description?.toLowerCase() ?? "").includes(searchTerm.toLowerCase()),
+  const filteredIntervals = intervals.filter(interval =>
+    interval.title.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   return (
@@ -307,7 +227,7 @@ export default function SubscriptionIntervalsPage() {
           <h2 className="text-3xl font-bold tracking-tight">Subscription Intervals</h2>
           <Button onClick={() => setIsAddOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
-            Add Product
+            Add Interval
           </Button>
         </div>
 
@@ -315,51 +235,39 @@ export default function SubscriptionIntervalsPage() {
         <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) resetAddForm() }}>
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
-              <DialogTitle>Add Product</DialogTitle>
-              <DialogDescription>Fill in the product details below.</DialogDescription>
+              <DialogTitle>Add Interval</DialogTitle>
+              <DialogDescription>Fill in the interval details below.</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleAddProduct} className="space-y-4">
               <div>
-                <Label htmlFor="name">Name</Label>
+                <Label htmlFor="title">Title</Label>
                 <Input
-                  id="name"
-                  name="name"
-                  value={addForm.name}
-                  onChange={handleAddChange}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="description">Description</Label>
-                <Input
-                  id="description"
-                  name="description"
-                  value={addForm.description}
+                  id="title"
+                  name="title"
+                  value={addForm.title}
                   onChange={handleAddChange}
                   required
                 />
               </div>
               <div className="flex gap-2">
                 <div className="flex-1">
-                  <Label htmlFor="price">Price</Label>
+                  <Label htmlFor="start_date">Start Date</Label>
                   <Input
-                    id="price"
-                    name="price"
-                    type="number"
-                    min="0"
-                    value={addForm.price}
+                    id="start_date"
+                    name="start_date"
+                    type="date"
+                    value={addForm.start_date}
                     onChange={handleAddChange}
                     required
                   />
                 </div>
                 <div className="flex-1">
-                  <Label htmlFor="quantity">Quantity</Label>
+                  <Label htmlFor="end_date">End Date</Label>
                   <Input
-                    id="quantity"
-                    name="quantity"
-                    type="number"
-                    min="0"
-                    value={addForm.quantity}
+                    id="end_date"
+                    name="end_date"
+                    type="date"
+                    value={addForm.end_date}
                     onChange={handleAddChange}
                     required
                   />
@@ -376,45 +284,26 @@ export default function SubscriptionIntervalsPage() {
                   />
                   <Label htmlFor="is_active">Active</Label>
                 </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    id="is_private"
-                    name="is_private"
-                    type="checkbox"
-                    checked={addForm.is_private}
-                    onChange={handleAddChange}
-                  />
-                  <Label htmlFor="is_private">Private</Label>
-                </div>
               </div>
               <div>
-                <Label htmlFor="images">Images</Label>
+                <Label htmlFor="price_per_serving_cents">Price per Serving ($)</Label>
                 <Input
-                  id="images"
-                  name="images"
-                  type="file"
-                  multiple
-                  accept="image/*"
-                  onChange={handleImagesChange}
-                  ref={fileInputRef}
+                  id="price_per_serving_cents"
+                  name="price_per_serving_cents"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={addForm.price_per_serving_cents}
+                  onChange={handleAddChange}
+                  required
                 />
-                <div className="flex gap-2 mt-2 flex-wrap">
-                  {imagePreviews.map((src, idx) => (
-                    <img
-                      key={idx}
-                      src={src}
-                      alt={`preview-${idx}`}
-                      className="w-16 h-16 object-cover rounded border"
-                    />
-                  ))}
-                </div>
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>
                   Cancel
                 </Button>
                 <Button type="submit" disabled={addLoading}>
-                  {addLoading ? "Adding..." : "Add Product"}
+                  {addLoading ? "Adding..." : "Add Interval"}
                 </Button>
               </DialogFooter>
             </form>
@@ -425,51 +314,39 @@ export default function SubscriptionIntervalsPage() {
         <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if (!open) resetEditForm() }}>
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
-              <DialogTitle>Edit Product</DialogTitle>
-              <DialogDescription>Update the product details below.</DialogDescription>
+              <DialogTitle>Edit Interval</DialogTitle>
+              <DialogDescription>Update the interval details below.</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleEditProduct} className="space-y-4">
               <div>
-                <Label htmlFor="edit_name">Name</Label>
+                <Label htmlFor="edit_title">Title</Label>
                 <Input
-                  id="edit_name"
-                  name="name"
-                  value={editForm.name}
-                  onChange={handleEditChange}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="edit_description">Description</Label>
-                <Input
-                  id="edit_description"
-                  name="description"
-                  value={editForm.description}
+                  id="edit_title"
+                  name="title"
+                  value={editForm.title}
                   onChange={handleEditChange}
                   required
                 />
               </div>
               <div className="flex gap-2">
                 <div className="flex-1">
-                  <Label htmlFor="edit_price">Price</Label>
+                  <Label htmlFor="edit_start_date">Start Date</Label>
                   <Input
-                    id="edit_price"
-                    name="price"
-                    type="number"
-                    min="0"
-                    value={editForm.price}
+                    id="edit_start_date"
+                    name="start_date"
+                    type="date"
+                    value={editForm.start_date}
                     onChange={handleEditChange}
                     required
                   />
                 </div>
                 <div className="flex-1">
-                  <Label htmlFor="edit_quantity">Quantity</Label>
+                  <Label htmlFor="edit_end_date">End Date</Label>
                   <Input
-                    id="edit_quantity"
-                    name="quantity"
-                    type="number"
-                    min="0"
-                    value={editForm.quantity}
+                    id="edit_end_date"
+                    name="end_date"
+                    type="date"
+                    value={editForm.end_date}
                     onChange={handleEditChange}
                     required
                   />
@@ -486,38 +363,19 @@ export default function SubscriptionIntervalsPage() {
                   />
                   <Label htmlFor="edit_is_active">Active</Label>
                 </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    id="edit_is_private"
-                    name="is_private"
-                    type="checkbox"
-                    checked={editForm.is_private}
-                    onChange={handleEditChange}
-                  />
-                  <Label htmlFor="edit_is_private">Private</Label>
-                </div>
               </div>
               <div>
-                <Label htmlFor="edit_images">Images</Label>
+                <Label htmlFor="edit_price_per_serving_cents">Price per Serving ($)</Label>
                 <Input
-                  id="edit_images"
-                  name="images"
-                  type="file"
-                  multiple
-                  accept="image/*"
-                  onChange={handleEditImagesChange}
-                  ref={editFileInputRef}
+                  id="edit_price_per_serving_cents"
+                  name="price_per_serving_cents"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={editForm.price_per_serving_cents}
+                  onChange={handleEditChange}
+                  required
                 />
-                <div className="flex gap-2 mt-2 flex-wrap">
-                  {editImagePreviews.map((src, idx) => (
-                    <img
-                      key={idx}
-                      src={src}
-                      alt={`preview-edit-${idx}`}
-                      className="w-16 h-16 object-cover rounded border"
-                    />
-                  ))}
-                </div>
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)}>
@@ -533,15 +391,15 @@ export default function SubscriptionIntervalsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>All Products</CardTitle>
-            <CardDescription>Manage your product catalog</CardDescription>
+            <CardTitle>All Intervals</CardTitle>
+            <CardDescription>Manage your subscription intervals</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex items-center space-x-2 mb-4">
               <div className="relative flex-1 max-w-sm">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search products..."
+                  placeholder="Search intervals..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-8"
@@ -552,71 +410,38 @@ export default function SubscriptionIntervalsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Image</TableHead>
-                  <TableHead>Price</TableHead>
-                  <TableHead>Stock</TableHead>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Start Date</TableHead>
+                  <TableHead>End Date</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>Price per Serving</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center">
-                      Loading...
-                    </TableCell>
+                    <TableCell colSpan={6} className="text-center">Loading...</TableCell>
                   </TableRow>
-                ) : filteredProducts.length === 0 ? (
+                ) : filteredIntervals.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center">
-                      No products found
-                    </TableCell>
+                    <TableCell colSpan={6} className="text-center">No intervals found</TableCell>
                   </TableRow>
                 ) : (
-                  filteredProducts.map((product) => (
-                    <TableRow key={product.id}>
-                      <TableCell className="font-medium">{product.name}</TableCell>
+                  filteredIntervals.map(interval => (
+                    <TableRow key={interval.id}>
+                      <TableCell>{interval.title}</TableCell>
+                      <TableCell>{new Date(interval.start_date).toLocaleDateString()}</TableCell>
+                      <TableCell>{new Date(interval.end_date).toLocaleDateString()}</TableCell>
                       <TableCell>
-                        {product.images && product.images.length > 0 ? (
-                          <img
-                            src={product.images[0]}
-                            alt={product.name}
-                            className="w-12 h-12 object-cover rounded border"
-                          />
-                        ) : (
-                          <span className="text-xs text-muted-foreground">No Image</span>
-                        )}
+                        <Badge variant={interval.status === "active" ? "default" : "secondary"}>
+                          {interval.status}
+                        </Badge>
                       </TableCell>
+                      <TableCell>{`$${(interval.price_per_serving_cents/100).toFixed(2)}`}</TableCell>
                       <TableCell>
-                        {typeof product.price === "number" ? `$${product.price.toFixed(2)}` : "N/A"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={product.stock > 0 ? "default" : "destructive"}>{product.stock}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={product.status === "active" ? "default" : "secondary"}>{product.status}</Badge>
-                      </TableCell>
-                      <TableCell>{new Date(product.created_at).toLocaleDateString()}</TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => openEditModal(product)}>
-                              <Edit className="mr-2 h-4 w-4" />
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="text-red-600">
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        <Button size="sm" variant="outline" onClick={() => openEditModal(interval)}>
+                          <Edit className="mr-2 h-4 w-4" /> Edit
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))
