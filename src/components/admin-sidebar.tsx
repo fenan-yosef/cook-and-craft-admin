@@ -2,7 +2,6 @@ import {
   LayoutDashboard,
   Users,
   ShoppingCart,
-  Package,
   MessageSquare,
   Calendar,
   Settings,
@@ -148,8 +147,12 @@ export function AdminSidebar() {
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                <Package className="size-4" />
+              <div className="flex h-8 w-10 items-center justify-center rounded-lg text-sidebar-primary-foreground">
+                <img
+                  src="/assets/photo_2025-08-21_11-16-40.jpg"
+                  alt="Logo"
+                  className=" rounded object-cover"
+                />
               </div>
               <div className="flex flex-col gap-0.5 leading-none">
                 <span className="font-semibold">Admin Panel</span>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -140,7 +140,6 @@ export function ProfileAvatar() {
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="relative h-8 w-8 rounded-full">
             <Avatar className="h-8 w-8">
-              <AvatarImage src="/placeholder.svg" alt={user.name} />
               <AvatarFallback className="bg-primary text-primary-foreground">{getInitials(user.name)}</AvatarFallback>
             </Avatar>
           </Button>
@@ -157,10 +156,10 @@ export function ProfileAvatar() {
             <User className="mr-2 h-4 w-4" />
             <span>Profile</span>
           </DropdownMenuItem>
-          <DropdownMenuItem>
+          {/* <DropdownMenuItem>
             <Settings className="mr-2 h-4 w-4" />
             <span>Settings</span>
-          </DropdownMenuItem>
+          </DropdownMenuItem> */}
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={logout}>
             <LogOut className="mr-2 h-4 w-4" />
@@ -186,7 +185,6 @@ export function ProfileAvatar() {
             {/* Avatar Section */}
             <div className="flex items-center space-x-4">
               <Avatar className="h-16 w-16">
-                <AvatarImage src="/placeholder.svg" alt={user.name} />
                 <AvatarFallback className="bg-primary text-primary-foreground text-lg">
                   {getInitials(user.name)}
                 </AvatarFallback>
