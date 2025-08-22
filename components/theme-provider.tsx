@@ -1,11 +1,3 @@
-
-
-import * as React from 'react'
-import {
-  ThemeProvider as NextThemesProvider,
-  type ThemeProviderProps,
-} from 'next-themes'
-
-export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
-  return <NextThemesProvider {...props}>{children}</NextThemesProvider>
-}
+// Unused after simplifying theme switching to a localStorage + class toggle approach.
+// Keeping this file to avoid import errors if referenced elsewhere.
+export {}

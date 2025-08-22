@@ -87,7 +87,7 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground font-sans;
+  @apply bg-background text-foreground font-sans transition-colors duration-300 ease-out;
     font-family: "Inter", sans-serif;
   }
 }

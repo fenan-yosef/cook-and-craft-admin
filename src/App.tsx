@@ -15,8 +15,12 @@ import PostsPage from "./pages/dashboard/posts/PostsPage"
 import DeliveryZonesPage from "./pages/dashboard/delivery-zones/DeliveryZonesPage"
 import MetricsPage from "./pages/dashboard/metrics/MetricsPage"
 import MealsPage from "./pages/dashboard/meals/MealsPage"
-import PreferencesPage from "./pages/dashboard/preferences/PreferencesPage"
-  
+import PreferencesPage from "./pages/dashboard/questions/QuestionsPage"
+import SubscriptionIntervalsPage from "./pages/dashboard/subscription_intervals/SubscriptionIntervalsPage"
+import SubscriptionAndMealSelections from "./pages/dashboard/subscription_and_meal_selection/SubscriptionAndMealSelections"
+import QuestionsPage from "./pages/dashboard/questions/QuestionsPage"
+import AnswersPage from "./pages/dashboard/answers/AnswersPage"
+import UserAnswersPage from "./pages/dashboard/users_answers/UserAnswersPage"
 
 function App() {
   return (
@@ -37,8 +41,13 @@ function App() {
             <Route path="metrics" element={<MetricsPage />} />
             <Route path="recipes" element={<RecipesPage />} />
             <Route path="meals" element={<MealsPage />} />
+            <Route path="answers" element={<AnswersPage />} />
             <Route path="subscriptions" element={<SubscriptionsPage />} />
+            <Route path="questions" element={<QuestionsPage />} />
             <Route path="preferences" element={<PreferencesPage />} />
+            <Route path="user-answers" element={<UserAnswersPage />} />
+            <Route path="subscription-intervals" element={<SubscriptionIntervalsPage />} />
+            <Route path="subscription-meal-selections" element={<SubscriptionAndMealSelections />} />
           </Route>
         </Routes>
         <Toaster />

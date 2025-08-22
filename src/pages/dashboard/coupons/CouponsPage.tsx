@@ -43,7 +43,7 @@ export default function CouponsPage() {
   const fetchCoupons = async () => {
     try {
       setLoading(true);
-      const result = await apiService.get("/coupons");
+      const result = await apiService.get("/admins/coupons");
       if (Array.isArray(result.data)) {
         setCoupons(result.data);
       } else {

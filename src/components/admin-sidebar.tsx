@@ -2,9 +2,9 @@ import {
   LayoutDashboard,
   Users,
   ShoppingCart,
-  Package,
   MessageSquare,
   Calendar,
+  Settings,
   LogOut,
   ChevronRight,
 } from "lucide-react"
@@ -85,20 +85,48 @@ const menuItems = [
     icon: Calendar,
     items: [
       {
+        title: "UserSubscriptions",
+        icon: Users,
+        items: [
+          {
+           title: "Subscription Intervals",
+           url: "/dashboard/subscription-intervals",
+          },
+          {
+           title: "Subscriptions",
+           url: "/dashboard/subscriptions",
+          },
+          {
+            title: "Subscription and Meal Selections",
+            url: "/dashboard/subscription-meal-selections",
+          },
+        ],
+      },
+      {
+        title: "UserPreferences",
+        icon: Settings,
+        items: [
+          {
+            title: "Questions",
+            url: "/dashboard/questions",
+          },
+          {
+            title: "Answers",
+            url: "/dashboard/answers",
+          },
+          {
+            title: "User Answers",
+            url: "/dashboard/user-answers",
+          },
+        ],
+      },
+      {
         title: "Recipes",
         url: "/dashboard/recipes",
       },
       {
         title: "Meals",
         url: "/dashboard/meals",
-      },
-      {
-        title: "Subscriptions",
-        url: "/dashboard/subscriptions",
-      },
-      {
-        title: "Preferences",
-        url: "/dashboard/preferences",
       },
     ],
   },
@@ -119,8 +147,12 @@ export function AdminSidebar() {
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                <Package className="size-4" />
+              <div className="flex h-8 w-10 items-center justify-center rounded-lg text-sidebar-primary-foreground">
+                <img
+                  src="/assets/photo_2025-08-21_11-16-40.jpg"
+                  alt="Logo"
+                  className=" rounded object-cover"
+                />
               </div>
               <div className="flex flex-col gap-0.5 leading-none">
                 <span className="font-semibold">Admin Panel</span>
@@ -151,11 +183,36 @@ export function AdminSidebar() {
                         <SidebarMenuSub>
                           {item.items.map((subItem) => (
                             <SidebarMenuSubItem key={subItem.title}>
-                              <SidebarMenuSubButton asChild isActive={location.pathname === subItem.url}>
-                                <Link to={subItem.url}>
-                                  <span>{subItem.title}</span>
-                                </Link>
-                              </SidebarMenuSubButton>
+                              {subItem.items ? (
+                                <Collapsible defaultOpen className="group/collapsible">
+                                  <CollapsibleTrigger asChild>
+                                    <SidebarMenuSubButton>
+                                      {subItem.icon && <subItem.icon />}
+                                      <span>{subItem.title}</span>
+                                      <ChevronRight className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-90" />
+                                    </SidebarMenuSubButton>
+                                  </CollapsibleTrigger>
+                                  <CollapsibleContent>
+                                    <SidebarMenuSub>
+                                      {subItem.items.map((nested) => (
+                                        <SidebarMenuSubItem key={nested.title}>
+                                          <SidebarMenuSubButton asChild isActive={location.pathname === nested.url!}>
+                                            <Link to={nested.url!}>
+                                              <span>{nested.title}</span>
+                                            </Link>
+                                          </SidebarMenuSubButton>
+                                        </SidebarMenuSubItem>
+                                      ))}
+                                    </SidebarMenuSub>
+                                  </CollapsibleContent>
+                                </Collapsible>
+                              ) : (
+                                <SidebarMenuSubButton asChild isActive={location.pathname === subItem.url!}>
+                                  <Link to={subItem.url!}>
+                                    <span>{subItem.title}</span>
+                                  </Link>
+                                </SidebarMenuSubButton>
+                              )}
                             </SidebarMenuSubItem>
                           ))}
                         </SidebarMenuSub>
