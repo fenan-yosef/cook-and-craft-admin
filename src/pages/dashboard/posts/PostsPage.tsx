@@ -57,6 +57,7 @@ interface Post {
   is_deleted: boolean | number;
   is_pinned: boolean;
   is_highlighted: boolean;
+  highlight_id?: number;
   status: "published" | "pending" | "draft" | "hidden" | "deleted";
   created_at: string;
   updated_at: string;
@@ -160,13 +161,15 @@ export default function PostsPage() {
             ...post,
             title: safeTitle,
             content: latestDesc ?? "No Content",
+            created_at: post.created_at,
             likes_count: Array.isArray(post?.post_likes)
               ? post.post_likes.length
               : post?.likes_count ?? 0,
-            is_pinned: Boolean(post?.post_pin ?? post?.is_pinned ?? false),
-            is_highlighted: Boolean(
-              post?.post_highlight ?? post?.is_highlighted ?? false
+            is_pinned: Boolean(
+              post?.post_pin || post?.is_pinned || post?.post_type === "pinned"
             ),
+            is_highlighted:
+              !!post.highlight_caption || post.post_type === "highlighted",
             status: post?.is_deleted
               ? "deleted"
               : post?.is_hidden
@@ -446,13 +449,15 @@ export default function PostsPage() {
     }
   };
 
-  const handleUnpinPost = async (postId: number) => {
+  const handleUnpinPost = async (post: any) => {
     if (token) apiService.setAuthToken(token);
+
     try {
-      await apiService.delete(`/post_pins/${postId}`);
+      // use the post.id directly since there's no post_pin object in response
+      await apiService.delete(`/post_pins/${post.id}`);
       toast({ title: "Success", description: "Post unpinned successfully." });
       await fetchPosts(currentPage);
-    } catch {
+    } catch (error) {
       toast({
         title: "Error",
         description: "Failed to unpin post.",
@@ -460,26 +465,31 @@ export default function PostsPage() {
       });
     }
   };
-  const handleHighlightPost = async (
-    postId: number,
-    isHighlighted: boolean
-  ) => {
-    if (isHighlighted)
-      return toast({
-        title: "Already highlighted",
-        description: "This post is already highlighted.",
-      });
+  const handleHighlightPost = async (postId: number) => {
     if (token) apiService.setAuthToken(token);
     try {
-      await apiService.post("/post_highlights", {
+      const res = await apiService.post("/post_highlights", {
         post_id: postId,
         short_caption: "Weekly Highlight",
         sort_index: 1,
       });
+
+      const highlight = res?.data;
+
+      // Optimistic UI update: attach highlight info
+      setPosts((currentPosts) =>
+        currentPosts.map((post) =>
+          post.id === postId
+            ? { ...post, is_highlighted: true, highlight_id: highlight.id }
+            : post
+        )
+      );
+
       toast({
         title: "Success",
         description: "Post highlighted successfully.",
       });
+
       fetchPosts(currentPage);
     } catch {
       toast({
@@ -490,14 +500,37 @@ export default function PostsPage() {
     }
   };
 
-  const handleRemoveHighlight = async (postId: number) => {
+  const handleRemoveHighlight = async (
+    postId: number,
+    highlightId?: number
+  ) => {
+    if (!highlightId) {
+      toast({
+        title: "Error",
+        description: "No highlight found for this post.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (token) apiService.setAuthToken(token);
     try {
-      await apiService.delete(`/post_highlights/${postId}`);
+      await apiService.delete(`/post_highlights/${highlightId}`);
+
+      // Optimistic UI update: remove highlight info
+      setPosts((currentPosts) =>
+        currentPosts.map((post) =>
+          post.id === postId
+            ? { ...post, is_highlighted: false, highlight_id: undefined }
+            : post
+        )
+      );
+
       toast({
         title: "Success",
         description: "Highlight removed successfully.",
       });
+
       fetchPosts(currentPage);
     } catch {
       toast({
@@ -830,9 +863,20 @@ export default function PostsPage() {
                   </TableRow>
                 ) : (
                   filteredPosts.map((post) => (
-                    <TableRow key={post.id}>
+                    <TableRow
+                      key={post.id}
+                      className={post.is_highlighted ? "bg-yellow-50" : ""}
+                    >
                       <TableCell className="w-[25%]">
-                        <div className="font-medium">{post.title}</div>
+                        <div className="flex items-center gap-2">
+                          {post.is_highlighted && (
+                            <Star className="h-4 w-4 text-yellow-500" />
+                          )}
+                          {post.is_pinned && (
+                            <Pin className="h-4 w-4 text-blue-500" />
+                          )}
+                          <span className="font-medium">{post.title}</span>
+                        </div>
                         <div className="text-sm text-muted-foreground">
                           {post.content}
                         </div>
@@ -900,7 +944,7 @@ export default function PostsPage() {
                                 <DropdownMenuSeparator />
                                 {post.is_pinned ? (
                                   <DropdownMenuItem
-                                    onClick={() => handleUnpinPost(post.id)}
+                                    onClick={() => handleUnpinPost(post)}
                                   >
                                     <PinOff className="mr-2 h-4 w-4" /> Unpin
                                     Post
@@ -915,7 +959,10 @@ export default function PostsPage() {
                                 {post.is_highlighted ? (
                                   <DropdownMenuItem
                                     onClick={() =>
-                                      handleRemoveHighlight(post.id)
+                                      handleRemoveHighlight(
+                                        post.id,
+                                        post.highlight_id
+                                      )
                                     }
                                   >
                                     <StarOff className="mr-2 h-4 w-4" /> Remove
@@ -923,17 +970,13 @@ export default function PostsPage() {
                                   </DropdownMenuItem>
                                 ) : (
                                   <DropdownMenuItem
-                                    onClick={() =>
-                                      handleHighlightPost(
-                                        post.id,
-                                        post.is_highlighted
-                                      )
-                                    }
+                                    onClick={() => handleHighlightPost(post.id)}
                                   >
                                     <Star className="mr-2 h-4 w-4" /> Highlight
                                     Post
                                   </DropdownMenuItem>
                                 )}
+
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                   className="text-red-600"
