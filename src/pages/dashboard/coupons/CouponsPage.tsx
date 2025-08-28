@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast"
 import { apiService } from "@/lib/api-service"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { id } from "date-fns/locale"
 
 interface Coupon {
   id: number;
@@ -85,7 +86,7 @@ export default function CouponsPage() {
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editLoading, setEditLoading] = useState(false)
   const [editForm, setEditForm] = useState({
-    code: "",
+    id: "",
     name: "",
     discountType: "percent",
     discountValue: "",
@@ -126,7 +127,7 @@ export default function CouponsPage() {
         starts_at: addForm.startsAt,
         ends_at: addForm.endsAt,
       }
-      const response = await apiService.post("/coupons", payload)
+      const response = await apiService.post("/admins/coupons", payload)
       toast({ title: "Success", description: response.message || "Coupon created successfully." })
       setIsAddOpen(false)
       setAddForm({ name:"", discountType:"percent", discountValue:"", maxDiscountValue:"", scope:"both", isAutoApply:false, maxRedemptions:"", perUserLimit:"", startsAt:"", endsAt:"" })
@@ -140,7 +141,7 @@ export default function CouponsPage() {
   // Open Edit modal with selected coupon data
   const openEditModal = (coupon: Coupon) => {
     setEditForm({
-      code: coupon.code,
+      id: coupon.id.toString(),
       name: coupon.name,
       // code: coupon.code,
       discountType: coupon.discountType,
@@ -172,7 +173,7 @@ export default function CouponsPage() {
         starts_at: editForm.startsAt,
         ends_at: editForm.endsAt,
       }
-  await apiService.patch(`/coupons/${editForm.code}`, payload)
+  await apiService.patch(`/admins/coupons/${editForm.id}`, payload)
       toast({ title: "Success", description: "Coupon updated successfully." })
       setIsEditOpen(false)
       fetchCoupons()
