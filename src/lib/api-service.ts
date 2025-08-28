@@ -1,32 +1,28 @@
+// src/lib/api-service.ts
 class ApiService {
-  private baseURL: string
-  private authToken: string | null = null
+  private baseURL: string;
+  private authToken: string | null = null;
 
   constructor() {
-    this.baseURL = "https://cook-craft.dhcb.io/api"
+    this.baseURL = "https://cook-craft.dhcb.io/api";
   }
 
   setAuthToken(token: string | null) {
-    this.authToken = token
+    this.authToken = token;
   }
 
   private getHeaders(): HeadersInit {
     const headers: HeadersInit = {
       "Content-Type": "application/json",
       Accept: "application/json",
-    }
-
+    };
     if (this.authToken) {
-      headers.Authorization = `Bearer ${this.authToken}`
+      headers.Authorization = `Bearer ${this.authToken}`;
     }
-
-    return headers
+    return headers;
   }
 
-  // Add a method for form-encoded requests (like login)
   async postFormData(endpoint: string, data: Record<string, string>) {
-    console.log(`Making form request to: ${this.baseURL}${endpoint}`)
-
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       method: "POST",
       headers: {
@@ -35,23 +31,15 @@ class ApiService {
         ...(this.authToken && { Authorization: `Bearer ${this.authToken}` }),
       },
       body: new URLSearchParams(data),
-    })
-
-    console.log(`Response status: ${response.status}`)
-
+    });
     if (!response.ok) {
-      const errorText = await response.text()
-      console.error(`API Error: ${response.status} - ${errorText}`)
-      throw new Error(`HTTP error! status: ${response.status}`)
+      const errorText = await response.text();
+      throw new Error(errorText || `HTTP error! status: ${response.status}`);
     }
-
-    return response.json()
+    return response.json();
   }
 
-  // PATCH with application/x-www-form-urlencoded body
   async patchFormData(endpoint: string, data: Record<string, string>) {
-    console.log(`Making form PATCH request to: ${this.baseURL}${endpoint}`)
-
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       method: "PATCH",
       headers: {
@@ -60,78 +48,53 @@ class ApiService {
         ...(this.authToken && { Authorization: `Bearer ${this.authToken}` }),
       },
       body: new URLSearchParams(data),
-    })
-
-    console.log(`Response status: ${response.status}`)
-
+    });
     if (!response.ok) {
-      const errorText = await response.text()
-      console.error(`API Error: ${response.status} - ${errorText}`)
-      throw new Error(errorText || `HTTP error! status: ${response.status}`)
+      const errorText = await response.text();
+      throw new Error(errorText || `HTTP error! status: ${response.status}`);
     }
-
-    return response.json()
+    return response.json();
   }
 
   async get(endpoint: string) {
-    console.log(`Making GET request to: ${this.baseURL}${endpoint}`)
-
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       method: "GET",
       headers: this.getHeaders(),
-    })
-
-    console.log(`Response status: ${response.status}`)
-
+    });
     if (!response.ok) {
-      const errorText = await response.text()
-      console.error(`API Error: ${response.status} - ${errorText}`)
-      throw new Error(`HTTP error! status: ${response.status}`)
+      const errorText = await response.text();
+      throw new Error(errorText || `HTTP error! status: ${response.status}`);
     }
-
-    return response.json()
+    return response.json();
   }
 
   async post(endpoint: string, data: any) {
-    console.log(`Making POST request to: ${this.baseURL}${endpoint}`)
-
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       method: "POST",
       headers: this.getHeaders(),
       body: JSON.stringify(data),
-    })
-
-    console.log(`Response status: ${response.status}`)
-
+    });
     if (!response.ok) {
-      const errorText = await response.text()
-      console.error(`API Error: ${response.status} - ${errorText}`)
-      throw new Error(`HTTP error! status: ${response.status}`)
+      const errorText = await response.text();
+      throw new Error(errorText || `HTTP error! status: ${response.status}`);
     }
-
-    return response.json()
+    return response.json();
   }
 
   async postMultipart(endpoint: string, formData: FormData) {
-    console.log(`Making multipart POST request to: ${this.baseURL}${endpoint}`)
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       method: "POST",
       headers: {
         Accept: "application/json",
         ...(this.authToken && { Authorization: `Bearer ${this.authToken}` }),
-      },
+      }, // no Content-Type here; browser sets boundary
       body: formData,
-    })
-
-    console.log(`Response status: ${response.status}`)
-
+    });
     if (!response.ok) {
-      const errorText = await response.text()
-      console.error(`API Error: ${response.status} - ${errorText}`)
-      throw new Error(errorText || `HTTP error! status: ${response.status}`)
+      const errorText = await response.text();
+      throw new Error(errorText || `HTTP error! status: ${response.status}`);
     }
-
-    return response.json()
+    return response.json();
   }
 
   async patch(endpoint: string, data?: any) {
@@ -139,13 +102,9 @@ class ApiService {
       method: "PATCH",
       headers: this.getHeaders(),
       body: data ? JSON.stringify(data) : undefined,
-    })
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-
-    return response.json()
+    });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    return response.json();
   }
 
   async patchJson(endpoint: string, data: any) {
@@ -157,15 +116,12 @@ class ApiService {
         Authorization: this.authToken ? `Bearer ${this.authToken}` : "",
       },
       body: JSON.stringify(data),
-    })
-
+    });
     if (!response.ok) {
-      const errorText = await response.text()
-      console.error(`PATCH API Error: ${response.status} - ${errorText}`)
-      throw new Error(errorText || `HTTP error! status: ${response.status}`)
+      const errorText = await response.text();
+      throw new Error(errorText || `HTTP error! status: ${response.status}`);
     }
-
-    return response.json()
+    return response.json();
   }
 
   async put(endpoint: string, data?: any) {
@@ -173,27 +129,24 @@ class ApiService {
       method: "PUT",
       headers: this.getHeaders(),
       body: data ? JSON.stringify(data) : undefined,
-    })
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-
-    return response.json()
+    });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    // Some APIs return empty body for PUT
+    const text = await response.text();
+    return text ? JSON.parse(text) : {};
   }
 
-  async delete(endpoint: string) {
+  // <-- updated: allow body on DELETE
+  async delete(endpoint: string, data?: any) {
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       method: "DELETE",
       headers: this.getHeaders(),
-    })
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-
-    return response.json()
+      body: data ? JSON.stringify(data) : undefined,
+    });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    const text = await response.text();
+    return text ? JSON.parse(text) : {};
   }
 }
 
-export const apiService = new ApiService()
+export const apiService = new ApiService();

@@ -18,6 +18,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { Search, MoreHorizontal, Eye, CheckCircle, XCircle, AlertTriangle, Calendar } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/contexts/auth-context";
 
 interface PostReport {
   id: number
@@ -36,9 +37,9 @@ interface PostReport {
 }
 
 const statusColors = {
-  pending: "bg-yellow-100 text-yellow-800",
+  pending: "bg-blue-100 text-blue-800",
   resolved: "bg-green-100 text-green-800",
-  dismissed: "bg-gray-100 text-gray-800",
+  dismissed: "bg-red-100 text-red-800",
 }
 
 const reasonColors = {
@@ -49,6 +50,8 @@ const reasonColors = {
   other: "bg-gray-100 text-gray-800",
 }
 
+const API_BASE_URL = "https://cook-craft.dhcb.io/api"
+
 export default function ReportsPage() {
   const [reports, setReports] = useState<PostReport[]>([])
   const [loading, setLoading] = useState(true)
@@ -58,76 +61,44 @@ export default function ReportsPage() {
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
   const [resolutionNote, setResolutionNote] = useState("")
   const { toast } = useToast()
+  const { token } = useAuth();
 
   useEffect(() => {
     fetchReports()
-  }, [])
+  }, [token])
 
   const fetchReports = async () => {
     try {
       setLoading(true)
-      // Mock data for demonstration
-      const mockReports: PostReport[] = [
-        {
-          id: 1,
-          post_id: 3,
-          post_title: "Inappropriate content example",
-          post_content: "This post contains content that violates community guidelines...",
-          user_id: 5,
-          reporter_name: "Sarah Wilson",
-          reporter_email: "sarah@example.com",
-          reason: "inappropriate",
-          description:
-            "This post contains offensive language and inappropriate content that violates community standards.",
-          status: "pending",
-          created_at: "2024-01-20T09:15:00Z",
+      const response = await fetch(`${API_BASE_URL}/post_reports`, {
+        headers: {
+          "Authorization": token ? `Bearer ${token}` : "",
+          "Accept": "application/json",
         },
-        {
-          id: 2,
-          post_id: 6,
-          post_title: "Spam promotional content",
-          post_content: "Buy now! Amazing deals! Click here for instant savings!",
-          user_id: 6,
-          reporter_name: "Mike Johnson",
-          reporter_email: "mike@example.com",
-          reason: "spam",
-          description: "This is clearly spam content promoting external products.",
-          status: "resolved",
-          created_at: "2024-01-19T14:30:00Z",
-          resolved_at: "2024-01-19T16:45:00Z",
-          resolved_by: "Admin User",
-        },
-        {
-          id: 3,
-          post_id: 7,
-          post_title: "Harassment towards other users",
-          post_content: "Targeting specific users with negative comments...",
-          user_id: 7,
-          reporter_name: "Emma Davis",
-          reporter_email: "emma@example.com",
-          reason: "harassment",
-          description: "This user is consistently harassing other community members.",
-          status: "pending",
-          created_at: "2024-01-18T11:20:00Z",
-        },
-        {
-          id: 4,
-          post_id: 8,
-          post_title: "False information about health",
-          post_content: "Spreading medical misinformation...",
-          user_id: 8,
-          reporter_name: "Dr. James Smith",
-          reporter_email: "james@example.com",
-          reason: "misinformation",
-          description: "This post contains dangerous medical misinformation that could harm people.",
-          status: "dismissed",
-          created_at: "2024-01-17T16:10:00Z",
-          resolved_at: "2024-01-18T10:30:00Z",
-          resolved_by: "Admin User",
-        },
-      ]
-      setReports(mockReports)
+      });
+      if (!response.ok) {
+        throw new Error("Failed to fetch reports")
+      }
+      const result = await response.json();
+      setReports(
+        result.data.map((item: any) => ({
+          id: item.id,
+          post_id: item.post_id,
+          post_title: `Post #${item.post_id}`,
+          post_content: "",
+          user_id: item.user_id,
+          reporter_name: `User #${item.user_id}`,
+          reporter_email: "",
+          reason: item.reason,
+          status: item.status === "reviewed" ? "resolved" : item.status as "pending" | "resolved" | "dismissed",
+          created_at: item.created_at,
+          resolved_at: item.reviewed_at,
+          resolved_by: item.reviewed_by,
+        }))
+      );
+
     } catch (error) {
+      console.error("Fetch reports error:", error)
       toast({
         title: "Error",
         description: "Failed to fetch reports",
@@ -140,16 +111,32 @@ export default function ReportsPage() {
 
   const resolveReport = async (reportId: number, resolution: "resolved" | "dismissed") => {
     try {
-      // In real app: await apiService.put(`/post_reports/${reportId}`, { status: resolution, note: resolutionNote })
-      setReports(
-        reports.map((report) =>
+      const statusToApi = resolution === "resolved" ? "reviewed" : "dismissed"
+
+      const response = await fetch(`${API_BASE_URL}/post_reports/${reportId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": token ? `Bearer ${token}` : "",
+          "Accept": "application/json",
+
+        },
+        body: JSON.stringify({ status: statusToApi, note: resolutionNote }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to resolve report")
+      }
+
+      setReports((prevReports) =>
+        prevReports.map((report) =>
           report.id === reportId
             ? {
-                ...report,
-                status: resolution,
-                resolved_at: new Date().toISOString(),
-                resolved_by: "Admin User",
-              }
+              ...report,
+              status: resolution,
+              resolved_at: new Date().toISOString(),
+              resolved_by: "Admin User",
+            }
             : report,
         ),
       )
@@ -161,6 +148,7 @@ export default function ReportsPage() {
         description: `Report ${resolution} successfully`,
       })
     } catch (error) {
+      console.error("Resolve report error:", error)
       toast({
         title: "Error",
         description: "Failed to resolve report",
@@ -169,10 +157,48 @@ export default function ReportsPage() {
     }
   }
 
-  const viewReport = (report: PostReport) => {
-    setSelectedReport(report)
+  const viewReport = async (report: PostReport) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/post_reports/${report.id}`, {
+      headers: {
+        "Authorization": token ? `Bearer ${token}` : "",
+        "Accept": "application/json",
+      },
+    })
+    if (!response.ok) {
+      throw new Error("Failed to fetch single report")
+    }
+
+    const result = await response.json()
+    const item = result.data
+
+    const detailedReport: PostReport = {
+      id: item.id,
+      post_id: item.post_id,
+      post_title: `Post #${item.post_id}`,
+      post_content: "", // You can ask backend for post content if available
+      user_id: item.user_id,
+      reporter_name: `User #${item.user_id}`,
+      reporter_email: "",
+      reason: item.reason,
+      status: item.status === "reviewed" ? "resolved" : item.status,
+      created_at: item.created_at,
+      resolved_at: item.reviewed_at,
+      resolved_by: item.reviewed_by,
+      description: item.description || "",
+    }
+
+    setSelectedReport(detailedReport)
     setIsViewDialogOpen(true)
+  } catch (error) {
+    console.error("View report error:", error)
+    toast({
+      title: "Error",
+      description: "Failed to fetch report details",
+      variant: "destructive",
+    })
   }
+}
 
   const filteredReports = reports.filter((report) => {
     const matchesSearch =
