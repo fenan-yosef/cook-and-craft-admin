@@ -37,9 +37,9 @@ interface PostReport {
 }
 
 const statusColors = {
-  pending: "bg-yellow-100 text-yellow-800",
+  pending: "bg-blue-100 text-blue-800",
   resolved: "bg-green-100 text-green-800",
-  dismissed: "bg-gray-100 text-gray-800",
+  dismissed: "bg-red-100 text-red-800",
 }
 
 const reasonColors = {
@@ -61,27 +61,42 @@ export default function ReportsPage() {
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
   const [resolutionNote, setResolutionNote] = useState("")
   const { toast } = useToast()
+  const { token } = useAuth();
 
-  
   useEffect(() => {
     fetchReports()
-  }, [])
+  }, [token])
 
-  const { token } = useAuth();
   const fetchReports = async () => {
     try {
       setLoading(true)
       const response = await fetch(`${API_BASE_URL}/post_reports`, {
-      headers: {
-        "Authorization": token ? `Bearer ${token}` : "",
-        "Accept": "application/json",
-      },
-    });
+        headers: {
+          "Authorization": token ? `Bearer ${token}` : "",
+          "Accept": "application/json",
+        },
+      });
       if (!response.ok) {
         throw new Error("Failed to fetch reports")
       }
       const result = await response.json();
-      setReports(result.data);
+      setReports(
+        result.data.map((item: any) => ({
+          id: item.id,
+          post_id: item.post_id,
+          post_title: `Post #${item.post_id}`,
+          post_content: "",
+          user_id: item.user_id,
+          reporter_name: `User #${item.user_id}`,
+          reporter_email: "",
+          reason: item.reason,
+          status: item.status === "reviewed" ? "resolved" : item.status as "pending" | "resolved" | "dismissed",
+          created_at: item.created_at,
+          resolved_at: item.reviewed_at,
+          resolved_by: item.reviewed_by,
+        }))
+      );
+
     } catch (error) {
       console.error("Fetch reports error:", error)
       toast({
@@ -96,34 +111,32 @@ export default function ReportsPage() {
 
   const resolveReport = async (reportId: number, resolution: "resolved" | "dismissed") => {
     try {
-      // API uses 'reviewed' for resolved
       const statusToApi = resolution === "resolved" ? "reviewed" : "dismissed"
-      
+
       const response = await fetch(`${API_BASE_URL}/post_reports/${reportId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
           "Authorization": token ? `Bearer ${token}` : "",
           "Accept": "application/json",
-         
+
         },
-        body: JSON.stringify({ status: statusToApi, note: resolutionNote }), // The API request body
+        body: JSON.stringify({ status: statusToApi, note: resolutionNote }),
       })
 
       if (!response.ok) {
         throw new Error("Failed to resolve report")
       }
 
-      // Update the state locally to reflect the change immediately
       setReports((prevReports) =>
         prevReports.map((report) =>
           report.id === reportId
             ? {
-                ...report,
-                status: resolution,
-                resolved_at: new Date().toISOString(),
-                resolved_by: "Admin User", // You might need to get this dynamically
-              }
+              ...report,
+              status: resolution,
+              resolved_at: new Date().toISOString(),
+              resolved_by: "Admin User",
+            }
             : report,
         ),
       )
@@ -145,24 +158,47 @@ export default function ReportsPage() {
   }
 
   const viewReport = async (report: PostReport) => {
-    try {
-      // Fetch the single report for detailed view to ensure data is up-to-date
-      const response = await fetch(`${API_BASE_URL}/post_reports/${report.id}`)
-      if (!response.ok) {
-        throw new Error("Failed to fetch single report")
-      }
-      const detailedReport: PostReport = await response.json()
-      setSelectedReport(detailedReport)
-      setIsViewDialogOpen(true)
-    } catch (error) {
-      console.error("View report error:", error)
-      toast({
-        title: "Error",
-        description: "Failed to fetch report details",
-        variant: "destructive",
-      })
+  try {
+    const response = await fetch(`${API_BASE_URL}/post_reports/${report.id}`, {
+      headers: {
+        "Authorization": token ? `Bearer ${token}` : "",
+        "Accept": "application/json",
+      },
+    })
+    if (!response.ok) {
+      throw new Error("Failed to fetch single report")
     }
+
+    const result = await response.json()
+    const item = result.data
+
+    const detailedReport: PostReport = {
+      id: item.id,
+      post_id: item.post_id,
+      post_title: `Post #${item.post_id}`,
+      post_content: "", // You can ask backend for post content if available
+      user_id: item.user_id,
+      reporter_name: `User #${item.user_id}`,
+      reporter_email: "",
+      reason: item.reason,
+      status: item.status === "reviewed" ? "resolved" : item.status,
+      created_at: item.created_at,
+      resolved_at: item.reviewed_at,
+      resolved_by: item.reviewed_by,
+      description: item.description || "",
+    }
+
+    setSelectedReport(detailedReport)
+    setIsViewDialogOpen(true)
+  } catch (error) {
+    console.error("View report error:", error)
+    toast({
+      title: "Error",
+      description: "Failed to fetch report details",
+      variant: "destructive",
+    })
   }
+}
 
   const filteredReports = reports.filter((report) => {
     const matchesSearch =

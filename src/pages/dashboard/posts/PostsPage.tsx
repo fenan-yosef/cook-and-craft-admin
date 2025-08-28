@@ -57,6 +57,7 @@ interface Post {
   is_deleted: boolean | number;
   is_pinned: boolean;
   is_highlighted: boolean;
+  highlight_id?: number;
   status: "published" | "pending" | "draft" | "hidden" | "deleted";
   created_at: string;
   updated_at: string;
@@ -71,7 +72,7 @@ interface Post {
   }[];
   post_likes: any[];
   post_poll: any | null;
-  media?: { id: number; storage_path: string }[];
+  media?: string[];
 }
 
 const statusColors: Record<Post["status"], string> = {
@@ -125,49 +126,76 @@ export default function PostsPage() {
     async (page = 1) => {
       try {
         setLoading(true);
+
+        if (!user) {
+          setLoading(false);
+          return;
+        }
+
         if (token) apiService.setAuthToken(token);
 
-        const res = await apiService.get(
-          `/posts?withLikes=true&withPolls=true&withVersions=true&page=${page}&is_deleted=${showDeleted ? 1 : 0}`
-        );
+        const url = `/posts?withLikes=true&withPolls=true&withVersions=true&page=${page}&isDeleted=${showDeleted}&authorId=${user.id}`;
+
+        const res = await apiService.get(url);
+
         const pageObj = res?.data ?? res;
         const postsArray: any[] = Array.isArray(pageObj.data)
           ? pageObj.data
           : pageObj?.data ?? [];
 
         const transformed = postsArray.map((post: any) => {
-  const sortedVersions = [...(post?.post_versions ?? [])].sort(
-    (a, b) =>
-      new Date(b.created_at || b.updated_at || 0).getTime() -
-      new Date(a.created_at || a.updated_at || 0).getTime()
-  );
-  const latestVersion = sortedVersions[0];
-  const latestDesc: string | undefined = latestVersion?.description;
-  const titleBase = latestDesc?.slice(0, 30) ?? "";
-  const safeTitle =
-    titleBase.length > 0
-      ? `${titleBase}${latestDesc!.length > 30 ? "..." : ""}`
-      : `Post #${post.id}`;
+          const sortedVersions = [...(post?.post_versions ?? [])].sort(
+            (a, b) =>
+              new Date(b.created_at || b.updated_at || 0).getTime() -
+              new Date(a.created_at || a.updated_at || 0).getTime()
+          );
+          const latestVersion = sortedVersions[0];
+          const latestDesc: string | undefined = latestVersion?.description;
+          const titleBase = latestDesc?.slice(0, 30) ?? "";
+          const safeTitle =
+            titleBase.length > 0
+              ? `${titleBase}${latestDesc!.length > 30 ? "..." : ""}`
+              : `Post #${post.id}`;
 
-  return {
-    ...post,
-    title: safeTitle,
-    content: latestDesc ?? "No Content",
-    likes_count: Array.isArray(post?.post_likes)
-      ? post.post_likes.length
-      : post?.likes_count ?? 0,
-    is_pinned: Boolean(post?.post_pin ?? post?.is_pinned ?? false),
-    is_highlighted: Boolean(
-      post?.post_highlight ?? post?.is_highlighted ?? false
-    ),
-    status: post?.is_deleted
-      ? "deleted"
-      :(post?.is_hidden
-          ? "hidden"
-          : latestVersion?.status ?? "draft"),
-  } as Post;
-});
-        setPosts(transformed);
+          return {
+            ...post,
+            title: safeTitle,
+            content: latestDesc ?? "No Content",
+            created_at: post.created_at,
+            likes_count: Array.isArray(post?.post_likes)
+              ? post.post_likes.length
+              : post?.likes_count ?? 0,
+            is_pinned: Boolean(
+              post?.post_pin || post?.is_pinned || post?.post_type === "pinned"
+            ),
+            is_highlighted:
+              !!post.highlight_caption || post.post_type === "highlighted",
+            status: post?.is_deleted
+              ? "deleted"
+              : post?.is_hidden
+              ? "hidden"
+              : latestVersion?.status ?? "draft",
+            media:
+              latestVersion?.images?.map(
+                (img: any) =>
+                  img.image ||
+                  img.imageUrl ||
+                  img.url ||
+                  img.path ||
+                  img.storage_path ||
+                  img
+              ) || [],
+          } as Post;
+        });
+
+        // Sort the transformed posts by creation date in descending order
+        const sortedPosts = transformed.sort((a, b) => {
+          return (
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          );
+        });
+
+        setPosts(sortedPosts);
         setCurrentPage(pageObj.current_page || 1);
         setLastPage(pageObj.last_page || 1);
       } catch (error) {
@@ -181,17 +209,26 @@ export default function PostsPage() {
         setLoading(false);
       }
     },
-    [toast, token, showDeleted]
+    [toast, token, showDeleted, user]
   );
-
   useEffect(() => {
-    if (!isLoading) {
+    if (!isLoading && user) {
       fetchPosts(currentPage);
     }
-  }, [isLoading, fetchPosts, currentPage, showDeleted]);
+  }, [isLoading, fetchPosts, currentPage, showDeleted, user]);
 
   const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (newPost.media.length === 0) {
+      toast({
+        title: "Error",
+        description: "At least one media file is required.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (
       newPost.pollOpenAt &&
       newPost.pollCloseAt &&
@@ -220,7 +257,7 @@ export default function PostsPage() {
       formData.append("description", newPost.description);
       formData.append("user_id", String(user.id));
       newPost.media.forEach((file, idx) => {
-        formData.append(`media[${idx}][file]`, file);
+        formData.append(`images[${idx}]`, file);
       });
       formData.append("tags[0][tag_type]", "user");
       formData.append("tags[0][user_id]", String(user.id));
@@ -286,6 +323,16 @@ export default function PostsPage() {
       return;
     }
 
+    // Add this validation check
+    if (newVersion.media.length === 0) {
+      toast({
+        title: "Error",
+        description: "At least one media file is required.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (
       newVersion.pollOpenAt &&
       newVersion.pollCloseAt &&
@@ -316,14 +363,14 @@ export default function PostsPage() {
       formData.append("post_id", String(selectedPost.id));
       formData.append("description", newVersion.description);
       newVersion.media.forEach((file, idx) => {
-        formData.append(`media[${idx}][file]`, file);
+        formData.append(`images[${idx}]`, file);
       });
       formData.append("tags[0][tag_type]", "user");
       formData.append("tags[0][user_id]", String(user.id));
       formData.append("tags[0][start_pos]", "0");
       formData.append(
         "tags[0][end_pos]",
-         String(Math.max(2, newVersion.description.length))
+        String(Math.max(2, newVersion.description.length))
       );
 
       if (newVersion.pollQuestion) {
@@ -344,7 +391,10 @@ export default function PostsPage() {
 
       await apiService.postMultipart("/post_versions", formData);
 
-      toast({ title: "Success", description: "New version created successfully!" });
+      toast({
+        title: "Success",
+        description: "New version created successfully!",
+      });
       setIsCreateVersionDialogOpen(false);
       setNewVersion({
         description: "",
@@ -369,69 +419,77 @@ export default function PostsPage() {
       setIsCreatingVersion(false);
     }
   };
-useEffect(() => {
-  if (selectedPost) {
-    const updated = posts.find((p) => p.id === selectedPost.id);
-    if (updated) setSelectedPost(updated);
-  }
-}, [posts]);
-  const handlePinPost = async (postId: number, isPinned: boolean) => {
-  if (isPinned)
-    return toast({
-      title: "Already pinned",
-      description: "This post is already pinned.",
-    });
-  if (token) apiService.setAuthToken(token);
-  try {
-    await apiService.post("/post_pins", { post_id: postId, sort_index: 1 });
-    toast({ title: "Success", description: "Post pinned successfully." });
-    await fetchPosts(currentPage);
-    // Update selectedPost if it's open
-    
-  } catch {
-    toast({
-      title: "Error",
-      description: "Failed to pin post.",
-      variant: "destructive",
-    });
-  }
-};
+  useEffect(() => {
+    if (selectedPost) {
+      const updated = posts.find((p) => p.id === selectedPost.id);
+      if (updated) setSelectedPost(updated);
+    }
+  }, [posts]);
 
-const handleUnpinPost = async (postId: number) => {
-  if (token) apiService.setAuthToken(token);
-  try {
-    await apiService.delete(`/post_pins/${postId}`);
-    toast({ title: "Success", description: "Post unpinned successfully." });
-    await fetchPosts(currentPage);
-    
-  } catch {
-    toast({
-      title: "Error",
-      description: "Failed to unpin post.",
-      variant: "destructive",
-    });
-  }
-};
-  const handleHighlightPost = async (
-    postId: number,
-    isHighlighted: boolean
-  ) => {
-    if (isHighlighted)
+  const handlePinPost = async (post: any) => {
+    if (post.is_pinned) {
       return toast({
-        title: "Already highlighted",
-        description: "This post is already highlighted.",
+        title: "Already pinned",
+        description: "This post is already pinned.",
       });
+    }
+
+    if (token) apiService.setAuthToken(token);
+
+    try {
+      await apiService.post("/post_pins", { post_id: post.id, sort_index: 1 });
+      toast({ title: "Success", description: "Post pinned successfully." });
+      await fetchPosts(currentPage);
+    } catch {
+      toast({
+        title: "Error",
+        description: "Failed to pin post.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleUnpinPost = async (post: any) => {
+    if (token) apiService.setAuthToken(token);
+
+    try {
+      // use the post.id directly since there's no post_pin object in response
+      await apiService.delete(`/post_pins/${post.id}`);
+      toast({ title: "Success", description: "Post unpinned successfully." });
+      await fetchPosts(currentPage);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to unpin post.",
+        variant: "destructive",
+      });
+    }
+  };
+  const handleHighlightPost = async (postId: number) => {
     if (token) apiService.setAuthToken(token);
     try {
-      await apiService.post("/post_highlights", {
+      const res = await apiService.post("/post_highlights", {
         post_id: postId,
         short_caption: "Weekly Highlight",
         sort_index: 1,
       });
+
+      const highlight = res?.data;
+
+      // Optimistic UI update: attach highlight info
+      setPosts((currentPosts) =>
+        currentPosts.map((post) =>
+          post.id === postId
+            ? { ...post, is_highlighted: true, highlight_id: highlight.id }
+            : post
+        )
+      );
+
       toast({
         title: "Success",
         description: "Post highlighted successfully.",
       });
+
       fetchPosts(currentPage);
     } catch {
       toast({
@@ -442,14 +500,37 @@ const handleUnpinPost = async (postId: number) => {
     }
   };
 
-  const handleRemoveHighlight = async (postId: number) => {
+  const handleRemoveHighlight = async (
+    postId: number,
+    highlightId?: number
+  ) => {
+    if (!highlightId) {
+      toast({
+        title: "Error",
+        description: "No highlight found for this post.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (token) apiService.setAuthToken(token);
     try {
-      await apiService.delete(`/post_highlights/${postId}`);
+      await apiService.delete(`/post_highlights/${highlightId}`);
+
+      // Optimistic UI update: remove highlight info
+      setPosts((currentPosts) =>
+        currentPosts.map((post) =>
+          post.id === postId
+            ? { ...post, is_highlighted: false, highlight_id: undefined }
+            : post
+        )
+      );
+
       toast({
         title: "Success",
         description: "Highlight removed successfully.",
       });
+
       fetchPosts(currentPage);
     } catch {
       toast({
@@ -535,13 +616,13 @@ const handleUnpinPost = async (postId: number) => {
   };
 
   const filteredPosts = posts.filter((post) => {
-  const q = searchTerm.trim().toLowerCase();
-  const matchesSearch =
-    post.title.toLowerCase().includes(q) ||
-    post.content.toLowerCase().includes(q);
+    const q = searchTerm.trim().toLowerCase();
+    const matchesSearch =
+      post.title.toLowerCase().includes(q) ||
+      post.content.toLowerCase().includes(q);
 
-  return matchesSearch;
-});
+    return matchesSearch;
+  });
 
   if (isLoading) {
     return (
@@ -558,6 +639,8 @@ const handleUnpinPost = async (postId: number) => {
       </div>
     );
   }
+
+  const [showPollOptions, setShowPollOptions] = useState(false);
 
   return (
     <div className="flex flex-col">
@@ -693,7 +776,12 @@ const handleUnpinPost = async (postId: number) => {
                     </div>
                   </>
                 )}
-                <Button type="submit" disabled={isCreatingPost || isLoading}>
+                <Button
+                  type="submit"
+                  disabled={
+                    isCreatingPost || isLoading || newPost.media.length === 0
+                  }
+                >
                   {isCreatingPost ? "Creating..." : "Create Post"}
                 </Button>
               </form>
@@ -775,16 +863,29 @@ const handleUnpinPost = async (postId: number) => {
                   </TableRow>
                 ) : (
                   filteredPosts.map((post) => (
-                    <TableRow key={post.id}>
+                    <TableRow
+                      key={post.id}
+                      className={post.is_highlighted ? "bg-yellow-50" : ""}
+                    >
                       <TableCell className="w-[25%]">
-                        <div className="font-medium">{post.title}</div>
+                        <div className="flex items-center gap-2">
+                          {post.is_highlighted && (
+                            <Star className="h-4 w-4 text-yellow-500" />
+                          )}
+                          {post.is_pinned && (
+                            <Pin className="h-4 w-4 text-blue-500" />
+                          )}
+                          <span className="font-medium">{post.title}</span>
+                        </div>
                         <div className="text-sm text-muted-foreground">
                           {post.content}
                         </div>
                       </TableCell>
                       <TableCell>
                         <Badge
-                          className={`${statusColors[post.status]} hover:bg-opacity-80`}
+                          className={`${
+                            statusColors[post.status]
+                          } hover:bg-opacity-80`}
                         >
                           {post.status}
                         </Badge>
@@ -793,12 +894,12 @@ const handleUnpinPost = async (postId: number) => {
                       <TableCell>
                         {post.media && post.media.length > 0 ? (
                           <div className="flex gap-1">
-                            {post.media.slice(0, 2).map((img, idx) => (
+                            {post.media.slice(0, 2).map((url, idx) => (
                               <img
-                                key={img.id || idx}
-                                src={img.storage_path}
+                                key={idx}
+                                src={url}
                                 alt="Post media"
-                                className="w-10 h-10 object-cover rounded"
+                                className="w-10 h-10 object-cover rounded border"
                               />
                             ))}
                             {post.media.length > 2 && (
@@ -808,7 +909,9 @@ const handleUnpinPost = async (postId: number) => {
                             )}
                           </div>
                         ) : (
-                          <span className="text-muted-foreground">-</span>
+                          <span className="text-xs text-muted-foreground">
+                            No Image
+                          </span>
                         )}
                       </TableCell>
                       <TableCell className="text-right">
@@ -831,29 +934,24 @@ const handleUnpinPost = async (postId: number) => {
                                   post.status !== "deleted" && (
                                     <DropdownMenuItem
                                       onClick={() =>
-                                        handleUpdateStatus(
-                                          post.id,
-                                          "published"
-                                        )
+                                        handleUpdateStatus(post.id, "published")
                                       }
                                     >
                                       Publish
                                     </DropdownMenuItem>
                                   )}
-                                
+
                                 <DropdownMenuSeparator />
                                 {post.is_pinned ? (
                                   <DropdownMenuItem
-                                    onClick={() => handleUnpinPost(post.id)}
+                                    onClick={() => handleUnpinPost(post)}
                                   >
                                     <PinOff className="mr-2 h-4 w-4" /> Unpin
                                     Post
                                   </DropdownMenuItem>
                                 ) : (
                                   <DropdownMenuItem
-                                    onClick={() =>
-                                      handlePinPost(post.id, post.is_pinned)
-                                    }
+                                    onClick={() => handlePinPost(post)}
                                   >
                                     <Pin className="mr-2 h-4 w-4" /> Pin Post
                                   </DropdownMenuItem>
@@ -861,7 +959,10 @@ const handleUnpinPost = async (postId: number) => {
                                 {post.is_highlighted ? (
                                   <DropdownMenuItem
                                     onClick={() =>
-                                      handleRemoveHighlight(post.id)
+                                      handleRemoveHighlight(
+                                        post.id,
+                                        post.highlight_id
+                                      )
                                     }
                                   >
                                     <StarOff className="mr-2 h-4 w-4" /> Remove
@@ -869,17 +970,13 @@ const handleUnpinPost = async (postId: number) => {
                                   </DropdownMenuItem>
                                 ) : (
                                   <DropdownMenuItem
-                                    onClick={() =>
-                                      handleHighlightPost(
-                                        post.id,
-                                        post.is_highlighted
-                                      )
-                                    }
+                                    onClick={() => handleHighlightPost(post.id)}
                                   >
                                     <Star className="mr-2 h-4 w-4" /> Highlight
                                     Post
                                   </DropdownMenuItem>
                                 )}
+
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                   className="text-red-600"
@@ -929,7 +1026,9 @@ const handleUnpinPost = async (postId: number) => {
                     Status:
                   </span>
                   <Badge
-                    className={`col-span-3 w-fit ${statusColors[selectedPost.status]}`}
+                    className={`col-span-3 w-fit ${
+                      statusColors[selectedPost.status]
+                    }`}
                   >
                     {selectedPost.status}
                   </Badge>
@@ -938,70 +1037,110 @@ const handleUnpinPost = async (postId: number) => {
                   <span className="col-span-1 text-sm font-medium">Likes:</span>
                   <span className="col-span-3">{selectedPost.likes_count}</span>
                 </div>
-                <div className="flex gap-2 mt-2 items-center">
-  {selectedPost.is_pinned && <Badge variant="secondary">Pinned</Badge>}
-  {selectedPost.is_highlighted && <Badge variant="secondary">Highlighted</Badge>}
-  {isAdmin && (
-    selectedPost.is_pinned ? (
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => handleUnpinPost(selectedPost.id)}
-      >
-        <PinOff className="mr-2 h-4 w-4" /> Unpin
-      </Button>
-    ) : (
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => handlePinPost(selectedPost.id, selectedPost.is_pinned)}
-      >
-        <Pin className="mr-2 h-4 w-4" /> Pin
-      </Button>
-    )
-  )}
-</div>
-
-                {/* Post Versions Table */}
-                {selectedPost.post_versions && selectedPost.post_versions.length > 0 && (
+                {selectedPost.post_poll && (
                   <div className="grid gap-2 mt-4">
-                    <h3 className="text-lg font-bold">Versions</h3>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>ID</TableHead>
-                          <TableHead>Description</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {selectedPost.post_versions.map((version) => (
-                          <TableRow key={version.id}>
-                            <TableCell>{version.id}</TableCell>
-                            <TableCell>{version.description.slice(0, 30)}...</TableCell>
-                            <TableCell>
-                              <Badge className={statusColors[version.status]}>
-                                {version.status}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              {version.status !== "published" && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleUpdateVersionStatus(selectedPost.id, version.id, "published")}
-                                >
-                                  Publish
-                                </Button>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                    <h3 className="text-lg font-bold">Poll</h3>
+                    <Button
+                      variant="ghost"
+                      onClick={() => setShowPollOptions(!showPollOptions)}
+                      className="justify-start px-0"
+                    >
+                      {selectedPost.post_poll.question}
+                    </Button>
+                    {showPollOptions && (
+                      <div className="grid gap-1 pl-4">
+                        {selectedPost.post_poll?.poll_options.map(
+                          (option: { option_txt: string }, index: number) => (
+                            <div
+                              key={index}
+                              className="flex items-center space-x-2"
+                            >
+                              <Badge>{option.option_txt}</Badge>
+                            </div>
+                          )
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
+                <div className="flex gap-2 mt-2 items-center">
+                  {selectedPost.is_pinned && (
+                    <Badge variant="secondary">Pinned</Badge>
+                  )}
+                  {selectedPost.is_highlighted && (
+                    <Badge variant="secondary">Highlighted</Badge>
+                  )}
+                  {isAdmin &&
+                    (selectedPost.is_pinned ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleUnpinPost(selectedPost.id)}
+                      >
+                        <PinOff className="mr-2 h-4 w-4" /> Unpin
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePinPost(selectedPost)}
+                      >
+                        <Pin className="mr-2 h-4 w-4" /> Pin
+                      </Button>
+                    ))}
+                </div>
+
+                {/* Post Versions Table */}
+                {selectedPost.post_versions &&
+                  selectedPost.post_versions.length > 0 && (
+                    <div className="grid gap-2 mt-4">
+                      <h3 className="text-lg font-bold">Versions</h3>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>ID</TableHead>
+                            <TableHead>Description</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">
+                              Actions
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {selectedPost.post_versions.map((version) => (
+                            <TableRow key={version.id}>
+                              <TableCell>{version.id}</TableCell>
+                              <TableCell>
+                                {version.description.slice(0, 30)}...
+                              </TableCell>
+                              <TableCell>
+                                <Badge className={statusColors[version.status]}>
+                                  {version.status}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {version.status !== "published" && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() =>
+                                      handleUpdateVersionStatus(
+                                        selectedPost.id,
+                                        version.id,
+                                        "published"
+                                      )
+                                    }
+                                  >
+                                    Publish
+                                  </Button>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
               </div>
             )}
             {isAdmin && selectedPost && (
@@ -1043,7 +1182,9 @@ const handleUnpinPost = async (postId: number) => {
         >
           <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
-              <DialogTitle>Create New Version for Post #{selectedPost?.id}</DialogTitle>
+              <DialogTitle>
+                Create New Version for Post #{selectedPost?.id}
+              </DialogTitle>
               <DialogDescription>
                 Fill out the form below to create a new version of this post.
               </DialogDescription>
@@ -1055,7 +1196,10 @@ const handleUnpinPost = async (postId: number) => {
                   id="version-description"
                   value={newVersion.description}
                   onChange={(e) =>
-                    setNewVersion({ ...newVersion, description: e.target.value })
+                    setNewVersion({
+                      ...newVersion,
+                      description: e.target.value,
+                    })
                   }
                   placeholder="Enter content for the new version..."
                   maxLength={255}
@@ -1126,7 +1270,9 @@ const handleUnpinPost = async (postId: number) => {
                       </div>
                       <div className="grid gap-4">
                         <div className="grid gap-2">
-                          <Label htmlFor="version-poll-open">Poll Open At</Label>
+                          <Label htmlFor="version-poll-open">
+                            Poll Open At
+                          </Label>
                           <Input
                             id="version-poll-open"
                             type="datetime-local"
@@ -1140,7 +1286,9 @@ const handleUnpinPost = async (postId: number) => {
                           />
                         </div>
                         <div className="grid gap-2">
-                          <Label htmlFor="version-poll-close">Poll Close At</Label>
+                          <Label htmlFor="version-poll-close">
+                            Poll Close At
+                          </Label>
                           <Input
                             id="version-poll-close"
                             type="datetime-local"
@@ -1154,7 +1302,9 @@ const handleUnpinPost = async (postId: number) => {
                           />
                         </div>
                         {pollDateError && (
-                          <div className="text-red-600 text-sm">{pollDateError}</div>
+                          <div className="text-red-600 text-sm">
+                            {pollDateError}
+                          </div>
                         )}
                       </div>
                     </>
