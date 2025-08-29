@@ -37,10 +37,9 @@ export default function QuestionsPage() {
   const [selectedQuestion, setSelectedQuestion] = useState<PreferenceQuestion | null>(null)
   const [newQuestion, setNewQuestion] = useState({
     question: "",
-    description: "",
-    question_type: "single_choice" as "single_choice" | "multiple_choice" | "text" | "rating",
-    is_required: true,
-    is_active: true,
+    allow_multiple: 0,
+    is_active: 1,
+    sort_order: 1,
   })
   const { toast } = useToast()
 
@@ -98,12 +97,15 @@ export default function QuestionsPage() {
         ...questions,
         {
           id: questions.length + 1,
-          ...newQuestion,
-          multiple: newQuestion.question_type === "multiple_choice",
-          order_index: questions.length + 1,
+          question: newQuestion.question,
+          multiple: newQuestion.allow_multiple === 1,
+          is_active: Boolean(newQuestion.is_active),
+          order_index: newQuestion.sort_order,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           answers: [],
+          question_type: "single_choice",
+          is_required: false
         },
       ])
       toast({
@@ -113,10 +115,9 @@ export default function QuestionsPage() {
       setIsCreateQuestionDialogOpen(false)
       setNewQuestion({
         question: "",
-        description: "",
-        question_type: "single_choice",
-        is_required: true,
-        is_active: true,
+        allow_multiple: 0,
+        is_active: 1,
+        sort_order: 1,
       })
     } catch (error) {
       toast({
@@ -194,10 +195,18 @@ export default function QuestionsPage() {
                         <div className="text-sm text-muted-foreground">{q.description}</div>
                       </TableCell>
                       <TableCell>
-                        <Switch checked={!!q.multiple} disabled />
+                        {q.multiple ? (
+                          <span className="px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-700 border border-green-300">Yes</span>
+                        ) : (
+                          <span className="px-2 py-1 rounded text-xs font-semibold bg-red-100 text-red-700 border border-red-300">No</span>
+                        )}
                       </TableCell>
                       <TableCell>
-                        <Switch checked={q.is_active} disabled />
+                        {q.is_active ? (
+                          <span className="px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-700 border border-green-300">Active</span>
+                        ) : (
+                          <span className="px-2 py-1 rounded text-xs font-semibold bg-red-100 text-red-700 border border-red-300">Inactive</span>
+                        )}
                       </TableCell>
                       <TableCell>{q.order_index}</TableCell>
                       <TableCell>{q.answers?.length ?? 0}</TableCell>
@@ -256,30 +265,31 @@ export default function QuestionsPage() {
                 onChange={(e) => setNewQuestion({ ...newQuestion, question: e.target.value })}
               />
             </div>
-            <div>
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={newQuestion.description}
-                onChange={(e) => setNewQuestion({ ...newQuestion, description: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label htmlFor="question_type">Question Type</Label>
+            <div className="flex items-center space-x-2">
+              <Label htmlFor="allow_multiple">Allow Multiple</Label>
               <Switch
-                id="is_required"
-                checked={newQuestion.is_required}
-                onCheckedChange={(checked) => setNewQuestion({ ...newQuestion, is_required: checked })}
+                id="allow_multiple"
+                checked={newQuestion.allow_multiple === 1}
+                onCheckedChange={(checked) => setNewQuestion({ ...newQuestion, allow_multiple: checked ? 1 : 0 })}
               />
-              <Label htmlFor="is_required">Required</Label>
             </div>
             <div className="flex items-center space-x-2">
+              <Label htmlFor="is_active">Active</Label>
               <Switch
                 id="is_active"
-                checked={newQuestion.is_active}
-                onCheckedChange={(checked) => setNewQuestion({ ...newQuestion, is_active: checked })}
+                checked={newQuestion.is_active === 1}
+                onCheckedChange={(checked) => setNewQuestion({ ...newQuestion, is_active: checked ? 1 : 0 })}
               />
-              <Label htmlFor="is_active">Active</Label>
+            </div>
+            <div>
+              <Label htmlFor="sort_order">Sort Order</Label>
+              <Input
+                id="sort_order"
+                type="number"
+                min={1}
+                value={newQuestion.sort_order}
+                onChange={(e) => setNewQuestion({ ...newQuestion, sort_order: Number(e.target.value) })}
+              />
             </div>
           </div>
           <DialogFooter>
@@ -304,24 +314,6 @@ export default function QuestionsPage() {
                 <Label>Question</Label>
                 <div className="mt-1">{selectedQuestion.question}</div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Multiple</Label>
-                  <div className="mt-1">{selectedQuestion.multiple ? "Yes" : "No"}</div>
-                </div>
-                <div>
-                  <Label>Active</Label>
-                  <div className="mt-1">{selectedQuestion.is_active ? "Active" : "Inactive"}</div>
-                </div>
-                <div>
-                  <Label>Sort Order</Label>
-                  <div className="mt-1">{selectedQuestion.order_index}</div>
-                </div>
-                <div>
-                  <Label>Required</Label>
-                  <div className="mt-1">{selectedQuestion.is_required ? "Yes" : "No"}</div>
-                </div>
-              </div>
               <div>
                 <Label>Answers ({selectedQuestion.answers?.length ?? 0})</Label>
                 <div className="mt-2 space-y-2">
@@ -333,7 +325,9 @@ export default function QuestionsPage() {
                       >
                         {typeof ans === "string" || typeof ans === "number"
                           ? String(ans)
-                          : <pre className="whitespace-pre-wrap text-xs">{JSON.stringify(ans, null, 2)}</pre>}
+                          : ans && typeof ans === "object" && "Answer" in ans
+                            ? `Answer: ${ans.Answer}`
+                            : <pre className="whitespace-pre-wrap text-xs">{JSON.stringify(ans, null, 2)}</pre>}
                       </div>
                     ))
                   ) : (

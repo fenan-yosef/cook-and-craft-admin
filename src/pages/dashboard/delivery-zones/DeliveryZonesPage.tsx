@@ -17,7 +17,7 @@ interface DeliveryZone {
   scope: string;
   locations: { latitude: number; longitude: number }[];
   fee: number;
-  isEnabled: boolean;
+  is_active: boolean;
   days: string[];
 }
 
@@ -30,11 +30,11 @@ export default function DeliveryZonesPage() {
   // Add Zone modal state
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [addLoading, setAddLoading] = useState(false);
-  const [addForm, setAddForm] = useState({ name: "", scope: "", locationsCsv: "", fee: "", isEnabled: false, daysCsv: "" });
+  const [addForm, setAddForm] = useState({ name: "", scope: "", locationsCsv: "", fee: "", is_active: false, daysCsv: "" });
   // Edit Zone modal state
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
-  const [editForm, setEditForm] = useState({ id: "", name: "", scope: "", locationsCsv: "", fee: "", isEnabled: false, daysCsv: "" });
+  const [editForm, setEditForm] = useState({ id: "", name: "", scope: "", locationsCsv: "", fee: "", is_active: false, daysCsv: "" });
 
   useEffect(() => {
     const token = localStorage.getItem("auth_token") || "";
@@ -45,7 +45,7 @@ export default function DeliveryZonesPage() {
   const fetchZones = async () => {
     try {
       setLoading(true);
-      const response = await apiService.get("/delivery-zones");
+      const response = await apiService.get("/admins/delivery-zones");
       if (Array.isArray(response.data)) {
         const mapped = response.data.map((item: any) => ({
           id: item.deliveryZoneId,
@@ -53,7 +53,7 @@ export default function DeliveryZonesPage() {
           scope: item.deliveryZoneScope,
           locations: item.deliveryZoneGeographicalLocation || [],
           fee: item.deliveryZoneFee,
-          isEnabled: Boolean(item.isDeliveryZoneEnabled),
+          is_active: Boolean(item.isDeliveryZoneEnabled),
           days: item.deliveryZoneDays || [],
         }));
         setZones(mapped);
@@ -81,7 +81,7 @@ export default function DeliveryZonesPage() {
       scope: zone.scope,
       locationsCsv: zone.locations.map(l=>`${l.latitude},${l.longitude}`).join('; '),
       fee: String(zone.fee),
-      isEnabled: zone.isEnabled,
+      is_active: zone.is_active,
       daysCsv: zone.days.join(', '),
     });
     setIsEditOpen(true);
@@ -122,10 +122,10 @@ export default function DeliveryZonesPage() {
                   scope: addForm.scope,
                   geographical_location: locations,
                   fee: parseFloat(addForm.fee),
-                  is_enabled: addForm.isEnabled ? 1 : 0,
+                  is_active: addForm.is_active ? 1 : 0,
                   days: days,
                 };
-                await apiService.post('/delivery-zones', payload);
+                await apiService.post('/admins/delivery-zones', payload);
                 toast({ title: 'Success', description: 'Zone added.' });
                 setIsAddOpen(false);
                 fetchZones();
@@ -146,8 +146,7 @@ export default function DeliveryZonesPage() {
               <div><Label htmlFor="scope">Scope</Label><Input id="scope" name="scope" value={addForm.scope} onChange={e=>setAddForm(prev=>({...prev,scope:e.target.value}))} required/></div>
               <div><Label htmlFor="locationsCsv">Locations (lat,lng;...)</Label><Input id="locationsCsv" name="locationsCsv" value={addForm.locationsCsv} onChange={e=>setAddForm(prev=>({...prev,locationsCsv:e.target.value}))} placeholder="31.2304,121.4737; 30.0444,31.2357; 29.9765,31.1313; 29.9820,31.1325" required/></div>
               <div><Label htmlFor="fee">Fee</Label><Input id="fee" name="fee" type="number" value={addForm.fee} onChange={e=>setAddForm(prev=>({...prev,fee:e.target.value}))} required/></div>
-              <div className="flex items-center gap-2"><input id="isEnabled" name="isEnabled" type="checkbox" checked={addForm.isEnabled} onChange={e=>setAddForm(prev=>({...prev,isEnabled:e.target.checked}))}/><Label htmlFor="isEnabled">Enabled</Label></div>
-              <div><Label htmlFor="daysCsv">Days (comma separated)</Label><Input id="daysCsv" name="daysCsv" value={addForm.daysCsv} onChange={e=>setAddForm(prev=>({...prev,daysCsv:e.target.value}))}/></div>
+              <div className="flex items-center gap-2"><input id="is_active" name="is_active" type="checkbox" checked={addForm.is_active} onChange={e=>setAddForm(prev=>({...prev,is_active:e.target.checked}))}/><Label htmlFor="is_active">Active</Label></div>
               <DialogFooter><Button variant="outline" onClick={()=>setIsAddOpen(false)}>Cancel</Button><Button type="submit" disabled={addLoading}>{addLoading?'Adding...':'Add'}</Button></DialogFooter>
             </form>
           </DialogContent>
@@ -179,10 +178,10 @@ export default function DeliveryZonesPage() {
                   scope: editForm.scope,
                   geographical_location: locations,
                   fee: parseFloat(editForm.fee),
-                  is_enabled: editForm.isEnabled ? 1 : 0,
+                  is_active: editForm.is_active ? 1 : 0,
                   days: days,
                 };
-                await apiService.patch(`/delivery-zones/${editForm.id}`, payload);
+                await apiService.patch(`/admins/delivery-zones/${editForm.id}`, payload);
                 toast({ title: 'Success', description: 'Zone updated.' });
                 setIsEditOpen(false);
                 fetchZones();
@@ -203,8 +202,7 @@ export default function DeliveryZonesPage() {
               <div><Label htmlFor="edit_scope">Scope</Label><Input id="edit_scope" name="scope" value={editForm.scope} onChange={e=>setEditForm(prev=>({...prev,scope:e.target.value}))} required/></div>
               <div><Label htmlFor="edit_locationsCsv">Locations (lat,lng;...)</Label><Input id="edit_locationsCsv" name="locationsCsv" value={editForm.locationsCsv} onChange={e=>setEditForm(prev=>({...prev,locationsCsv:e.target.value}))} required/></div>
               <div><Label htmlFor="edit_fee">Fee</Label><Input id="edit_fee" name="fee" type="number" value={editForm.fee} onChange={e=>setEditForm(prev=>({...prev,fee:e.target.value}))} required/></div>
-              <div className="flex items-center gap-2"><input id="edit_isEnabled" name="isEnabled" type="checkbox" checked={editForm.isEnabled} onChange={e=>setEditForm(prev=>({...prev,isEnabled:e.target.checked}))}/><Label htmlFor="edit_isEnabled">Enabled</Label></div>
-              <div><Label htmlFor="edit_daysCsv">Days (comma separated)</Label><Input id="edit_daysCsv" name="daysCsv" value={editForm.daysCsv} onChange={e=>setEditForm(prev=>({...prev,daysCsv:e.target.value}))}/></div>
+              <div className="flex items-center gap-2"><input id="edit_is_active" name="is_active" type="checkbox" checked={editForm.is_active} onChange={e=>setEditForm(prev=>({...prev,is_active:e.target.checked}))}/><Label htmlFor="edit_is_active">Active</Label></div>
               <DialogFooter><Button variant="outline" onClick={()=>setIsEditOpen(false)}>Cancel</Button><Button type="submit" disabled={editLoading}>{editLoading?'Saving...':'Save'}</Button></DialogFooter>
             </form>
           </DialogContent>
@@ -236,7 +234,7 @@ export default function DeliveryZonesPage() {
                   <TableHead>Locations</TableHead>
                   <TableHead>Fee</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Days</TableHead>
+                  {/* <TableHead>Days</TableHead> */}
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -267,11 +265,11 @@ export default function DeliveryZonesPage() {
                       </TableCell>
                       <TableCell>${zone.fee.toFixed(2)}</TableCell>
                       <TableCell>
-                        <Badge variant={zone.isEnabled ? "default" : "destructive"}>
-                          {zone.isEnabled ? "Enabled" : "Disabled"}
+                        <Badge variant={zone.is_active ? "default" : "destructive"}>
+                          {zone.is_active ? "Active" : "Inactive"}
                         </Badge>
                       </TableCell>
-                      <TableCell>{zone.days.join(", ") || "-"}</TableCell>
+                      {/* <TableCell>{zone.days.join(", ") || "-"}</TableCell> */}
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
