@@ -34,23 +34,23 @@ const AnswersTypeColors = {
 
 export default function AnswersPage() {
   const [answers, setanswers] = useState<PreferenceAnswers[]>([])
+  const [questions, setQuestions] = useState<{ id: number; question: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [isCreateAnswersDialogOpen, setIsCreateAnswersDialogOpen] = useState(false)
   const [newAnswers, setNewAnswers] = useState({
-    Answers: "",
-    description: "",
-    Answers_type: "single_choice" as "single_choice" | "multiple_choice" | "text" | "rating",
-    is_required: true,
-    is_active: true,
+    question_id: 0,
+    answer_text: "",
+    sort_order: 1,
   })
   const { toast } = useToast()
 
   useEffect(() => {
-    // set auth token from localStorage and fetch answers
-    const token = localStorage.getItem('auth_token')
-    apiService.setAuthToken(token)
-    fetchPreferences()
+  // set auth token from localStorage and fetch answers/questions
+  const token = localStorage.getItem('auth_token')
+  apiService.setAuthToken(token)
+  fetchPreferences()
+  fetchQuestions()
   }, [])
 
   const fetchPreferences = async () => {
@@ -83,30 +83,60 @@ export default function AnswersPage() {
     }
   }
 
+  // Fetch all available questions for dropdown
+  const fetchQuestions = async () => {
+    try {
+      const response = await apiService.get('/preference_questions')
+      const items = Array.isArray(response.data) ? response.data : []
+      setQuestions(
+        items.map((item: any) => ({
+          id: item.ID,
+          question: item.Question,
+        }))
+      )
+    } catch (error) {
+      // Optionally toast error
+    }
+  }
+
   const handleCreateAnswers = async () => {
     try {
-      setanswers([
-        ...answers,
-        {
-          id: answers.length + 1,
-          ...newAnswers,
-          order_index: answers.length + 1,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-      ])
-      toast({
-        title: "Success",
-        description: "Answers created successfully",
-      })
-      setIsCreateAnswersDialogOpen(false)
-      setNewAnswers({
-        Answers: "",
-        description: "",
-        Answers_type: "single_choice",
-        is_required: true,
-        is_active: true,
-      })
+      // Actually send POST request to backend
+      const payload = {
+        question_id: newAnswers.question_id,
+        answer_text: newAnswers.answer_text,
+        sort_order: newAnswers.sort_order,
+      }
+      const response = await apiService.post('/preference_answers', payload)
+      if (response && response.data && response.data.ID) {
+        // Add the new answer to the local list using backend response
+        setanswers([
+          ...answers,
+          {
+            id: response.data.ID,
+            Answers: response.data.Answer || newAnswers.answer_text,
+            description: questions.find(q => q.id === newAnswers.question_id)?.question || "",
+            Answers_type: 'single_choice',
+            is_required: true,
+            is_active: true,
+            order_index: response.data.Sort || newAnswers.sort_order,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+        ])
+        toast({
+          title: "Success",
+          description: "Answers created successfully",
+        })
+        setIsCreateAnswersDialogOpen(false)
+        setNewAnswers({
+          question_id: 0,
+          answer_text: "",
+          sort_order: 1,
+        })
+      } else {
+        throw new Error("No ID returned from backend")
+      }
     } catch (error) {
       toast({
         title: "Error",
@@ -154,10 +184,9 @@ export default function AnswersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Answers</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Required</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Answer</TableHead>
+                  <TableHead>Question</TableHead>
+                  <TableHead>Sort Order</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -179,22 +208,12 @@ export default function AnswersPage() {
                     <TableRow key={q.id}>
                       <TableCell>
                         <div className="font-medium">{q.Answers}</div>
-                        <div className="text-sm text-muted-foreground">{q.description}</div>
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          className={`${
-                            AnswersTypeColors[q.Answers_type]
-                          } hover:bg-opacity-80`}
-                        >
-                          {q.Answers_type.replace("_", " ")}
-                        </Badge>
+                        <div className="font-medium">{q.description}</div>
                       </TableCell>
                       <TableCell>
-                        <Switch checked={q.is_required} disabled />
-                      </TableCell>
-                      <TableCell>
-                        <Switch checked={q.is_active} disabled />
+                        {q.order_index}
                       </TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
@@ -235,37 +254,36 @@ export default function AnswersPage() {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div>
-              <Label htmlFor="Answers">Answers</Label>
+              <Label htmlFor="question_id">Question</Label>
+              <select
+                id="question_id"
+                className="w-full border rounded px-2 py-2"
+                value={newAnswers.question_id}
+                onChange={e => setNewAnswers({ ...newAnswers, question_id: Number(e.target.value) })}
+              >
+                <option value={0}>Select a question...</option>
+                {questions.map(q => (
+                  <option key={q.id} value={q.id}>{q.question}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="answer_text">Answer Text</Label>
               <Input
-                id="Answers"
-                value={newAnswers.Answers}
-                onChange={(e) => setNewAnswers({ ...newAnswers, Answers: e.target.value })}
+                id="answer_text"
+                value={newAnswers.answer_text}
+                onChange={e => setNewAnswers({ ...newAnswers, answer_text: e.target.value })}
               />
             </div>
             <div>
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={newAnswers.description}
-                onChange={(e) => setNewAnswers({ ...newAnswers, description: e.target.value })}
+              <Label htmlFor="sort_order">Sort Order</Label>
+              <Input
+                id="sort_order"
+                type="number"
+                min={1}
+                value={newAnswers.sort_order}
+                onChange={e => setNewAnswers({ ...newAnswers, sort_order: Number(e.target.value) })}
               />
-            </div>
-            <div>
-              <Label htmlFor="Answers_type">Answers Type</Label>
-              <Switch
-                id="is_required"
-                checked={newAnswers.is_required}
-                onCheckedChange={(checked) => setNewAnswers({ ...newAnswers, is_required: checked })}
-              />
-              <Label htmlFor="is_required">Required</Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="is_active"
-                checked={newAnswers.is_active}
-                onCheckedChange={(checked) => setNewAnswers({ ...newAnswers, is_active: checked })}
-              />
-              <Label htmlFor="is_active">Active</Label>
             </div>
           </div>
           <DialogFooter>

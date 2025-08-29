@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { apiService } from "@/lib/api-service"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Users, ShoppingCart, MessageSquare, Calendar } from "lucide-react"
 
@@ -24,15 +25,42 @@ export default function DashboardHomePage() {
   })
 
   useEffect(() => {
-    // In a real app, you'd fetch these stats from your API
-    setStats({
-      totalUsers: 1234,
-      totalOrders: 567,
-      totalPosts: 890,
-      totalSubscriptions: 123,
-      revenue: 45678,
-      growth: 12.5,
-    })
+    const fetchStats = async () => {
+      try {
+        // Get auth token from localStorage
+        const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
+        if (token) apiService.setAuthToken(token)
+
+        // Fetch posts
+        const postsRes = await apiService.get("/posts?withLikes=true&withPolls=true")
+        // Fetch users
+        const usersRes = await apiService.get("/admins/users")
+        // Fetch orders
+        const ordersRes = await apiService.get("/orders")
+        // Fetch subscriptions
+        const subsRes = await apiService.get("/subscriptions")
+
+        setStats({
+          totalUsers: Array.isArray(usersRes.data) ? usersRes.data.length : 0,
+          totalOrders: Array.isArray(ordersRes.data) ? ordersRes.data.length : 0,
+          totalPosts: Array.isArray(postsRes.data) ? postsRes.data.length : 0,
+          totalSubscriptions: Array.isArray(subsRes.data) ? subsRes.data.length : 0,
+          revenue: 45678, // TODO: Replace with real revenue endpoint if available
+          growth: 12.5,   // TODO: Replace with real growth calculation if available
+        })
+      } catch (err) {
+        // fallback to 0s if error
+        setStats({
+          totalUsers: 0,
+          totalOrders: 0,
+          totalPosts: 0,
+          totalSubscriptions: 0,
+          revenue: 0,
+          growth: 0,
+        })
+      }
+    }
+    fetchStats()
   }, [])
 
   return (
