@@ -46,7 +46,6 @@ import {
   Play,
   Pause,
   XCircle,
-  Calendar,
   DollarSign,
   Users,
   TrendingUp,
@@ -67,7 +66,7 @@ interface Subscription {
   plan_type?: "weekly" | "monthly" | "quarterly"
   status: "active" | "paused" | "cancelled" | "expired"
   meals_per_week?: number
-  meals_per_interval?: number // Added this property to fix the error
+  meals_per_interval?: number
   price_per_meal?: number
   total_price?: number
   start_date?: string
@@ -105,7 +104,7 @@ const planTypeColors = {
 const API_BASE_URL = "https://cook-craft.dhcb.io/api"
 
 export default function SubscriptionsPage() {
-  const { token } = useAuth() // Get the token from AuthContext
+  const { token } = useAuth()
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
@@ -116,34 +115,32 @@ export default function SubscriptionsPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const { toast } = useToast()
 
-  // State for the new subscription form
+  // State for the new subscription form with the correct payload structure
   const [newSubscriptionForm, setNewSubscriptionForm] = useState({
     first_interval_id: 0,
+    type: "weekly",
     people_count: 0,
     meals_per_interval: 0,
     bag_deposit_cents: 0,
+    delivery_time_id: 0,
     coupon_code: "",
     payment_status: "paid",
     status: "active",
-    delivery_latlng: {
-      latitude: 0,
-      longitude: 0,
-    },
+    user_location_id: 0,
   })
 
-  // State for the edit subscription form
-  const [editSubscriptionForm, setEditSubscriptionForm] = useState<Omit<Subscription, "id">>({
+  // State for the edit subscription form with the correct payload structure
+  const [editSubscriptionForm, setEditSubscriptionForm] = useState({
     first_interval_id: 0,
+    type: "weekly",
     people_count: 0,
     meals_per_interval: 0,
     bag_deposit_cents: 0,
+    delivery_time_id: 0,
     coupon_code: "",
     payment_status: "paid",
     status: "active",
-    delivery_latlng: {
-      latitude: 0,
-      longitude: 0,
-    },
+    user_location_id: 0,
   })
 
   useEffect(() => {
@@ -157,9 +154,8 @@ export default function SubscriptionsPage() {
         variant: "destructive",
       })
     }
-  }, [token]) // Re-fetch when token changes
+  }, [token])
 
-  // Fetches all subscriptions from the API
   const fetchSubscriptions = async () => {
     try {
       setLoading(true)
@@ -170,7 +166,7 @@ export default function SubscriptionsPage() {
       })
       if (!response.ok) throw new Error("Failed to fetch subscriptions")
       const data = await response.json()
-      setSubscriptions(data.data) // Assuming API returns data in a 'data' field
+      setSubscriptions(data.data)
     } catch (error) {
       toast({
         title: "Error",
@@ -182,7 +178,6 @@ export default function SubscriptionsPage() {
     }
   }
 
-  // Fetches a single subscription for editing
   const fetchSubscriptionById = async (id: number) => {
     if (!token) return
 
@@ -194,7 +189,19 @@ export default function SubscriptionsPage() {
       })
       if (!response.ok) throw new Error("Failed to fetch subscription details")
       const data = await response.json()
-      setEditSubscriptionForm(data.data) // Assuming API returns data in a 'data' field
+      // Map the fetched data to the correct edit form structure
+      setEditSubscriptionForm({
+        first_interval_id: data.data.first_interval_id,
+        type: data.data.plan_type,
+        people_count: data.data.people_count,
+        meals_per_interval: data.data.meals_per_interval,
+        bag_deposit_cents: data.data.bag_deposit_cents,
+        delivery_time_id: data.data.delivery_time_id, // Assuming this exists in the full response
+        coupon_code: data.data.coupon_code,
+        payment_status: data.data.payment_status,
+        status: data.data.status,
+        user_location_id: data.data.user_location_id, // Assuming this exists in the full response
+      })
     } catch (error) {
       toast({
         title: "Error",
@@ -204,7 +211,6 @@ export default function SubscriptionsPage() {
     }
   }
 
-  // Handles API call to create a new subscription
   const handleCreateSubscription = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!token) return
@@ -224,7 +230,7 @@ export default function SubscriptionsPage() {
         description: "Subscription created successfully.",
       })
       setIsCreateDialogOpen(false)
-      fetchSubscriptions() // Refresh the list
+      fetchSubscriptions()
     } catch (error) {
       toast({
         title: "Error",
@@ -234,7 +240,6 @@ export default function SubscriptionsPage() {
     }
   }
 
-  // Handles API call to update an existing subscription
   const handleUpdateSubscription = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!selectedSubscription || !token) return
@@ -257,7 +262,7 @@ export default function SubscriptionsPage() {
         description: "Subscription updated successfully.",
       })
       setIsEditDialogOpen(false)
-      fetchSubscriptions() // Refresh the list
+      fetchSubscriptions()
     } catch (error) {
       toast({
         title: "Error",
@@ -267,7 +272,6 @@ export default function SubscriptionsPage() {
     }
   }
 
-  // Handles API call to delete a subscription
   const handleDeleteSubscription = async (subscriptionId: number) => {
     if (window.confirm("Are you sure you want to delete this subscription?")) {
       if (!token) return
@@ -284,7 +288,7 @@ export default function SubscriptionsPage() {
           title: "Success",
           description: "Subscription deleted successfully.",
         })
-        fetchSubscriptions() // Refresh the list
+        fetchSubscriptions()
       } catch (error) {
         toast({
           title: "Error",
@@ -295,7 +299,6 @@ export default function SubscriptionsPage() {
     }
   }
 
-  // Handle status change with API call
   const handleStatusChange = async (subscriptionId: number, status: "active" | "paused" | "cancelled") => {
     try {
       // In a real app, you'd call an API to update the status
@@ -321,7 +324,6 @@ export default function SubscriptionsPage() {
     setIsViewDialogOpen(true)
   }
 
-  // Open edit dialog and fetch subscription data
   const openEditDialog = (subscription: Subscription) => {
     setSelectedSubscription(subscription)
     fetchSubscriptionById(subscription.id)
@@ -609,7 +611,6 @@ export default function SubscriptionsPage() {
                   <p>{new Date(selectedSubscription.end_date).toLocaleDateString()}</p>
                 </div>
               )}
-              {/* New fields from API */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Bag Deposit</Label>
@@ -700,6 +701,32 @@ export default function SubscriptionsPage() {
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="delivery_time_id" className="text-right">
+                Delivery Time ID
+              </Label>
+              <Input
+                id="delivery_time_id"
+                type="number"
+                value={newSubscriptionForm.delivery_time_id}
+                onChange={(e) => setNewSubscriptionForm({ ...newSubscriptionForm, delivery_time_id: parseInt(e.target.value) })}
+                className="col-span-3"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="user_location_id" className="text-right">
+                User Location ID
+              </Label>
+              <Input
+                id="user_location_id"
+                type="number"
+                value={newSubscriptionForm.user_location_id}
+                onChange={(e) => setNewSubscriptionForm({ ...newSubscriptionForm, user_location_id: parseInt(e.target.value) })}
+                className="col-span-3"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="coupon_code" className="text-right">
                 Coupon Code
               </Label>
@@ -747,32 +774,22 @@ export default function SubscriptionsPage() {
               </Select>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="latitude" className="text-right">
-                Latitude
+              <Label htmlFor="type" className="text-right">
+                Plan Type
               </Label>
-              <Input
-                id="latitude"
-                type="number"
-                step="any"
-                value={newSubscriptionForm.delivery_latlng.latitude}
-                onChange={(e) => setNewSubscriptionForm({ ...newSubscriptionForm, delivery_latlng: { ...newSubscriptionForm.delivery_latlng, latitude: parseFloat(e.target.value) } })}
-                className="col-span-3"
-                required
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="longitude" className="text-right">
-                Longitude
-              </Label>
-              <Input
-                id="longitude"
-                type="number"
-                step="any"
-                value={newSubscriptionForm.delivery_latlng.longitude}
-                onChange={(e) => setNewSubscriptionForm({ ...newSubscriptionForm, delivery_latlng: { ...newSubscriptionForm.delivery_latlng, longitude: parseFloat(e.target.value) } })}
-                className="col-span-3"
-                required
-              />
+              <Select
+                value={newSubscriptionForm.type}
+                onValueChange={(value) => setNewSubscriptionForm({ ...newSubscriptionForm, type: value as "weekly" | "monthly" | "quarterly" })}
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Select a plan type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                  <SelectItem value="quarterly">Quarterly</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <DialogFooter>
               <Button type="button" onClick={() => setIsCreateDialogOpen(false)}>
@@ -827,7 +844,7 @@ export default function SubscriptionsPage() {
               <Input
                 id="edit_meals_per_interval"
                 type="number"
-                value={editSubscriptionForm.meals_per_interval ?? 0}
+                value={editSubscriptionForm.meals_per_interval}
                 onChange={(e) => setEditSubscriptionForm({ ...editSubscriptionForm, meals_per_interval: parseInt(e.target.value) })}
                 className="col-span-3"
                 required
@@ -843,6 +860,32 @@ export default function SubscriptionsPage() {
                 value={editSubscriptionForm.bag_deposit_cents}
                 onChange={(e) => setEditSubscriptionForm({ ...editSubscriptionForm, bag_deposit_cents: parseInt(e.target.value) })}
                 className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit_delivery_time_id" className="text-right">
+                Delivery Time ID
+              </Label>
+              <Input
+                id="edit_delivery_time_id"
+                type="number"
+                value={editSubscriptionForm.delivery_time_id}
+                onChange={(e) => setEditSubscriptionForm({ ...editSubscriptionForm, delivery_time_id: parseInt(e.target.value) })}
+                className="col-span-3"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit_user_location_id" className="text-right">
+                User Location ID
+              </Label>
+              <Input
+                id="edit_user_location_id"
+                type="number"
+                value={editSubscriptionForm.user_location_id}
+                onChange={(e) => setEditSubscriptionForm({ ...editSubscriptionForm, user_location_id: parseInt(e.target.value) })}
+                className="col-span-3"
+                required
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
@@ -893,32 +936,22 @@ export default function SubscriptionsPage() {
               </Select>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit_latitude" className="text-right">
-                Latitude
+              <Label htmlFor="edit_type" className="text-right">
+                Plan Type
               </Label>
-              <Input
-                id="edit_latitude"
-                type="number"
-                step="any"
-                value={editSubscriptionForm.delivery_latlng.latitude}
-                onChange={(e) => setEditSubscriptionForm({ ...editSubscriptionForm, delivery_latlng: { ...editSubscriptionForm.delivery_latlng, latitude: parseFloat(e.target.value) } })}
-                className="col-span-3"
-                required
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit_longitude" className="text-right">
-                Longitude
-              </Label>
-              <Input
-                id="edit_longitude"
-                type="number"
-                step="any"
-                value={editSubscriptionForm.delivery_latlng.longitude}
-                onChange={(e) => setEditSubscriptionForm({ ...editSubscriptionForm, delivery_latlng: { ...editSubscriptionForm.delivery_latlng, longitude: parseFloat(e.target.value) } })}
-                className="col-span-3"
-                required
-              />
+              <Select
+                value={editSubscriptionForm.type}
+                onValueChange={(value) => setEditSubscriptionForm({ ...editSubscriptionForm, type: value as "weekly" | "monthly" | "quarterly" })}
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Select a plan type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                  <SelectItem value="quarterly">Quarterly</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <DialogFooter>
               <Button type="button" onClick={() => setIsEditDialogOpen(false)}>
