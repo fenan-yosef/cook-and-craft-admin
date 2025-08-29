@@ -32,6 +32,14 @@ export default function MealsPage() {
     label: "",
     is_active: true,
   })
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [editMeal, setEditMeal] = useState<{ id: number; recipe_id: number | null; label: string; is_active: boolean }>({
+    id: 0,
+    recipe_id: null,
+    label: "",
+    is_active: true,
+  })
   const { toast } = useToast()
   const { token, isLoading: authLoading } = useAuth()
 
@@ -128,6 +136,50 @@ export default function MealsPage() {
     }
   }
 
+  const openEdit = (meal: Meal) => {
+    const match = recipesOptions.find((r) => r.name === meal.recipe)
+    setEditMeal({ id: meal.id, recipe_id: match ? match.id : null, label: meal.label, is_active: meal.available })
+    setIsEditDialogOpen(true)
+  }
+
+  const submitEdit = async () => {
+    try {
+      const errs: string[] = []
+      if (!editMeal.recipe_id) errs.push("Recipe is required")
+      if (!editMeal.label.trim()) errs.push("Label is required")
+      if (errs.length) {
+        toast({ title: "Validation", description: errs.join("; ") })
+        return
+      }
+      setEditing(true)
+      const payload: any = {
+        recipe_id: editMeal.recipe_id,
+        label: editMeal.label.trim(),
+        lable: editMeal.label.trim(),
+        is_active: editMeal.is_active ? 1 : 0,
+      }
+      const res = await apiService.post(`/meals/${editMeal.id}?_method=put`, payload)
+      const updated = Array.isArray(res?.data) && res.data.length > 0 ? res.data[0] : null
+      if (updated) {
+        const m: Meal = {
+          id: updated.ID ?? updated.id ?? editMeal.id,
+          label: updated.Label ?? updated.label ?? editMeal.label,
+          recipe: updated.Recipe ?? updated.recipe ?? (recipesOptions.find((r) => r.id === editMeal.recipe_id)?.name || ""),
+          available: (updated.Available ?? updated.is_active ?? (editMeal.is_active ? 1 : 0)) === 1,
+        }
+        setMeals((prev) => prev.map((x) => (x.id === m.id ? m : x)))
+      } else {
+        await fetchMeals()
+      }
+      toast({ title: "Updated", description: "Meal updated" })
+      setIsEditDialogOpen(false)
+    } catch (error: any) {
+      toast({ title: "Error", description: error?.message || "Failed to update meal", variant: "destructive" })
+    } finally {
+      setEditing(false)
+    }
+  }
+
   const viewMeal = (meal: Meal) => {
     setSelectedMeal(meal)
     setIsViewDialogOpen(true)
@@ -140,13 +192,24 @@ export default function MealsPage() {
       (meal.available ? "available" : "unavailable").includes(searchTerm.toLowerCase()),
   )
 
+  // Derive recipe display name (maps numeric IDs to recipe names when possible)
+  const getRecipeName = (recipeValue: any): string => {
+    if (recipeValue === null || recipeValue === undefined) return ""
+    const asNumber = typeof recipeValue === "number" ? recipeValue : Number(recipeValue)
+    if (!Number.isNaN(asNumber) && asNumber > 0) {
+      const match = recipesOptions.find((r) => r.id === asNumber)
+      return match?.name ?? String(recipeValue)
+    }
+    return String(recipeValue)
+  }
+
   return (
     <div className="flex flex-col">
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
         <div className="flex items-center justify-between">
           <h2 className="text-3xl font-bold tracking-tight">Meals</h2>
           <Button disabled={!token || authLoading} onClick={() => setIsCreateDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" /> Add Meal
+            <Utensils className="mr-2 h-4 w-4" /> Add Meal
           </Button>
         </div>
 
@@ -201,9 +264,9 @@ export default function MealsPage() {
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell>
-                         <div className="text-sm text-muted-foreground truncate">{meal.recipe}</div>
-                      </TableCell>
+               <TableCell>
+                 <div className="text-sm text-muted-foreground truncate">{getRecipeName(meal.recipe)}</div>
+               </TableCell>
                       <TableCell>
                         <div>
                           <Badge variant={meal.available ? "default" : "secondary"} className={meal.available ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>
@@ -223,7 +286,7 @@ export default function MealsPage() {
                               <Eye className="mr-2 h-4 w-4" />
                               View 
                             </DropdownMenuItem>
-                            <DropdownMenuItem >
+                            <DropdownMenuItem onClick={() => openEdit(meal)}>
                               <Pen className="mr-2 h-4 w-4" />
                               Edit 
                             </DropdownMenuItem>
@@ -279,6 +342,51 @@ export default function MealsPage() {
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)} disabled={creating}>Cancel</Button>
               <Button onClick={createMeal} disabled={creating}>{creating ? "Saving..." : "Save"}</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Meal Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Edit Meal</DialogTitle>
+              <DialogDescription>Update meal details.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-2">
+              <div className="grid gap-2">
+                <Label>Recipe</Label>
+                <Select
+                  value={editMeal.recipe_id ? String(editMeal.recipe_id) : ""}
+                  onValueChange={(v) => setEditMeal((s) => ({ ...s, recipe_id: Number(v) }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={recipesLoading ? "Loading recipes..." : "Select a recipe"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {recipesOptions.map((r) => (
+                      <SelectItem key={r.id} value={String(r.id)}>
+                        {r.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="elabel">Label</Label>
+                <Input id="elabel" value={editMeal.label} onChange={(e) => setEditMeal((s) => ({ ...s, label: e.target.value }))} placeholder="Meal label" />
+              </div>
+              <div className="flex items-center justify-between border rounded-md px-3 py-2">
+                <div className="space-y-0.5">
+                  <Label>Active</Label>
+                  <p className="text-xs text-muted-foreground">Mark meal as active</p>
+                </div>
+                <Switch checked={editMeal.is_active} onCheckedChange={(v) => setEditMeal((s) => ({ ...s, is_active: v }))} />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} disabled={editing}>Cancel</Button>
+              <Button onClick={submitEdit} disabled={editing}>{editing ? "Saving..." : "Save changes"}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
