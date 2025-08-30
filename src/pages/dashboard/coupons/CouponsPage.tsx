@@ -12,7 +12,14 @@ import { useToast } from "@/hooks/use-toast"
 import { apiService } from "@/lib/api-service"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { id } from "date-fns/locale"
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationPrevious,
+  PaginationNext,
+  PaginationLink,
+} from "@/components/ui/pagination"
 
 interface Coupon {
   id: number;
@@ -20,13 +27,13 @@ interface Coupon {
   code: string;
   discountType: string;
   discountValue: number;
-  maxDiscountValue: number;
+  maxDiscountValue?: number;
   scope: string;
   maxRedemptions: number;
   perUserLimit: number;
   startsAt: string;
   endsAt: string;
-  isAutoApply: boolean; // Added property
+  isAutoApply: boolean;
 }
 
 export default function CouponsPage() {
@@ -34,38 +41,57 @@ export default function CouponsPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const { toast } = useToast()
-  // Set auth token and fetch coupons together to ensure token is set before request
-  useEffect(() => {
-    const token = localStorage.getItem("auth_token") || "";
-    apiService.setAuthToken(token);
-    fetchCoupons();
-  }, []);
 
-  const fetchCoupons = async () => {
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [lastPage, setLastPage] = useState(1)
+  const [perPage, setPerPage] = useState(15)
+  const [total, setTotal] = useState(0)
+
+  useEffect(() => {
+    const token = localStorage.getItem("auth_token") || ""
+    apiService.setAuthToken(token)
+    fetchCoupons(currentPage)
+  }, [currentPage])
+
+  const fetchCoupons = async (page = 1) => {
     try {
-      setLoading(true);
-      const result = await apiService.get("/admins/coupons");
+      setLoading(true)
+      const result = await apiService.get(`/admins/coupons?page=${page}`)
+
       if (Array.isArray(result.data)) {
-        setCoupons(result.data);
+        // No meta info, just data
+        setCoupons(result.data)
+        setCurrentPage(1)
+        setLastPage(1)
+        setPerPage(result.data.length)
+        setTotal(result.data.length)
+      } else if (result?.data) {
+        // With meta info (your backend format)
+        setCoupons(result.data)
+        setCurrentPage(result.current_page || page)
+        setLastPage(result.last_page || 1)
+        setPerPage(result.per_page || 15)
+        setTotal(result.total || result.data.length)
       } else {
-        throw new Error(result.message || "Failed to fetch coupons");
+        throw new Error(result.message || "Failed to fetch coupons")
       }
     } catch (error: any) {
       toast({
         title: "Error",
         description: error.message || "Failed to fetch coupons",
         variant: "destructive",
-      });
+      })
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   const filteredCoupons = coupons.filter(
     (coupon) =>
       coupon.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (coupon.name || "").toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  )
 
   // Add Coupon modal state and form
   const [isAddOpen, setIsAddOpen] = useState(false)
@@ -82,6 +108,7 @@ export default function CouponsPage() {
     startsAt: "",
     endsAt: "",
   })
+
   // Edit Coupon modal state and form
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editLoading, setEditLoading] = useState(false)
@@ -103,7 +130,7 @@ export default function CouponsPage() {
     const { name, value, type, checked } = e.target
     setAddForm(prev => ({ ...prev, [name]: type === "checkbox" ? checked : value }))
   }
-  // Handle Edit form changes
+
   const handleEditChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target
     setEditForm(prev => ({ ...prev, [name]: type === "checkbox" ? checked : value }))
@@ -113,10 +140,8 @@ export default function CouponsPage() {
     e.preventDefault()
     setAddLoading(true)
     try {
-      // Build payload with top-level fields matching API
       const payload = {
         name: addForm.name,
-        //code: addForm.code,
         discount_type: addForm.discountType,
         discount_value: parseFloat(addForm.discountValue),
         max_discount_value: parseFloat(addForm.maxDiscountValue),
@@ -131,22 +156,21 @@ export default function CouponsPage() {
       toast({ title: "Success", description: response.message || "Coupon created successfully." })
       setIsAddOpen(false)
       setAddForm({ name:"", discountType:"percent", discountValue:"", maxDiscountValue:"", scope:"both", isAutoApply:false, maxRedemptions:"", perUserLimit:"", startsAt:"", endsAt:"" })
-      fetchCoupons()
+      fetchCoupons(currentPage)
     } catch (err: any) {
       toast({ title: "Error", description: err.message || "Failed to create coupon.", variant: "destructive" })
     } finally {
       setAddLoading(false)
     }
   }
-  // Open Edit modal with selected coupon data
+
   const openEditModal = (coupon: Coupon) => {
     setEditForm({
       id: coupon.id.toString(),
       name: coupon.name,
-      // code: coupon.code,
       discountType: coupon.discountType,
       discountValue: String(coupon.discountValue),
-      maxDiscountValue: String(coupon.maxDiscountValue),
+      maxDiscountValue: String(coupon.maxDiscountValue || ""),
       scope: coupon.scope,
       isAutoApply: Boolean(coupon.isAutoApply),
       maxRedemptions: String(coupon.maxRedemptions),
@@ -156,7 +180,7 @@ export default function CouponsPage() {
     })
     setIsEditOpen(true)
   }
-  // Submit Edit coupon
+
   const handleEditCoupon = async (e: React.FormEvent) => {
     e.preventDefault()
     setEditLoading(true)
@@ -173,10 +197,10 @@ export default function CouponsPage() {
         starts_at: editForm.startsAt,
         ends_at: editForm.endsAt,
       }
-  await apiService.patch(`/admins/coupons/${editForm.id}`, payload)
+      await apiService.patch(`/admins/coupons/${editForm.id}`, payload)
       toast({ title: "Success", description: "Coupon updated successfully." })
       setIsEditOpen(false)
-      fetchCoupons()
+      fetchCoupons(currentPage)
     } catch (err: any) {
       toast({ title: "Error", description: err.message || "Failed to update coupon.", variant: "destructive" })
     } finally {
@@ -230,13 +254,13 @@ export default function CouponsPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center">
+                    <TableCell colSpan={10} className="text-center">
                       Loading...
                     </TableCell>
                   </TableRow>
                 ) : filteredCoupons.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center">
+                    <TableCell colSpan={10} className="text-center">
                       No coupons found
                     </TableCell>
                   </TableRow>
@@ -247,16 +271,15 @@ export default function CouponsPage() {
                       <TableCell>{coupon.discountValue}</TableCell>
                       <TableCell>{coupon.maxDiscountValue}</TableCell>
                       <TableCell>{coupon.scope}</TableCell>
-                      <TableCell>{coupon.isAutoApply}</TableCell>
+                      <TableCell>
+                        <Badge variant={coupon.isAutoApply ? "default" : "secondary"}>
+                          {coupon.isAutoApply ? "Auto-Apply" : "Manual"}
+                        </Badge>
+                      </TableCell>
                       <TableCell>{coupon.maxRedemptions}</TableCell>
                       <TableCell>{coupon.perUserLimit}</TableCell>
                       <TableCell>{coupon.startsAt}</TableCell>
                       <TableCell>{coupon.endsAt}</TableCell>
-                      {/* <TableCell>
-                        <Badge className={coupon.isAutoApply ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>
-                          {coupon.isAutoApply ? "Active" : "Inactive"}
-                        </Badge>
-                      </TableCell> */}
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -279,6 +302,58 @@ export default function CouponsPage() {
                 )}
               </TableBody>
             </Table>
+
+            {/* Pagination */}
+            <div className="mt-4">
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        if (currentPage > 1) setCurrentPage(currentPage - 1)
+                      }}
+                      className={currentPage <= 1 ? "pointer-events-none opacity-50" : ""}
+                    />
+                  </PaginationItem>
+
+                  {Array.from({ length: lastPage }, (_, i) => i + 1).map((pageNum) => (
+                    <PaginationItem key={pageNum}>
+                      <PaginationLink
+                        href="#"
+                        isActive={pageNum === currentPage}
+                        onClick={(e) => {
+                          e.preventDefault()
+                          setCurrentPage(pageNum)
+                        }}
+                      >
+                        {pageNum}
+                      </PaginationLink>
+                    </PaginationItem>
+                  ))}
+
+                  <PaginationItem>
+                    <PaginationNext
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        if (currentPage < lastPage) setCurrentPage(currentPage + 1)
+                      }}
+                      className={currentPage >= lastPage ? "pointer-events-none opacity-50" : ""}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+
+              <div className="mt-2 text-xs text-muted-foreground text-center">
+                {total > 0 ? (
+                  <>Showing {(currentPage - 1) * perPage + 1} - {Math.min(currentPage * perPage, total)} of {total}</>
+                ) : (
+                  <>No results</>
+                )}
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -294,10 +369,6 @@ export default function CouponsPage() {
                 <Label htmlFor="name">Name</Label>
                 <Input id="name" name="name" value={addForm.name} onChange={handleAddChange} required />
               </div>
-              {/* <div>
-                <Label htmlFor="code">Code</Label>
-                <Input id="code" name="code" value={addForm.code} onChange={handleAddChange} required />
-              </div> */}
               <div className="flex gap-2">
                 <div className="flex-1">
                   <Label htmlFor="discountValue">Discount Value (%)</Label>
@@ -308,12 +379,10 @@ export default function CouponsPage() {
                   <Input id="maxDiscountValue" name="maxDiscountValue" type="number" value={addForm.maxDiscountValue} onChange={handleAddChange} required />
                 </div>
               </div>
-              {/* Scope field */}
               <div>
                 <Label htmlFor="scope">Scope</Label>
                 <Input id="scope" name="scope" value={addForm.scope} onChange={handleAddChange} required />
               </div>
-              {/* Redemptions and per-user limit */}
               <div className="flex gap-2">
                 <div className="flex-1">
                   <Label htmlFor="maxRedemptions">Max Redemptions</Label>
