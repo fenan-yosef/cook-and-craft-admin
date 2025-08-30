@@ -6,7 +6,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Search, Plus, MoreVertical, Eye, Pencil, Trash } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
@@ -35,6 +34,14 @@ export default function QuestionsPage() {
   const [isCreateQuestionDialogOpen, setIsCreateQuestionDialogOpen] = useState(false)
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
   const [selectedQuestion, setSelectedQuestion] = useState<PreferenceQuestion | null>(null)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [editTargetId, setEditTargetId] = useState<number | null>(null)
+  const [editQuestion, setEditQuestion] = useState({
+    question: "",
+    allow_multiple: 0,
+    is_active: 1,
+    sort_order: 1,
+  })
   const [newQuestion, setNewQuestion] = useState({
     question: "",
     allow_multiple: 0,
@@ -93,38 +100,41 @@ export default function QuestionsPage() {
 
   const handleCreateQuestion = async () => {
     try {
-      setQuestions([
-        ...questions,
-        {
-          id: questions.length + 1,
-          question: newQuestion.question,
-          multiple: newQuestion.allow_multiple === 1,
-          is_active: Boolean(newQuestion.is_active),
-          order_index: newQuestion.sort_order,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          answers: [],
-          question_type: "single_choice",
-          is_required: false
-        },
-      ])
-      toast({
-        title: "Success",
-        description: "Question created successfully",
-      })
+      const payload = {
+        question_text: newQuestion.question,
+        allow_multiple: newQuestion.allow_multiple,
+        is_active: newQuestion.is_active,
+        sort_order: newQuestion.sort_order,
+      }
+      const resp = await apiService.post("/preference_questions", payload)
+      const item = resp?.data ?? {}
+      const created: PreferenceQuestion = {
+        id: Number(item.ID ?? Date.now()),
+        question: String(item.Question ?? newQuestion.question),
+        description: "",
+        question_type: (item.Multiple ? "multiple_choice" : "single_choice") as
+          | "single_choice"
+          | "multiple_choice"
+          | "text"
+          | "rating",
+        is_required: true,
+        is_active: Boolean(item.Active ?? (newQuestion.is_active === 1)),
+        order_index: Number(item.Sort_Order ?? newQuestion.sort_order),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        answers: Array.isArray(item.answers) ? item.answers : [],
+        multiple: Boolean(item.Multiple ?? (newQuestion.allow_multiple === 1)),
+      }
+      setQuestions((prev) => [...prev, created])
+      toast({ title: "Success", description: "Question created successfully" })
       setIsCreateQuestionDialogOpen(false)
-      setNewQuestion({
-        question: "",
-        allow_multiple: 0,
-        is_active: 1,
-        sort_order: 1,
-      })
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to create question",
-        variant: "destructive",
-      })
+      setNewQuestion({ question: "", allow_multiple: 0, is_active: 1, sort_order: 1 })
+    } catch (error: any) {
+      const backendMsg = error?.response?.data?.error
+      const msg = typeof backendMsg === "object" && backendMsg?.question_text?.[0]
+        ? backendMsg.question_text[0]
+        : "Failed to create question"
+      toast({ title: "Error", description: msg, variant: "destructive" })
     }
   }
 
@@ -227,7 +237,18 @@ export default function QuestionsPage() {
                               <Eye className="mr-2 h-4 w-4" />
                               View
                             </DropdownMenuItem>
-                            <DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setEditTargetId(q.id)
+                                setEditQuestion({
+                                  question: q.question,
+                                  allow_multiple: q.multiple ? 1 : 0,
+                                  is_active: q.is_active ? 1 : 0,
+                                  sort_order: q.order_index,
+                                })
+                                setIsEditDialogOpen(true)
+                              }}
+                            >
                               <Pencil className="mr-2 h-4 w-4" />
                               Edit
                             </DropdownMenuItem>
@@ -339,6 +360,89 @@ export default function QuestionsPage() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Question Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Question</DialogTitle>
+            <DialogDescription>Update the selected question.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div>
+              <Label htmlFor="edit_question">Question</Label>
+              <Input
+                id="edit_question"
+                value={editQuestion.question}
+                onChange={(e) => setEditQuestion({ ...editQuestion, question: e.target.value })}
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Label htmlFor="edit_allow_multiple">Allow Multiple</Label>
+              <Switch
+                id="edit_allow_multiple"
+                checked={editQuestion.allow_multiple === 1}
+                onCheckedChange={(checked) => setEditQuestion({ ...editQuestion, allow_multiple: checked ? 1 : 0 })}
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Label htmlFor="edit_is_active">Active</Label>
+              <Switch
+                id="edit_is_active"
+                checked={editQuestion.is_active === 1}
+                onCheckedChange={(checked) => setEditQuestion({ ...editQuestion, is_active: checked ? 1 : 0 })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit_sort_order">Sort Order</Label>
+              <Input
+                id="edit_sort_order"
+                type="number"
+                min={1}
+                value={editQuestion.sort_order}
+                onChange={(e) => setEditQuestion({ ...editQuestion, sort_order: Number(e.target.value) })}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setIsEditDialogOpen(false)} variant="outline">Cancel</Button>
+            <Button
+              onClick={async () => {
+                if (!editTargetId) return
+                try {
+                  const payload = {
+                    question_text: editQuestion.question,
+                    allow_multiple: editQuestion.allow_multiple,
+                    is_active: editQuestion.is_active,
+                    sort_order: editQuestion.sort_order,
+                  }
+                  await apiService.post(`/preference_questions/${editTargetId}?_method=put`, payload)
+                  setQuestions((prev) =>
+                    prev.map((it) =>
+                      it.id === editTargetId
+                        ? {
+                            ...it,
+                            question: editQuestion.question,
+                            multiple: editQuestion.allow_multiple === 1,
+                            is_active: editQuestion.is_active === 1,
+                            order_index: editQuestion.sort_order,
+                            updated_at: new Date().toISOString(),
+                          }
+                        : it,
+                    ),
+                  )
+                  toast({ title: "Success", description: "Question updated successfully" })
+                  setIsEditDialogOpen(false)
+                } catch (error) {
+                  toast({ title: "Error", description: "Failed to update question", variant: "destructive" })
+                }
+              }}
+            >
+              Save
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

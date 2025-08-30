@@ -28,6 +28,9 @@ type ApiRecipe = {
   Prep_minutes: number
   Is_active: number 
   Images: any[] 
+  Ingredients?: Array<{ name?: string; amount?: string } | string>
+  Nutrition_facts?: Array<{ label?: string; value?: string } | string>
+  Utensils?: Array<string | { name?: string }>
 }
 
 // Best-effort image URL extraction from various backend formats
@@ -77,12 +80,22 @@ export default function RecipesPage() {
     Description: "",
     Calories: "" as string | number,
     Prep_minutes: "" as string | number,
+  Ingredients: [{ name: "", amount: "" }] as { name: string; amount: string }[],
+  Nutrition_facts: [{ label: "", value: "" }] as { label: string; value: string }[],
+  Utensils: [""] as string[],
+  StepsText: "",
     Is_active: true,
   })
   const [newImages, setNewImages] = useState<File[]>([])
   const [newImagePreviews, setNewImagePreviews] = useState<string[]>([])
   const { toast } = useToast()
   const { token, isLoading: authLoading } = useAuth()
+
+  // Ensure apiService has the latest token (fallback to localStorage for deep links)
+  useEffect(() => {
+    const t = token || (typeof window !== "undefined" ? localStorage.getItem("auth_token") : null)
+    apiService.setAuthToken(t || null)
+  }, [token])
 
   useEffect(() => {
     if (token) {
@@ -126,7 +139,21 @@ export default function RecipesPage() {
   // Create/Edit/Delete not implemented for API yet; only viewing list
 
   const resetNewRecipe = () =>
-  { setNewRecipe({ Name: "", Description: "", Calories: "", Prep_minutes: "", Is_active: true }); setNewImages([]); setNewImagePreviews([]) }
+  {
+    setNewRecipe({
+      Name: "",
+      Description: "",
+      Calories: "",
+      Prep_minutes: "",
+      Ingredients: [{ name: "", amount: "" }],
+      Nutrition_facts: [{ label: "", value: "" }],
+      Utensils: [""],
+      StepsText: "",
+      Is_active: true,
+    })
+    setNewImages([])
+    setNewImagePreviews([])
+  }
 
   const createRecipe = async () => {
     try {
@@ -144,7 +171,14 @@ export default function RecipesPage() {
         return
       }
       setCreating(true)
-      let res: any
+  let res: any
+  const ingredientsClean = (newRecipe.Ingredients || []).filter((x) => (x.name?.trim() || x.amount?.trim()))
+  const nutritionClean = (newRecipe.Nutrition_facts || []).filter((x) => (x.label?.trim() || x.value?.trim()))
+  const utensilsClean = (newRecipe.Utensils || []).map((u) => (u ?? "").trim()).filter(Boolean)
+  const stepsArray = newRecipe.StepsText
+        ? newRecipe.StepsText.split("\n").map((s) => s.trim()).filter(Boolean)
+        : []
+      const stepsToSend: any = stepsArray.length > 0 ? stepsArray : null
       if (newImages.length > 0) {
         const fd = new FormData()
         fd.append("name", nameVal)
@@ -152,15 +186,27 @@ export default function RecipesPage() {
         fd.append("calories_kcal", String(calNum))
         fd.append("prep_minutes", String(prepNum))
         fd.append("is_active", newRecipe.Is_active ? "1" : "0")
+        // Complex fields as JSON strings in multipart (backend should json_decode)
+        fd.append("ingredients", JSON.stringify(ingredientsClean))
+        fd.append("nutrition_facts", JSON.stringify(nutritionClean))
+        fd.append("utensils", JSON.stringify(utensilsClean))
+        if (stepsToSend !== null) {
+          fd.append("steps", JSON.stringify(stepsToSend))
+        }
         for (const file of newImages) fd.append("images[]", file)
         res = await apiService.postMultipart("/recipes", fd)
       } else {
         const payload: any = {
           name: nameVal,
           description: descVal,
-          calories_kcal: calNum,
-          prep_minutes: prepNum,
+          calories_kcal: String(calNum),
+          prep_minutes: String(prepNum),
+          ingredients: ingredientsClean,
+          nutrition_facts: nutritionClean,
+          utensils: utensilsClean,
+          steps: stepsToSend,
           is_active: newRecipe.Is_active ? 1 : 0,
+          images: [],
         }
         res = await apiService.post("/recipes", payload)
       }
@@ -291,6 +337,128 @@ export default function RecipesPage() {
                   <Label htmlFor="prep">Prep minutes</Label>
                   <Input id="prep" type="number" value={newRecipe.Prep_minutes} onChange={(e) => setNewRecipe((s) => ({ ...s, Prep_minutes: e.target.value }))} placeholder="e.g. 20" />
                 </div>
+              </div>
+              {/* Ingredients */}
+              <div className="grid gap-2">
+                <div className="flex items-center justify-between">
+                  <Label>Ingredients</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setNewRecipe((s) => ({ ...s, Ingredients: [...(s.Ingredients || []), { name: "", amount: "" }] }))}
+                  >
+                    Add
+                  </Button>
+                </div>
+                <div className="grid gap-2">
+                  {(newRecipe.Ingredients || []).map((ing, idx) => (
+                    <div key={idx} className="grid grid-cols-5 gap-2">
+                      <Input
+                        placeholder="Name"
+                        value={ing.name}
+                        onChange={(e) => {
+                          const arr = [...(newRecipe.Ingredients || [])]
+                          arr[idx] = { ...arr[idx], name: e.target.value }
+                          setNewRecipe((s) => ({ ...s, Ingredients: arr }))
+                        }}
+                        className="col-span-3"
+                      />
+                      <Input
+                        placeholder="Amount"
+                        value={ing.amount}
+                        onChange={(e) => {
+                          const arr = [...(newRecipe.Ingredients || [])]
+                          arr[idx] = { ...arr[idx], amount: e.target.value }
+                          setNewRecipe((s) => ({ ...s, Ingredients: arr }))
+                        }}
+                        className="col-span-2"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Nutrition facts */}
+              <div className="grid gap-2">
+                <div className="flex items-center justify-between">
+                  <Label>Nutrition facts</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setNewRecipe((s) => ({ ...s, Nutrition_facts: [...(s.Nutrition_facts || []), { label: "", value: "" }] }))}
+                  >
+                    Add
+                  </Button>
+                </div>
+                <div className="grid gap-2">
+                  {(newRecipe.Nutrition_facts || []).map((nf, idx) => (
+                    <div key={idx} className="grid grid-cols-5 gap-2">
+                      <Input
+                        placeholder="Label"
+                        value={nf.label}
+                        onChange={(e) => {
+                          const arr = [...(newRecipe.Nutrition_facts || [])]
+                          arr[idx] = { ...arr[idx], label: e.target.value }
+                          setNewRecipe((s) => ({ ...s, Nutrition_facts: arr }))
+                        }}
+                        className="col-span-3"
+                      />
+                      <Input
+                        placeholder="Value"
+                        value={nf.value}
+                        onChange={(e) => {
+                          const arr = [...(newRecipe.Nutrition_facts || [])]
+                          arr[idx] = { ...arr[idx], value: e.target.value }
+                          setNewRecipe((s) => ({ ...s, Nutrition_facts: arr }))
+                        }}
+                        className="col-span-2"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Utensils */}
+              <div className="grid gap-2">
+                <div className="flex items-center justify-between">
+                  <Label>Utensils</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setNewRecipe((s) => ({ ...s, Utensils: [...(s.Utensils || []), ""] }))}
+                  >
+                    Add
+                  </Button>
+                </div>
+                <div className="grid gap-2">
+                  {(newRecipe.Utensils || []).map((ut, idx) => (
+                    <Input
+                      key={idx}
+                      placeholder="e.g. Pan"
+                      value={ut}
+                      onChange={(e) => {
+                        const arr = [...(newRecipe.Utensils || [])]
+                        arr[idx] = e.target.value
+                        setNewRecipe((s) => ({ ...s, Utensils: arr }))
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Steps (multiline, one per line) */}
+              <div className="grid gap-2">
+                <Label htmlFor="steps">Steps (one per line)</Label>
+                <textarea
+                  id="steps"
+                  className="min-h-[100px] rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  placeholder="Write each step on a new line"
+                  value={newRecipe.StepsText}
+                  onChange={(e) => setNewRecipe((s) => ({ ...s, StepsText: e.target.value }))}
+                />
               </div>
               <div className="flex items-center justify-between border rounded-md px-3 py-2">
                 <div className="space-y-0.5">
@@ -458,6 +626,74 @@ export default function RecipesPage() {
                     )}
                   </div>
                 </div>
+                {/* Ingredients */}
+                {(() => {
+                  const ings: any[] =
+                    (selectedRecipe as any).Ingredients ?? (selectedRecipe as any).ingredients ?? []
+                  if (!Array.isArray(ings) || ings.length === 0) return null
+                  return (
+                    <div>
+                      <h3 className="font-semibold mb-2">Ingredients</h3>
+                      <ul className="list-disc pl-5 space-y-1 text-sm text-muted-foreground">
+                        {ings.map((it: any, i: number) => {
+                          if (typeof it === "string") return <li key={i}>{it}</li>
+                          const name = it?.name ?? it?.ingredient ?? "—"
+                          const amount = it?.amount ?? it?.qty ?? ""
+                          return (
+                            <li key={i}>
+                              {name}
+                              {amount ? ` — ${amount}` : ""}
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </div>
+                  )
+                })()}
+
+                {/* Nutrition facts */}
+                {(() => {
+                  const nfs: any[] =
+                    (selectedRecipe as any).Nutrition_facts ?? (selectedRecipe as any).nutrition_facts ?? []
+                  if (!Array.isArray(nfs) || nfs.length === 0) return null
+                  return (
+                    <div>
+                      <h3 className="font-semibold mb-2">Nutrition facts</h3>
+                      <ul className="list-disc pl-5 space-y-1 text-sm text-muted-foreground">
+                        {nfs.map((nf: any, i: number) => {
+                          if (typeof nf === "string") return <li key={i}>{nf}</li>
+                          const label = nf?.label ?? "—"
+                          const value = nf?.value ?? "—"
+                          return (
+                            <li key={i}>
+                              {label} — {value}
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </div>
+                  )
+                })()}
+
+                {/* Utensils */}
+                {(() => {
+                  const uts: any[] =
+                    (selectedRecipe as any).Utensils ?? (selectedRecipe as any).utensils ?? []
+                  if (!Array.isArray(uts) || uts.length === 0) return null
+                  return (
+                    <div>
+                      <h3 className="font-semibold mb-2">Utensils</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {uts.map((u: any, i: number) => {
+                          const label = typeof u === "string" ? u : u?.name ?? JSON.stringify(u)
+                          return (
+                            <Badge key={i} variant="secondary">{label}</Badge>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })()}
                 {Array.isArray(selectedRecipe.Images) && selectedRecipe.Images.length > 0 ? (
                   <div>
                     <h3 className="font-semibold mb-2">Images</h3>
