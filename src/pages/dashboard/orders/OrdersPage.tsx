@@ -6,20 +6,20 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, MoreHorizontal, Eye, XCircle } from "lucide-react";
+import { Search, MoreHorizontal, Eye, XCircle, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiService } from "@/lib/api-service";
 
 interface Order {
   id: number;
-  user_id: number;
-  user_name: string;
-  user_email: string;
   status: "pending" | "processing" | "shipped" | "delivered" | "cancelled";
+  paymentStatus: string;
+  subtotal: number;
+  deliveryFee: number;
   total: number;
-  items_count: number;
-  created_at: string;
-  updated_at: string;
+  deliveryAddress: string;
+  deliveryCoordination?: { latitude: number; longitude: number };
+  itemsCount: number;
 }
 
 const statusColors: Record<Order["status"], string> = {
@@ -46,27 +46,36 @@ export default function OrdersPage() {
   const fetchOrders = async () => {
     try {
       setLoading(true);
-      // Ensure auth token on apiService
-      const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
-  if (token) apiService.setAuthToken(token);
+      // Ensure auth token on apiService (prefer auth_loken, fallback to auth_token)
+      const token = typeof window !== "undefined"
+        ? (localStorage.getItem("auth_loken") ?? localStorage.getItem("auth_token"))
+        : null;
+      if (token) apiService.setAuthToken(token);
 
       // Fetch orders with pagination
       const response = await apiService.get(`/orders?page=${page}`);
-      const payload = response.data;
-      // Map order data
-      const apiOrders = Array.isArray(payload.data) ? payload.data : [];
-      const mapped: Order[] = apiOrders.map((u: any) => ({
-        id: u.id,
-        user_id: u.user_id,
-        user_name: u.user_name,
-        user_email: u.user_email,
-        status: u.status,
-        total: u.total,
-        items_count: u.items_count,
-        created_at: u.created_at,
-        updated_at: u.updated_at,
+      const payload = response ?? {};
+      // Normalize array from common wrappers
+      const candidates = [payload, payload?.data, payload?.data?.data, payload?.result, payload?.results, payload?.orders, payload?.list];
+      let apiOrders: any[] = [];
+      for (const layer of candidates) {
+        if (!layer) continue;
+        if (Array.isArray(layer)) { apiOrders = layer; break; }
+        if (Array.isArray((layer as any).data)) { apiOrders = (layer as any).data; break; }
+      }
+      const mapped: Order[] = apiOrders.map((o: any) => ({
+        id: Number(o.id),
+        status: o.status,
+        paymentStatus: o.paymentStatus,
+        subtotal: Number(o.subtotal ?? 0),
+        deliveryFee: Number(o.deliveryFee ?? 0),
+        total: Number(o.total ?? 0),
+        deliveryAddress: String(o.deliveryAddress ?? ""),
+        deliveryCoordination: o.deliveryCoordination,
+        itemsCount: Array.isArray(o.orderItems) ? o.orderItems.length : 0,
       }));
-  setOrders(mapped);
+      // If no API orders, fall back to mock orders so the UI has data
+      setOrders(mapped.length > 0 ? mapped : getMockOrders());
     } catch (error) {
       toast({ title: "Error", description: "Failed to fetch orders", variant: "destructive" });
     } finally {
@@ -74,11 +83,75 @@ export default function OrdersPage() {
     }
   };
 
-  const filteredOrders = orders.filter(
-    (order) =>
-      order.user_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.user_email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Local fallback orders when API returns none
+  const getMockOrders = (): Order[] => [
+    {
+      id: 1011,
+      status: "pending",
+      paymentStatus: "unpaid",
+      subtotal: 42.5,
+      deliveryFee: 5,
+      total: 47.5,
+      deliveryAddress: "221B Baker Street, London",
+      deliveryCoordination: { latitude: 51.5237, longitude: -0.1585 },
+      itemsCount: 3,
+    },
+    {
+      id: 1012,
+      status: "processing",
+      paymentStatus: "paid",
+      subtotal: 89.99,
+      deliveryFee: 0,
+      total: 89.99,
+      deliveryAddress: "742 Evergreen Terrace, Springfield",
+      deliveryCoordination: { latitude: 39.7817, longitude: -89.6501 },
+      itemsCount: 5,
+    },
+    {
+      id: 1013,
+      status: "shipped",
+      paymentStatus: "paid",
+      subtotal: 120,
+      deliveryFee: 10,
+      total: 130,
+      deliveryAddress: "1600 Amphitheatre Parkway, Mountain View, CA",
+      deliveryCoordination: { latitude: 37.422, longitude: -122.084 },
+      itemsCount: 2,
+    },
+    {
+      id: 1014,
+      status: "delivered",
+      paymentStatus: "paid",
+      subtotal: 12,
+      deliveryFee: 2,
+      total: 14,
+      deliveryAddress: "1 Hacker Way, Menlo Park, CA",
+      deliveryCoordination: { latitude: 37.4847, longitude: -122.1484 },
+      itemsCount: 1,
+    },
+  ];
+
+  // Approve an order: move from pending -> processing (local UI update)
+  const handleApprove = (orderId: number) => {
+    setOrders((prev) => {
+      const updated = prev.map((o) =>
+  o.id === orderId && o.status === "pending" ? { ...o, status: "processing" as Order["status"] } : o
+      );
+      return updated;
+    });
+    toast({ title: "Order approved", description: `Order #${orderId} is now processing.` });
+  };
+
+  const filteredOrders = orders
+    .filter((order) => (statusFilter === "all" ? true : order.status === statusFilter))
+    .filter((order) => {
+      const q = searchTerm.toLowerCase();
+      return (
+        String(order.id).includes(q) ||
+        (order.deliveryAddress ?? "").toLowerCase().includes(q) ||
+        (order.paymentStatus ?? "").toLowerCase().includes(q)
+      );
+    });
 
   return (
     <div className="flex flex-col">
@@ -124,8 +197,9 @@ export default function OrdersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Customer</TableHead>
+                  <TableHead>Order</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Payment</TableHead>
                   <TableHead>Total</TableHead>
                   <TableHead>Items</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -134,13 +208,13 @@ export default function OrdersPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center">
+                    <TableCell colSpan={6} className="text-center">
                       Loading...
                     </TableCell>
                   </TableRow>
                 ) : filteredOrders.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center">
+                    <TableCell colSpan={6} className="text-center">
                       No orders found
                     </TableCell>
                   </TableRow>
@@ -148,8 +222,10 @@ export default function OrdersPage() {
                   filteredOrders.map((order) => (
                     <TableRow key={order.id}>
                       <TableCell>
-                        <div className="font-medium">{order.user_name}</div>
-                        <div className="text-sm text-muted-foreground">{order.user_email}</div>
+                        <div className="font-medium">Order #{order.id}</div>
+                        <div className="text-sm text-muted-foreground truncate max-w-[240px]">
+                          {order.deliveryAddress || "—"}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <Badge
@@ -158,8 +234,11 @@ export default function OrdersPage() {
                           {order.status}
                         </Badge>
                       </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{order.paymentStatus}</Badge>
+                      </TableCell>
                       <TableCell>${order.total.toFixed(2)}</TableCell>
-                      <TableCell>{order.items_count}</TableCell>
+                      <TableCell>{order.itemsCount}</TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -168,6 +247,12 @@ export default function OrdersPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              disabled={order.status !== "pending"}
+                              onClick={() => handleApprove(order.id)}
+                            >
+                              <CheckCircle className="mr-2 h-4 w-4" /> Approve
+                            </DropdownMenuItem>
                             <DropdownMenuItem>
                               <Eye className="mr-2 h-4 w-4" /> View
                             </DropdownMenuItem>

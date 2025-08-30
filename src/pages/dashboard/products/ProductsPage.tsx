@@ -97,6 +97,10 @@ export default function ProductsPage() {
   const [rawProducts, setRawProducts] = useState<Record<number, any>>({})
   const [isViewOpen, setIsViewOpen] = useState(false)
   const [viewProduct, setViewProduct] = useState<any | null>(null)
+  // Add Tag Modal State
+  const [isAddTagOpen, setIsAddTagOpen] = useState(false)
+  const [addTagLoading, setAddTagLoading] = useState(false)
+  const [addTagValue, setAddTagValue] = useState("")
 
   useEffect(() => {
     fetchCategories()
@@ -168,12 +172,12 @@ export default function ProductsPage() {
         status: item.isProductActive ? "active" : "inactive",
         created_at: item.createdAt || new Date().toISOString(),
         images: item.productImages?.map((img: any) => img.imageUrl || img.url || img.path || img) || [],
-        sku: item.productSku,
-        isPrivate: !!item.isProductPrivate,
-        tags: (item.productTags || [])
+    sku: item.productSku,
+    isPrivate: !!item.isProductPrivate,
+    tags: (item.productTags || [])
           .map((t: any) => (typeof t === "string" ? t : (t?.name ?? t?.tagName ?? t?.label ?? t?.title ?? t?.slug ?? "")))
           .filter(Boolean),
-  categoryId: item.productCategoryId ?? null,
+  categoryId: item.productCategoryId ?? item?.category_id ?? item?.categoryId ?? null,
       }))
       setProducts(mappedProducts)
       // store raw items for view modal
@@ -314,16 +318,14 @@ export default function ProductsPage() {
   // Also include isProductActive / isProductPrivate aliases
   formData.append("isProductActive", addForm.is_active ? "1" : "0")
   formData.append("isProductPrivate", addForm.is_private ? "1" : "0")
-      if (addForm.productCategoryId)
-        formData.append("productCategoryId", String(Number(addForm.productCategoryId)))
-      if (addForm.productVersionNumber) formData.append("productVersionNumber", addForm.productVersionNumber)
-      if (addForm.tagsString) {
-        addForm.tagsString
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean)
-          .forEach((t) => formData.append("productTags[]", t))
+      if (addForm.productCategoryId) {
+        const catId = String(Number(addForm.productCategoryId))
+        formData.append("productCategoryId", catId)
+        // also send alias for compatibility
+        formData.append("category_id", catId)
       }
+      if (addForm.productVersionNumber) formData.append("productVersionNumber", addForm.productVersionNumber)
+  // tags are handled via Add Tag modal
       addForm.images.forEach((file) => formData.append("images[]", file))
 
   // Use api service with base URL and token from localStorage
@@ -364,7 +366,7 @@ export default function ProductsPage() {
       existingImages: product.images || [],
       productCategoryId: product.categoryId != null ? String(product.categoryId) : "",
       productVersionNumber: raw?.productVersionNumber != null ? String(raw.productVersionNumber) : "",
-      tagsString: (product.tags || []).join(", "),
+  tagsString: "",
     })
     setEditImagePreviews(product.images || [])
     setIsEditOpen(true)
@@ -418,7 +420,7 @@ export default function ProductsPage() {
     e.preventDefault()
     setEditLoading(true)
     try {
-      const payload = {
+      const payload: any = {
         name: editForm.name,
         productName: editForm.name, // for backend compatibility
         description: editForm.description,
@@ -429,13 +431,13 @@ export default function ProductsPage() {
         is_private: editForm.is_private ? 1 : 0,
         ...(editForm.productCategoryId && { productCategoryId: Number(editForm.productCategoryId) }),
         ...(editForm.productVersionNumber && { productVersionNumber: Number(editForm.productVersionNumber) }),
-        ...(editForm.tagsString && {
-          productTags: editForm.tagsString
-            .split(",")
-            .map((t) => t.trim())
-            .filter(Boolean),
-        }),
+  // tags are handled via Add Tag modal
         // images: not supported in JSON PATCH, only for FormData
+      }
+
+      // Add alias category_id for compatibility if category provided
+      if (editForm.productCategoryId) {
+        payload.category_id = Number(editForm.productCategoryId)
       }
 
       // Use /products/{id} endpoint for PATCH
@@ -561,16 +563,6 @@ export default function ProductsPage() {
                     type="number"
                     min="0"
                     value={addForm.productVersionNumber}
-                    onChange={handleAddChange}
-                  />
-                </div>
-                <div className="flex-1">
-                  <Label htmlFor="tags">Tags (comma separated)</Label>
-                  <Input
-                    id="tags"
-                    name="tagsString"
-                    placeholder="e.g., Pizza, Vegan"
-                    value={addForm.tagsString}
                     onChange={handleAddChange}
                   />
                 </div>
@@ -718,16 +710,23 @@ export default function ProductsPage() {
                       tags = Array.from(new Set([...tags, ...mapped.tags]))
                     }
 
-                    return tags.length ? (
-                      <div className="flex flex-wrap gap-1">
-                        {tags.map((t, i) => (
-                          <Badge key={i} variant="secondary" className="text-[10px]">
-                            {t}
-                          </Badge>
-                        ))}
+                    return (
+                      <div className="flex flex-wrap items-center gap-2">
+                        {tags.length ? (
+                          <div className="flex flex-wrap gap-1">
+                            {tags.map((t, i) => (
+                              <Badge key={i} variant="secondary" className="text-[10px]">
+                                {t}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">No tags</span>
+                        )}
+                        <Button size="sm" variant="outline" onClick={() => setIsAddTagOpen(true)}>
+                          Add Tag
+                        </Button>
                       </div>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
                     )
                   })()}
                 </div>
@@ -763,6 +762,61 @@ export default function ProductsPage() {
             ) : (
               <div className="text-sm text-muted-foreground">No data to display.</div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Add Tag Modal */}
+        <Dialog open={isAddTagOpen} onOpenChange={(open) => { setIsAddTagOpen(open); if (!open) { setAddTagValue("") } }}>
+          <DialogContent className="sm:max-w-[420px]">
+            <DialogHeader>
+              <DialogTitle>Add Tags</DialogTitle>
+              <DialogDescription>Add one or more tags to this product. Separate multiple with commas.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="add_tags_input">Tags</Label>
+                <Input
+                  id="add_tags_input"
+                  placeholder="e.g., French, Bread"
+                  value={addTagValue}
+                  onChange={(e) => setAddTagValue(e.target.value)}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" type="button" onClick={() => setIsAddTagOpen(false)}>Cancel</Button>
+              <Button
+                type="button"
+                disabled={addTagLoading}
+                onClick={async () => {
+                  if (!viewProduct?.productId) return
+                  const tags = addTagValue
+                    .split(',')
+                    .map((t) => t.trim())
+                    .filter(Boolean)
+                  if (tags.length === 0) return
+                  try {
+                    setAddTagLoading(true)
+                    const token = localStorage.getItem('auth_token')
+                    if (token) apiService.setAuthToken(token)
+                    await apiService.post(`/admins/products/${viewProduct.productId}/product-tags`, { tags })
+                    toast({ title: 'Tags added' })
+                    setIsAddTagOpen(false)
+                    setAddTagValue('')
+                    // Refresh current page and reopen view to reflect new tags
+                    await fetchProducts(currentPage)
+                    const updated = rawProducts[Number(viewProduct.productId)]
+                    setViewProduct(updated || null)
+                  } catch (err: any) {
+                    toast({ title: 'Failed to add tags', description: err?.message || 'Error', variant: 'destructive' })
+                  } finally {
+                    setAddTagLoading(false)
+                  }
+                }}
+              >
+                {addTagLoading ? 'Adding…' : 'Add'}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
 
@@ -852,16 +906,6 @@ export default function ProductsPage() {
                     onChange={handleEditChange}
                   />
                 </div>
-                <div className="flex-1">
-                  <Label htmlFor="edit_tags">Tags (comma separated)</Label>
-                  <Input
-                    id="edit_tags"
-                    name="tagsString"
-                    placeholder="e.g., Pizza, Vegan"
-                    value={editForm.tagsString}
-                    onChange={handleEditChange}
-                  />
-                </div>
               </div>
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
@@ -947,7 +991,6 @@ export default function ProductsPage() {
                   <TableHead>Price</TableHead>
                   <TableHead>Stock</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Tags</TableHead>
                   <TableHead>Private</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -993,19 +1036,6 @@ export default function ProductsPage() {
                       </TableCell>
                       <TableCell>
                         <Badge variant={product.status === "active" ? "default" : "secondary"}>{product.status}</Badge>
-                      </TableCell>
-                      <TableCell className="max-w-[200px] whitespace-nowrap overflow-hidden text-ellipsis">
-                        {product.tags && product.tags.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {product.tags.map((t, i) => (
-                              <Badge key={i} variant="secondary" className="text-[10px]">
-                                {t}
-                              </Badge>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
                       </TableCell>
                       <TableCell>
                         <Badge variant={product.isPrivate ? "secondary" : "outline"}>
