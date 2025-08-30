@@ -46,7 +46,6 @@ import {
   Play,
   Pause,
   XCircle,
-  Calendar,
   DollarSign,
   Users,
   TrendingUp,
@@ -56,31 +55,38 @@ import {
   Trash2,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { useAuth } from "@/contexts/auth-context"
+import { useAuth } from "@/contexts/auth-context";
+
+
 
 interface Subscription {
   id: number
   user_id?: number
   user_name?: string
   user_email?: string
-  plan_name?: string
-  plan_type?: "weekly" | "monthly" | "quarterly"
+  type?: "weekly" | "monthly" | "quarterly"
+  interval_count?: number
+  first_interval_id?: number
+  people_count?: number
+  meals_per_interval?: number
+  zone_name?: string
+  delivery_time_id?: {
+    id: number
+    start_time: string
+    end_time: string
+    day: { day_of_week: number }
+  }
+  bag_deposit_cents?: number
+  delivery_fee_cents?: number
+  subtotal_cents?: number
+  discount_cents?: number
+  total_cents?: number
+  payment_status: "paid" | "unpaid"
   status: "active" | "paused" | "cancelled" | "expired"
-  meals_per_week?: number
-  meals_per_interval?: number // Added this property to fix the error
-  price_per_meal?: number
-  total_price?: number
-  start_date?: string
-  end_date?: string
-  next_delivery?: string
   created_at?: string
   updated_at?: string
-  first_interval_id: number
-  people_count: number
-  bag_deposit_cents: number
   coupon_code?: string
-  payment_status: "paid" | "unpaid"
-  delivery_latlng: {
+  delivery_latlng?: {
     latitude: number
     longitude: number
   }
@@ -105,7 +111,7 @@ const planTypeColors = {
 const API_BASE_URL = "https://cook-craft.dhcb.io/api"
 
 export default function SubscriptionsPage() {
-  const { token } = useAuth() // Get the token from AuthContext
+  const { token } = useAuth()
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
@@ -116,34 +122,32 @@ export default function SubscriptionsPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const { toast } = useToast()
 
-  // State for the new subscription form
+  // State for the new subscription form with the correct payload structure
   const [newSubscriptionForm, setNewSubscriptionForm] = useState({
     first_interval_id: 0,
+    type: "weekly",
     people_count: 0,
     meals_per_interval: 0,
     bag_deposit_cents: 0,
+    delivery_time_id: 0,
     coupon_code: "",
     payment_status: "paid",
     status: "active",
-    delivery_latlng: {
-      latitude: 0,
-      longitude: 0,
-    },
+    user_location_id: 0,
   })
 
-  // State for the edit subscription form
-  const [editSubscriptionForm, setEditSubscriptionForm] = useState<Omit<Subscription, "id">>({
+  // State for the edit subscription form with the correct payload structure
+  const [editSubscriptionForm, setEditSubscriptionForm] = useState({
     first_interval_id: 0,
+    type: "weekly",
     people_count: 0,
     meals_per_interval: 0,
     bag_deposit_cents: 0,
+    delivery_time_id: 0,
     coupon_code: "",
     payment_status: "paid",
     status: "active",
-    delivery_latlng: {
-      latitude: 0,
-      longitude: 0,
-    },
+    user_location_id: 0,
   })
 
   useEffect(() => {
@@ -157,9 +161,8 @@ export default function SubscriptionsPage() {
         variant: "destructive",
       })
     }
-  }, [token]) // Re-fetch when token changes
+  }, [token])
 
-  // Fetches all subscriptions from the API
   const fetchSubscriptions = async () => {
     try {
       setLoading(true)
@@ -170,7 +173,15 @@ export default function SubscriptionsPage() {
       })
       if (!response.ok) throw new Error("Failed to fetch subscriptions")
       const data = await response.json()
-      setSubscriptions(data.data) // Assuming API returns data in a 'data' field
+      // Use the provided API response structure for the data
+      setSubscriptions(data.data.map((sub: any) => ({
+        ...sub,
+        total_cents: sub.total_cents,
+        delivery_time_id: sub.delivery_time_id,
+        zone_name: sub.zone_name,
+        people_count: sub.people_count,
+        meals_per_interval: sub.meals_per_interval,
+      })))
     } catch (error) {
       toast({
         title: "Error",
@@ -182,7 +193,6 @@ export default function SubscriptionsPage() {
     }
   }
 
-  // Fetches a single subscription for editing
   const fetchSubscriptionById = async (id: number) => {
     if (!token) return
 
@@ -194,7 +204,19 @@ export default function SubscriptionsPage() {
       })
       if (!response.ok) throw new Error("Failed to fetch subscription details")
       const data = await response.json()
-      setEditSubscriptionForm(data.data) // Assuming API returns data in a 'data' field
+      // Map the fetched data to the correct edit form structure
+      setEditSubscriptionForm({
+        first_interval_id: data.data.first_interval_id,
+        type: data.data.type,
+        people_count: data.data.people_count,
+        meals_per_interval: data.data.meals_per_interval,
+        bag_deposit_cents: data.data.bag_deposit_cents,
+        delivery_time_id: data.data.delivery_time_id?.id, // Use the ID
+        coupon_code: data.data.coupon_code,
+        payment_status: data.data.payment_status,
+        status: data.data.status,
+        user_location_id: data.data.user_location_id, // Assuming this exists
+      })
     } catch (error) {
       toast({
         title: "Error",
@@ -204,7 +226,6 @@ export default function SubscriptionsPage() {
     }
   }
 
-  // Handles API call to create a new subscription
   const handleCreateSubscription = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!token) return
@@ -224,7 +245,7 @@ export default function SubscriptionsPage() {
         description: "Subscription created successfully.",
       })
       setIsCreateDialogOpen(false)
-      fetchSubscriptions() // Refresh the list
+      fetchSubscriptions()
     } catch (error) {
       toast({
         title: "Error",
@@ -234,7 +255,6 @@ export default function SubscriptionsPage() {
     }
   }
 
-  // Handles API call to update an existing subscription
   const handleUpdateSubscription = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!selectedSubscription || !token) return
@@ -257,7 +277,7 @@ export default function SubscriptionsPage() {
         description: "Subscription updated successfully.",
       })
       setIsEditDialogOpen(false)
-      fetchSubscriptions() // Refresh the list
+      fetchSubscriptions()
     } catch (error) {
       toast({
         title: "Error",
@@ -267,7 +287,6 @@ export default function SubscriptionsPage() {
     }
   }
 
-  // Handles API call to delete a subscription
   const handleDeleteSubscription = async (subscriptionId: number) => {
     if (window.confirm("Are you sure you want to delete this subscription?")) {
       if (!token) return
@@ -284,7 +303,7 @@ export default function SubscriptionsPage() {
           title: "Success",
           description: "Subscription deleted successfully.",
         })
-        fetchSubscriptions() // Refresh the list
+        fetchSubscriptions()
       } catch (error) {
         toast({
           title: "Error",
@@ -295,7 +314,6 @@ export default function SubscriptionsPage() {
     }
   }
 
-  // Handle status change with API call
   const handleStatusChange = async (subscriptionId: number, status: "active" | "paused" | "cancelled") => {
     try {
       // In a real app, you'd call an API to update the status
@@ -321,7 +339,6 @@ export default function SubscriptionsPage() {
     setIsViewDialogOpen(true)
   }
 
-  // Open edit dialog and fetch subscription data
   const openEditDialog = (subscription: Subscription) => {
     setSelectedSubscription(subscription)
     fetchSubscriptionById(subscription.id)
@@ -334,7 +351,7 @@ export default function SubscriptionsPage() {
       (sub) =>
         (sub.user_name?.toLowerCase() ?? "").includes(searchTerm.toLowerCase()) ||
         (sub.user_email?.toLowerCase() ?? "").includes(searchTerm.toLowerCase()) ||
-        (sub.plan_name?.toLowerCase() ?? "").includes(searchTerm.toLowerCase()),
+        (sub.zone_name?.toLowerCase() ?? "").includes(searchTerm.toLowerCase()),
     )
 
   return (
@@ -356,7 +373,6 @@ export default function SubscriptionsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{subscriptions.length}</div>
-              <p className="text-xs text-muted-foreground">+5% from last month</p>
             </CardContent>
           </Card>
           <Card>
@@ -368,7 +384,6 @@ export default function SubscriptionsPage() {
               <div className="text-2xl font-bold">
                 {subscriptions.filter((sub) => sub.status === "active").length}
               </div>
-              <p className="text-xs text-muted-foreground">+12% from last month</p>
             </CardContent>
           </Card>
           <Card>
@@ -381,20 +396,19 @@ export default function SubscriptionsPage() {
                 $
                 {subscriptions
                   .filter((sub) => sub.status === "active")
-                  .reduce((acc, sub) => acc + (sub.total_price ?? 0), 0)
+                  .reduce((acc, sub) => acc + (sub.total_cents ?? 0 / 100), 0)
                   .toFixed(2)}
               </div>
-              <p className="text-xs text-muted-foreground">+8% from last month</p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Avg. Meals Per Week</CardTitle>
+              <CardTitle className="text-sm font-medium">Avg. Meals Per Interval</CardTitle>
               <Clock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {(subscriptions.reduce((acc, sub) => acc + (sub.meals_per_week ?? 0), 0) / subscriptions.length).toFixed(1)}
+                {(subscriptions.reduce((acc, sub) => acc + (sub.meals_per_interval ?? 0), 0) / subscriptions.length).toFixed(1)}
               </div>
               <p className="text-xs text-muted-foreground">Average across all plans</p>
             </CardContent>
@@ -435,23 +449,26 @@ export default function SubscriptionsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>User</TableHead>
-                  <TableHead>Plan</TableHead>
+                  <TableHead>Plan Type</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Total Price</TableHead>
-                  <TableHead>Next Delivery</TableHead>
+                  <TableHead>People</TableHead>
+                  <TableHead>Meals</TableHead>
+                  <TableHead>Zone</TableHead>
+                  <TableHead>Total</TableHead>
+                  <TableHead>Delivery Window</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center">
+                    <TableCell colSpan={9} className="text-center">
                       Loading...
                     </TableCell>
                   </TableRow>
                 ) : filteredSubscriptions.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center">
+                    <TableCell colSpan={9} className="text-center">
                       No subscriptions found
                     </TableCell>
                   </TableRow>
@@ -459,30 +476,32 @@ export default function SubscriptionsPage() {
                   filteredSubscriptions.map((sub) => (
                     <TableRow key={sub.id}>
                       <TableCell>
-                        <div className="font-medium">{sub.user_name}</div>
+                        <div className="font-medium">{sub.user_name ?? `User #${sub.user_id}`}</div>
                         <div className="text-sm text-muted-foreground">{sub.user_email}</div>
                       </TableCell>
                       <TableCell>
-                        <div className="font-medium">{sub.plan_name}</div>
                         <Badge
-                          className={`${
-                            planTypeColors[sub.plan_type as keyof typeof planTypeColors]
-                          } hover:bg-opacity-80`}
+                          className={planTypeColors[sub.type as keyof typeof planTypeColors]}
                         >
-                          {sub.plan_type}
+                          {sub.type}
                         </Badge>
                       </TableCell>
                       <TableCell>
                         <Badge
-                          className={`${
-                            statusColors[sub.status]
-                          } hover:bg-opacity-80`}
+                          className={statusColors[sub.status]}
                         >
                           {sub.status}
                         </Badge>
                       </TableCell>
-                      <TableCell>${(sub.total_price ?? 0).toFixed(2)}</TableCell>
-                      <TableCell>{new Date(sub.next_delivery ?? "").toLocaleDateString()}</TableCell>
+                      <TableCell>{sub.people_count}</TableCell>
+                      <TableCell>{sub.meals_per_interval}</TableCell>
+                      <TableCell>{sub.zone_name}</TableCell>
+                      <TableCell>${((sub.total_cents ?? 0) / 100).toFixed(2)}</TableCell>
+                      <TableCell>
+                        {sub.delivery_time_id
+                          ? `${sub.delivery_time_id.start_time.substring(0, 5)} - ${sub.delivery_time_id.end_time.substring(0, 5)}`
+                          : "N/A"}
+                      </TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -542,7 +561,7 @@ export default function SubscriptionsPage() {
           <DialogHeader>
             <DialogTitle>Subscription Details</DialogTitle>
             <DialogDescription>
-              Detailed view of the subscription for {selectedSubscription?.user_name}.
+              Detailed view of the subscription for {selectedSubscription?.user_name ?? `User #${selectedSubscription?.user_id}`}.
             </DialogDescription>
           </DialogHeader>
           {selectedSubscription && (
@@ -550,19 +569,18 @@ export default function SubscriptionsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>User</Label>
-                  <p>{selectedSubscription.user_name}</p>
+                  <p>{selectedSubscription.user_name ?? `User #${selectedSubscription.user_id}`}</p>
                   <p className="text-sm text-muted-foreground">{selectedSubscription.user_email}</p>
                 </div>
                 <div>
-                  <Label>Plan</Label>
-                  <p>{selectedSubscription.plan_name}</p>
-                  <Badge
-                    className={`${
-                      planTypeColors[selectedSubscription.plan_type as keyof typeof planTypeColors]
-                    } hover:bg-opacity-80`}
-                  >
-                    {selectedSubscription.plan_type}
-                  </Badge>
+                  <Label>Plan Type</Label>
+                  <p>
+                    <Badge
+                      className={planTypeColors[selectedSubscription.type as keyof typeof planTypeColors]}
+                    >
+                      {selectedSubscription.type}
+                    </Badge>
+                  </p>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -570,9 +588,7 @@ export default function SubscriptionsPage() {
                   <Label>Status</Label>
                   <p>
                     <Badge
-                      className={`${
-                        statusColors[selectedSubscription.status]
-                      } hover:bg-opacity-80`}
+                      className={statusColors[selectedSubscription.status]}
                     >
                       {selectedSubscription.status}
                     </Badge>
@@ -580,57 +596,58 @@ export default function SubscriptionsPage() {
                 </div>
                 <div>
                   <Label>Total Price</Label>
-                  <p>${(selectedSubscription.total_price ?? 0).toFixed(2)}</p>
+                  <p>${((selectedSubscription.total_cents ?? 0) / 100).toFixed(2)}</p>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Meals per Week</Label>
-                  <p>{selectedSubscription.meals_per_week}</p>
+                  <Label>People</Label>
+                  <p>{selectedSubscription.people_count}</p>
                 </div>
                 <div>
-                  <Label>Price per Meal</Label>
-                  <p>${(selectedSubscription.price_per_meal ?? 0).toFixed(2)}</p>
+                  <Label>Meals per Interval</Label>
+                  <p>{selectedSubscription.meals_per_interval}</p>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Start Date</Label>
-                  <p>{new Date(selectedSubscription.start_date ?? "").toLocaleDateString()}</p>
+                  <Label>Zone</Label>
+                  <p>{selectedSubscription.zone_name}</p>
                 </div>
                 <div>
-                  <Label>Next Delivery</Label>
-                  <p>{new Date(selectedSubscription.next_delivery ?? "").toLocaleDateString()}</p>
+                  <Label>Delivery Window</Label>
+                  <p>
+                    {selectedSubscription.delivery_time_id
+                      ? `${selectedSubscription.delivery_time_id.start_time.substring(0, 5)} - ${selectedSubscription.delivery_time_id.end_time.substring(0, 5)}`
+                      : "N/A"}
+                  </p>
                 </div>
               </div>
-              {selectedSubscription.end_date && (
-                <div>
-                  <Label>End Date</Label>
-                  <p>{new Date(selectedSubscription.end_date).toLocaleDateString()}</p>
-                </div>
-              )}
-              {/* New fields from API */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Bag Deposit</Label>
-                  <p>${(selectedSubscription.bag_deposit_cents / 100).toFixed(2)}</p>
+                  <Label>Created At</Label>
+                  <p>{selectedSubscription.created_at ? new Date(selectedSubscription.created_at).toLocaleDateString() : 'N/A'}</p>
                 </div>
                 <div>
                   <Label>Payment Status</Label>
-                  <Badge className={`${statusColors[selectedSubscription.payment_status]} hover:bg-opacity-80`}>
+                  <Badge className={statusColors[selectedSubscription.payment_status]}>
                     {selectedSubscription.payment_status}
                   </Badge>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Delivery Latitude</Label>
-                  <p>{selectedSubscription.delivery_latlng.latitude}</p>
+                  <Label>Bag Deposit</Label>
+                  <p>${((selectedSubscription.bag_deposit_cents ?? 0) / 100).toFixed(2)}</p>
                 </div>
                 <div>
-                  <Label>Delivery Longitude</Label>
-                  <p>{selectedSubscription.delivery_latlng.longitude}</p>
+                  <Label>Delivery Fee</Label>
+                  <p>${((selectedSubscription.delivery_fee_cents ?? 0) / 100).toFixed(2)}</p>
                 </div>
+              </div>
+              <div>
+                <Label>Coupon Code</Label>
+                <p>{selectedSubscription.coupon_code || "None"}</p>
               </div>
             </div>
           )}
@@ -700,6 +717,32 @@ export default function SubscriptionsPage() {
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="delivery_time_id" className="text-right">
+                Delivery Time ID
+              </Label>
+              <Input
+                id="delivery_time_id"
+                type="number"
+                value={newSubscriptionForm.delivery_time_id}
+                onChange={(e) => setNewSubscriptionForm({ ...newSubscriptionForm, delivery_time_id: parseInt(e.target.value) })}
+                className="col-span-3"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="user_location_id" className="text-right">
+                User Location ID
+              </Label>
+              <Input
+                id="user_location_id"
+                type="number"
+                value={newSubscriptionForm.user_location_id}
+                onChange={(e) => setNewSubscriptionForm({ ...newSubscriptionForm, user_location_id: parseInt(e.target.value) })}
+                className="col-span-3"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="coupon_code" className="text-right">
                 Coupon Code
               </Label>
@@ -747,32 +790,22 @@ export default function SubscriptionsPage() {
               </Select>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="latitude" className="text-right">
-                Latitude
+              <Label htmlFor="type" className="text-right">
+                Plan Type
               </Label>
-              <Input
-                id="latitude"
-                type="number"
-                step="any"
-                value={newSubscriptionForm.delivery_latlng.latitude}
-                onChange={(e) => setNewSubscriptionForm({ ...newSubscriptionForm, delivery_latlng: { ...newSubscriptionForm.delivery_latlng, latitude: parseFloat(e.target.value) } })}
-                className="col-span-3"
-                required
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="longitude" className="text-right">
-                Longitude
-              </Label>
-              <Input
-                id="longitude"
-                type="number"
-                step="any"
-                value={newSubscriptionForm.delivery_latlng.longitude}
-                onChange={(e) => setNewSubscriptionForm({ ...newSubscriptionForm, delivery_latlng: { ...newSubscriptionForm.delivery_latlng, longitude: parseFloat(e.target.value) } })}
-                className="col-span-3"
-                required
-              />
+              <Select
+                value={newSubscriptionForm.type}
+                onValueChange={(value) => setNewSubscriptionForm({ ...newSubscriptionForm, type: value as "weekly" | "monthly" | "quarterly" })}
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Select a plan type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                  <SelectItem value="quarterly">Quarterly</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <DialogFooter>
               <Button type="button" onClick={() => setIsCreateDialogOpen(false)}>
@@ -827,7 +860,7 @@ export default function SubscriptionsPage() {
               <Input
                 id="edit_meals_per_interval"
                 type="number"
-                value={editSubscriptionForm.meals_per_interval ?? 0}
+                value={editSubscriptionForm.meals_per_interval}
                 onChange={(e) => setEditSubscriptionForm({ ...editSubscriptionForm, meals_per_interval: parseInt(e.target.value) })}
                 className="col-span-3"
                 required
@@ -843,6 +876,32 @@ export default function SubscriptionsPage() {
                 value={editSubscriptionForm.bag_deposit_cents}
                 onChange={(e) => setEditSubscriptionForm({ ...editSubscriptionForm, bag_deposit_cents: parseInt(e.target.value) })}
                 className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit_delivery_time_id" className="text-right">
+                Delivery Time ID
+              </Label>
+              <Input
+                id="edit_delivery_time_id"
+                type="number"
+                value={editSubscriptionForm.delivery_time_id}
+                onChange={(e) => setEditSubscriptionForm({ ...editSubscriptionForm, delivery_time_id: parseInt(e.target.value) })}
+                className="col-span-3"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit_user_location_id" className="text-right">
+                User Location ID
+              </Label>
+              <Input
+                id="edit_user_location_id"
+                type="number"
+                value={editSubscriptionForm.user_location_id}
+                onChange={(e) => setEditSubscriptionForm({ ...editSubscriptionForm, user_location_id: parseInt(e.target.value) })}
+                className="col-span-3"
+                required
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
@@ -893,32 +952,22 @@ export default function SubscriptionsPage() {
               </Select>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit_latitude" className="text-right">
-                Latitude
+              <Label htmlFor="edit_type" className="text-right">
+                Plan Type
               </Label>
-              <Input
-                id="edit_latitude"
-                type="number"
-                step="any"
-                value={editSubscriptionForm.delivery_latlng.latitude}
-                onChange={(e) => setEditSubscriptionForm({ ...editSubscriptionForm, delivery_latlng: { ...editSubscriptionForm.delivery_latlng, latitude: parseFloat(e.target.value) } })}
-                className="col-span-3"
-                required
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="edit_longitude" className="text-right">
-                Longitude
-              </Label>
-              <Input
-                id="edit_longitude"
-                type="number"
-                step="any"
-                value={editSubscriptionForm.delivery_latlng.longitude}
-                onChange={(e) => setEditSubscriptionForm({ ...editSubscriptionForm, delivery_latlng: { ...editSubscriptionForm.delivery_latlng, longitude: parseFloat(e.target.value) } })}
-                className="col-span-3"
-                required
-              />
+              <Select
+                value={editSubscriptionForm.type}
+                onValueChange={(value) => setEditSubscriptionForm({ ...editSubscriptionForm, type: value as "weekly" | "monthly" | "quarterly" })}
+              >
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Select a plan type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                  <SelectItem value="quarterly">Quarterly</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <DialogFooter>
               <Button type="button" onClick={() => setIsEditDialogOpen(false)}>

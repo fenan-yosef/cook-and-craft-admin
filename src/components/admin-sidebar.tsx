@@ -155,8 +155,8 @@ export function AdminSidebar() {
                 />
               </div>
               <div className="flex flex-col gap-0.5 leading-none">
-                <span className="font-semibold">Admin Panel</span>
-                <span className="text-xs">Management Dashboard</span>
+                <span className="font-semibold">Cook And Crafts</span>
+                <span className="text-xs">Admin Panel</span>
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
