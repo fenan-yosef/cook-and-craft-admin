@@ -23,17 +23,19 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { User, Settings, LogOut, Edit } from "lucide-react"
+import { User, LogOut, Edit, Eye, EyeOff } from "lucide-react"
 
 export function ProfileAvatar() {
   const { user, logout, updateUser } = useAuth() || {}
   const { toast } = useToast()
   const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [profileData, setProfileData] = useState({
     name: user?.name || "",
     email: user?.email || "",
-    currentPassword: "",
+  phone: (user as any)?.phone || "",
     newPassword: "",
     confirmPassword: "",
   })
@@ -45,6 +47,7 @@ export function ProfileAvatar() {
         ...prev,
         name: user.name,
         email: user.email,
+  phone: (user as any)?.phone || "",
       }))
     }
   }, [user])
@@ -63,6 +66,7 @@ export function ProfileAvatar() {
 
   const handleProfileUpdate = async () => {
     try {
+  //
       // Validate passwords if changing
       if (profileData.newPassword) {
         if (profileData.newPassword !== profileData.confirmPassword) {
@@ -82,24 +86,53 @@ export function ProfileAvatar() {
           return
         }
       }
+      // Build payload
+      const [firstNameRaw, ...rest] = (profileData.name || "").trim().split(/\s+/)
+      const first_name = firstNameRaw || profileData.name
+      const last_name = rest.join(" ") || ""
+      const payload: Record<string, any> = {
+        first_name,
+        last_name,
+        email: profileData.email,
+        phone: profileData.phone,
+      }
+      if (profileData.newPassword) {
+        payload.password = profileData.newPassword
+        payload.password_confirmation = profileData.confirmPassword
+      }
 
-      // In a real app, you would make an API call here to update the profile
-      // For example:
-      // await apiService.put("/admins/profile", {
-      //   first_name: profileData.name.split(' ')[0], // Assuming name can be split
-      //   last_name: profileData.name.split(' ')[1] || '',
-      //   email: profileData.email,
-      //   current_password: profileData.currentPassword,
-      //   new_password: profileData.newPassword,
-      // });
+      // Ensure auth token is set
+      const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
+      if (!token) {
+        toast({ title: "Auth error", description: "Missing auth token.", variant: "destructive" })
+        return
+      }
 
-      // Simulate API call success and update local user data
+      // Lazy import to avoid circular
+      const { apiService } = await import("@/lib/api-service")
+      apiService.setAuthToken(token)
+
+      // Some Laravel routes accept PATCH on /admins (not /admins/profile) and prefer form encoding
+      const formPayload: Record<string, string> = {
+        first_name: String(payload.first_name ?? ""),
+        last_name: String(payload.last_name ?? ""),
+        email: String(payload.email ?? ""),
+        phone: String(payload.phone ?? ""),
+      }
+      if (payload.password) {
+        formPayload.password = String(payload.password)
+        formPayload.password_confirmation = String(payload.password_confirmation ?? "")
+      }
+      await apiService.patchFormData("/admins", formPayload)
+
+      // Update local user data
       const updatedUser = {
         ...user,
         name: profileData.name,
         email: profileData.email,
+        phone: profileData.phone,
       }
-      updateUser?.(updatedUser) // Update user in AuthContext and localStorage
+      updateUser?.(updatedUser)
 
       toast({
         title: "Success",
@@ -109,7 +142,6 @@ export function ProfileAvatar() {
       setIsEditing(false)
       setProfileData({
         ...profileData,
-        currentPassword: "",
         newPassword: "",
         confirmPassword: "",
       })
@@ -117,7 +149,19 @@ export function ProfileAvatar() {
       console.error("Profile update error:", error)
       toast({
         title: "Error",
-        description: "Failed to update profile.",
+        description: (() => {
+          const msg = (error as any)?.message ?? "Failed to update profile."
+          try {
+            const parsed = JSON.parse(String(msg))
+            if (parsed?.message) return String(parsed.message)
+            if (parsed?.errors) {
+              const firstKey = Object.keys(parsed.errors)[0]
+              const firstMsg = parsed.errors[firstKey]?.[0]
+              if (firstMsg) return String(firstMsg)
+            }
+          } catch {}
+          return String(msg)
+        })(),
         variant: "destructive",
       })
     }
@@ -127,7 +171,7 @@ export function ProfileAvatar() {
     setProfileData({
       name: user?.name || "",
       email: user?.email || "",
-      currentPassword: "",
+  phone: (user as any)?.phone || "",
       newPassword: "",
       confirmPassword: "",
     })
@@ -224,48 +268,72 @@ export function ProfileAvatar() {
                 />
               </div>
 
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="phone" className="text-right">
+                  Phone
+                </Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  value={profileData.phone}
+                  onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
+                  className="col-span-3"
+                  disabled={!isEditing}
+                />
+              </div>
+
               {isEditing && (
                 <>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="currentPassword" className="text-right">
-                      Current Password
-                    </Label>
-                    <Input
-                      id="currentPassword"
-                      type="password"
-                      value={profileData.currentPassword}
-                      onChange={(e) => setProfileData({ ...profileData, currentPassword: e.target.value })}
-                      className="col-span-3"
-                      placeholder="Enter current password"
-                    />
-                  </div>
-
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="newPassword" className="text-right">
                       New Password
                     </Label>
-                    <Input
-                      id="newPassword"
-                      type="password"
-                      value={profileData.newPassword}
-                      onChange={(e) => setProfileData({ ...profileData, newPassword: e.target.value })}
-                      className="col-span-3"
-                      placeholder="Leave empty to keep current"
-                    />
+                    <div className="col-span-3 relative">
+                      <Input
+                        id="newPassword"
+                        type={showNewPassword ? "text" : "password"}
+                        value={profileData.newPassword}
+                        onChange={(e) => setProfileData({ ...profileData, newPassword: e.target.value })}
+                        className="pr-10"
+                        placeholder="Leave empty to keep current"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2"
+                        onClick={() => setShowNewPassword((s) => !s)}
+                        aria-label={showNewPassword ? "Hide password" : "Show password"}
+                      >
+                        {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-4 items-center gap-4">
                     <Label htmlFor="confirmPassword" className="text-right">
                       Confirm Password
                     </Label>
-                    <Input
-                      id="confirmPassword"
-                      type="password"
-                      value={profileData.confirmPassword}
-                      onChange={(e) => setProfileData({ ...profileData, confirmPassword: e.target.value })}
-                      className="col-span-3"
-                      placeholder="Confirm new password"
-                    />
+                    <div className="col-span-3 relative">
+                      <Input
+                        id="confirmPassword"
+                        type={showConfirmPassword ? "text" : "password"}
+                        value={profileData.confirmPassword}
+                        onChange={(e) => setProfileData({ ...profileData, confirmPassword: e.target.value })}
+                        className="pr-10"
+                        placeholder="Confirm new password"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-1.5 top-1/2 -translate-y-1/2"
+                        onClick={() => setShowConfirmPassword((s) => !s)}
+                        aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                      >
+                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
                   </div>
                 </>
               )}
