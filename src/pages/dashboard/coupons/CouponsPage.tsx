@@ -149,7 +149,7 @@ export default function CouponsPage() {
         return newErrors;
     });
   }
-  
+
   const handleAddCoupon = async (e: React.FormEvent) => {
     e.preventDefault()
     setAddLoading(true)
@@ -175,7 +175,14 @@ export default function CouponsPage() {
     } catch (err: any) {
       const errorData = err?.data?.error;
       if (errorData) {
-          setAddErrors(errorData);
+          const mappedErrors: Record<string, string[]> = {};
+          if (errorData.discount_value) {
+            mappedErrors.discountValue = errorData.discount_value;
+          }
+          if (errorData.starts_at) {
+            mappedErrors.startsAt = errorData.starts_at;
+          }
+          setAddErrors(mappedErrors);
           toast({
               title: "Validation Error",
               description: "Please correct the highlighted fields.",
@@ -235,7 +242,14 @@ export default function CouponsPage() {
     } catch (err: any) {
       const errorData = err?.data?.error;
       if (errorData) {
-          setEditErrors(errorData);
+          const mappedErrors: Record<string, string[]> = {};
+          if (errorData.discount_value) {
+            mappedErrors.discountValue = errorData.discount_value;
+          }
+          if (errorData.starts_at) {
+            mappedErrors.startsAt = errorData.starts_at;
+          }
+          setEditErrors(mappedErrors);
           toast({
               title: "Validation Error",
               description: "Please correct the highlighted fields.",
@@ -417,18 +431,18 @@ export default function CouponsPage() {
               <div className="flex gap-2">
                 <div className="flex-1">
                   <Label htmlFor="discountValue">Discount Value (%)</Label>
-                  <Input 
-                      id="discountValue" 
-                      name="discountValue" 
-                      type="number" 
-                      step="0.01" 
-                      value={addForm.discountValue} 
-                      onChange={handleAddChange} 
-                      required 
-                      className={addErrors.discount_value ? "border-red-500" : ""}
+                  <Input
+                      id="discountValue"
+                      name="discountValue"
+                      type="number"
+                      step="0.01"
+                      value={addForm.discountValue}
+                      onChange={handleAddChange}
+                      required
+                      className={addErrors.discountValue ? "border-red-500" : ""}
                   />
-                  {addErrors.discount_value && (
-                      <p className="text-red-500 text-sm mt-1">{addErrors.discount_value[0]}</p>
+                  {addErrors.discountValue && (
+                      <p className="text-red-500 text-sm mt-1">{addErrors.discountValue[0]}</p>
                   )}
                 </div>
                 <div className="flex-1">
@@ -456,17 +470,17 @@ export default function CouponsPage() {
               </div>
               <div>
                 <Label htmlFor="startsAt">Starts At</Label>
-                <Input 
-                    id="startsAt" 
-                    name="startsAt" 
-                    type="datetime-local" 
-                    value={addForm.startsAt} 
-                    onChange={handleAddChange} 
-                    required 
-                    className={addErrors.starts_at ? "border-red-500" : ""}
+                <Input
+                    id="startsAt"
+                    name="startsAt"
+                    type="datetime-local"
+                    value={addForm.startsAt}
+                    onChange={handleAddChange}
+                    required
+                    className={addErrors.startsAt ? "border-red-500" : ""}
                 />
-                {addErrors.starts_at && (
-                    <p className="text-red-500 text-sm mt-1">{addErrors.starts_at[0]}</p>
+                {addErrors.startsAt && (
+                    <p className="text-red-500 text-sm mt-1">{addErrors.startsAt[0]}</p>
                 )}
               </div>
               <div>
@@ -496,18 +510,18 @@ export default function CouponsPage() {
               <div className="flex gap-2">
                 <div className="flex-1">
                   <Label htmlFor="edit_discountValue">Discount Value (%)</Label>
-                  <Input 
-                      id="edit_discountValue" 
-                      name="discountValue" 
-                      type="number" 
-                      step="0.01" 
-                      value={editForm.discountValue} 
-                      onChange={handleEditChange} 
-                      required 
-                      className={editErrors.discount_value ? "border-red-500" : ""}
+                  <Input
+                      id="edit_discountValue"
+                      name="discountValue"
+                      type="number"
+                      step="0.01"
+                      value={editForm.discountValue}
+                      onChange={handleEditChange}
+                      required
+                      className={editErrors.discountValue ? "border-red-500" : ""}
                   />
-                  {editErrors.discount_value && (
-                      <p className="text-red-500 text-sm mt-1">{editErrors.discount_value[0]}</p>
+                  {editErrors.discountValue && (
+                      <p className="text-red-500 text-sm mt-1">{editErrors.discountValue[0]}</p>
                   )}
                 </div>
                 <div className="flex-1">
@@ -535,17 +549,17 @@ export default function CouponsPage() {
               </div>
               <div>
                 <Label htmlFor="edit_startsAt">Starts At</Label>
-                <Input 
-                    id="edit_startsAt" 
-                    name="startsAt" 
-                    type="datetime-local" 
-                    value={editForm.startsAt} 
-                    onChange={handleEditChange} 
-                    required 
-                    className={editErrors.starts_at ? "border-red-500" : ""}
+                <Input
+                    id="edit_startsAt"
+                    name="startsAt"
+                    type="datetime-local"
+                    value={editForm.startsAt}
+                    onChange={handleEditChange}
+                    required
+                    className={editErrors.startsAt ? "border-red-500" : ""}
                 />
-                {editErrors.starts_at && (
-                    <p className="text-red-500 text-sm mt-1">{editErrors.starts_at[0]}</p>
+                {editErrors.startsAt && (
+                    <p className="text-red-500 text-sm mt-1">{editErrors.startsAt[0]}</p>
                 )}
               </div>
               <div>
