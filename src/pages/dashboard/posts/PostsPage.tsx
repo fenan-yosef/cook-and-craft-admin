@@ -56,6 +56,7 @@ interface Post {
   is_hidden: boolean | number;
   is_deleted: boolean | number;
   is_pinned: boolean;
+  pin_id?: number;
   is_highlighted: boolean;
   highlight_id?: number;
   status: "published" | "pending" | "draft" | "hidden" | "deleted";
@@ -454,7 +455,7 @@ export default function PostsPage() {
 
     try {
       // use the post.id directly since there's no post_pin object in response
-      await apiService.delete(`/post_pins/${post.id}`);
+      await apiService.delete(`/post_pins/${post.pin_id}`);
       toast({ title: "Success", description: "Post unpinned successfully." });
       await fetchPosts(currentPage);
     } catch (error) {
