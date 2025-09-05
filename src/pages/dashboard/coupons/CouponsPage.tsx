@@ -108,6 +108,7 @@ export default function CouponsPage() {
     startsAt: "",
     endsAt: "",
   })
+  const [addErrors, setAddErrors] = useState<Record<string, string[]>>({})
 
   // Edit Coupon modal state and form
   const [isEditOpen, setIsEditOpen] = useState(false)
@@ -125,20 +126,34 @@ export default function CouponsPage() {
     startsAt: "",
     endsAt: "",
   })
+  const [editErrors, setEditErrors] = useState<Record<string, string[]>>({})
 
   const handleAddChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target
     setAddForm(prev => ({ ...prev, [name]: type === "checkbox" ? checked : value }))
+    // Clear the error for the field being changed
+    setAddErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        return newErrors;
+    });
   }
 
   const handleEditChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target
     setEditForm(prev => ({ ...prev, [name]: type === "checkbox" ? checked : value }))
+    // Clear the error for the field being changed
+    setEditErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        return newErrors;
+    });
   }
 
   const handleAddCoupon = async (e: React.FormEvent) => {
     e.preventDefault()
     setAddLoading(true)
+    setAddErrors({})
     try {
       const payload = {
         name: addForm.name,
@@ -158,7 +173,28 @@ export default function CouponsPage() {
       setAddForm({ name:"", discountType:"percent", discountValue:"", maxDiscountValue:"", scope:"both", isAutoApply:false, maxRedemptions:"", perUserLimit:"", startsAt:"", endsAt:"" })
       fetchCoupons(currentPage)
     } catch (err: any) {
-      toast({ title: "Error", description: err.message || "Failed to create coupon.", variant: "destructive" })
+      const errorData = err?.data?.error;
+      if (errorData) {
+          const mappedErrors: Record<string, string[]> = {};
+          if (errorData.discount_value) {
+            mappedErrors.discountValue = errorData.discount_value;
+          }
+          if (errorData.starts_at) {
+            mappedErrors.startsAt = errorData.starts_at;
+          }
+          setAddErrors(mappedErrors);
+          toast({
+              title: "Validation Error",
+              description: "Please correct the highlighted fields.",
+              variant: "destructive",
+          });
+      } else {
+          toast({
+              title: "Error",
+              description: err.message || "Failed to create coupon.",
+              variant: "destructive",
+          });
+      }
     } finally {
       setAddLoading(false)
     }
@@ -179,11 +215,13 @@ export default function CouponsPage() {
       endsAt: coupon.endsAt,
     })
     setIsEditOpen(true)
+    setEditErrors({})
   }
 
   const handleEditCoupon = async (e: React.FormEvent) => {
     e.preventDefault()
     setEditLoading(true)
+    setEditErrors({})
     try {
       const payload = {
         name: editForm.name,
@@ -202,7 +240,28 @@ export default function CouponsPage() {
       setIsEditOpen(false)
       fetchCoupons(currentPage)
     } catch (err: any) {
-      toast({ title: "Error", description: err.message || "Failed to update coupon.", variant: "destructive" })
+      const errorData = err?.data?.error;
+      if (errorData) {
+          const mappedErrors: Record<string, string[]> = {};
+          if (errorData.discount_value) {
+            mappedErrors.discountValue = errorData.discount_value;
+          }
+          if (errorData.starts_at) {
+            mappedErrors.startsAt = errorData.starts_at;
+          }
+          setEditErrors(mappedErrors);
+          toast({
+              title: "Validation Error",
+              description: "Please correct the highlighted fields.",
+              variant: "destructive",
+          });
+      } else {
+          toast({
+              title: "Error",
+              description: err.message || "Failed to update coupon.",
+              variant: "destructive",
+          });
+      }
     } finally {
       setEditLoading(false)
     }
@@ -372,7 +431,19 @@ export default function CouponsPage() {
               <div className="flex gap-2">
                 <div className="flex-1">
                   <Label htmlFor="discountValue">Discount Value (%)</Label>
-                  <Input id="discountValue" name="discountValue" type="number" step="0.01" value={addForm.discountValue} onChange={handleAddChange} required />
+                  <Input
+                      id="discountValue"
+                      name="discountValue"
+                      type="number"
+                      step="0.01"
+                      value={addForm.discountValue}
+                      onChange={handleAddChange}
+                      required
+                      className={addErrors.discountValue ? "border-red-500" : ""}
+                  />
+                  {addErrors.discountValue && (
+                      <p className="text-red-500 text-sm mt-1">{addErrors.discountValue[0]}</p>
+                  )}
                 </div>
                 <div className="flex-1">
                   <Label htmlFor="maxDiscountValue">Max Discount</Label>
@@ -399,7 +470,18 @@ export default function CouponsPage() {
               </div>
               <div>
                 <Label htmlFor="startsAt">Starts At</Label>
-                <Input id="startsAt" name="startsAt" type="datetime-local" value={addForm.startsAt} onChange={handleAddChange} required />
+                <Input
+                    id="startsAt"
+                    name="startsAt"
+                    type="datetime-local"
+                    value={addForm.startsAt}
+                    onChange={handleAddChange}
+                    required
+                    className={addErrors.startsAt ? "border-red-500" : ""}
+                />
+                {addErrors.startsAt && (
+                    <p className="text-red-500 text-sm mt-1">{addErrors.startsAt[0]}</p>
+                )}
               </div>
               <div>
                 <Label htmlFor="endsAt">Ends At</Label>
@@ -428,7 +510,19 @@ export default function CouponsPage() {
               <div className="flex gap-2">
                 <div className="flex-1">
                   <Label htmlFor="edit_discountValue">Discount Value (%)</Label>
-                  <Input id="edit_discountValue" name="discountValue" type="number" step="0.01" value={editForm.discountValue} onChange={handleEditChange} required />
+                  <Input
+                      id="edit_discountValue"
+                      name="discountValue"
+                      type="number"
+                      step="0.01"
+                      value={editForm.discountValue}
+                      onChange={handleEditChange}
+                      required
+                      className={editErrors.discountValue ? "border-red-500" : ""}
+                  />
+                  {editErrors.discountValue && (
+                      <p className="text-red-500 text-sm mt-1">{editErrors.discountValue[0]}</p>
+                  )}
                 </div>
                 <div className="flex-1">
                   <Label htmlFor="edit_maxDiscountValue">Max Discount</Label>
@@ -455,7 +549,18 @@ export default function CouponsPage() {
               </div>
               <div>
                 <Label htmlFor="edit_startsAt">Starts At</Label>
-                <Input id="edit_startsAt" name="startsAt" type="datetime-local" value={editForm.startsAt} onChange={handleEditChange} required />
+                <Input
+                    id="edit_startsAt"
+                    name="startsAt"
+                    type="datetime-local"
+                    value={editForm.startsAt}
+                    onChange={handleEditChange}
+                    required
+                    className={editErrors.startsAt ? "border-red-500" : ""}
+                />
+                {editErrors.startsAt && (
+                    <p className="text-red-500 text-sm mt-1">{editErrors.startsAt[0]}</p>
+                )}
               </div>
               <div>
                 <Label htmlFor="edit_endsAt">Ends At</Label>

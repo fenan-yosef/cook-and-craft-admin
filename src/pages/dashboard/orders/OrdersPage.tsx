@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,9 +8,35 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, MoreHorizontal, Eye, XCircle, CheckCircle } from "lucide-react";
+import { Search, MoreHorizontal, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiService } from "@/lib/api-service";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationPrevious,
+  PaginationNext,
+  PaginationLink,
+} from "@/components/ui/pagination";
+
+interface OrderItem {
+  id: number;
+  quantity: number;
+  price: number;
+  product: {
+    id: number;
+    name: string;
+    sku: string;
+    description: string;
+    price: number;
+    quantity: number;
+    images: string[];
+  };
+  addons: any[];
+}
 
 interface Order {
   id: number;
@@ -19,7 +47,7 @@ interface Order {
   total: number;
   deliveryAddress: string;
   deliveryCoordination?: { latitude: number; longitude: number };
-  itemsCount: number;
+  orderItems: OrderItem[];
 }
 
 const statusColors: Record<Order["status"], string> = {
@@ -31,155 +59,102 @@ const statusColors: Record<Order["status"], string> = {
 };
 
 export default function OrdersPage() {
+  const { toast } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  // Fixed page for now; pagination controls can be added later
-  const page = 1;
-  const { toast } = useToast();
+  const [statusFilter, setStatusFilter] = useState("all");
+
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [lastPage, setLastPage] = useState(1);
+  const [perPage, setPerPage] = useState(15);
+  const [total, setTotal] = useState(0);
 
   useEffect(() => {
-    fetchOrders();
-  }, [page]);
+    const token = localStorage.getItem("auth_token") || "";
+    apiService.setAuthToken(token);
+    fetchOrders(currentPage);
+  }, [currentPage]);
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (page = 1) => {
     try {
       setLoading(true);
-      // Ensure auth token on apiService (prefer auth_loken, fallback to auth_token)
-      const token = typeof window !== "undefined"
-        ? (localStorage.getItem("auth_loken") ?? localStorage.getItem("auth_token"))
-        : null;
-      if (token) apiService.setAuthToken(token);
+      setError(null);
+      const result = await apiService.get(`/admins/orders?page=${page}`);
+      setOrders(result.data);
 
-      // Fetch orders with pagination
-      const response = await apiService.get(`/orders?page=${page}`);
-      const payload = response ?? {};
-      // Normalize array from common wrappers
-      const candidates = [payload, payload?.data, payload?.data?.data, payload?.result, payload?.results, payload?.orders, payload?.list];
-      let apiOrders: any[] = [];
-      for (const layer of candidates) {
-        if (!layer) continue;
-        if (Array.isArray(layer)) { apiOrders = layer; break; }
-        if (Array.isArray((layer as any).data)) { apiOrders = (layer as any).data; break; }
-      }
-      const mapped: Order[] = apiOrders.map((o: any) => ({
-        id: Number(o.id),
-        status: o.status,
-        paymentStatus: o.paymentStatus,
-        subtotal: Number(o.subtotal ?? 0),
-        deliveryFee: Number(o.deliveryFee ?? 0),
-        total: Number(o.total ?? 0),
-        deliveryAddress: String(o.deliveryAddress ?? ""),
-        deliveryCoordination: o.deliveryCoordination,
-        itemsCount: Array.isArray(o.orderItems) ? o.orderItems.length : 0,
-      }));
-      // If no API orders, fall back to mock orders so the UI has data
-      setOrders(mapped.length > 0 ? mapped : getMockOrders());
-    } catch (error) {
-      toast({ title: "Error", description: "Failed to fetch orders", variant: "destructive" });
+      const { current_page, last_page, per_page, total } = result.meta || {};
+      setCurrentPage(current_page || page);
+      setLastPage(last_page || 1);
+      setPerPage(per_page || 15);
+      setTotal(total || result.data.length);
+
+    } catch (error: any) {
+      setError(error.message || "Failed to fetch orders.");
+      toast({
+        title: "Error",
+        description: error.message || "Failed to fetch orders.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  // Local fallback orders when API returns none
-  const getMockOrders = (): Order[] => [
-    {
-      id: 1011,
-      status: "pending",
-      paymentStatus: "unpaid",
-      subtotal: 42.5,
-      deliveryFee: 5,
-      total: 47.5,
-      deliveryAddress: "221B Baker Street, London",
-      deliveryCoordination: { latitude: 51.5237, longitude: -0.1585 },
-      itemsCount: 3,
-    },
-    {
-      id: 1012,
-      status: "processing",
-      paymentStatus: "paid",
-      subtotal: 89.99,
-      deliveryFee: 0,
-      total: 89.99,
-      deliveryAddress: "742 Evergreen Terrace, Springfield",
-      deliveryCoordination: { latitude: 39.7817, longitude: -89.6501 },
-      itemsCount: 5,
-    },
-    {
-      id: 1013,
-      status: "shipped",
-      paymentStatus: "paid",
-      subtotal: 120,
-      deliveryFee: 10,
-      total: 130,
-      deliveryAddress: "1600 Amphitheatre Parkway, Mountain View, CA",
-      deliveryCoordination: { latitude: 37.422, longitude: -122.084 },
-      itemsCount: 2,
-    },
-    {
-      id: 1014,
-      status: "delivered",
-      paymentStatus: "paid",
-      subtotal: 12,
-      deliveryFee: 2,
-      total: 14,
-      deliveryAddress: "1 Hacker Way, Menlo Park, CA",
-      deliveryCoordination: { latitude: 37.4847, longitude: -122.1484 },
-      itemsCount: 1,
-    },
-  ];
-
-  // Approve an order: move from pending -> processing (local UI update)
-  const handleApprove = (orderId: number) => {
-    setOrders((prev) => {
-      const updated = prev.map((o) =>
-  o.id === orderId && o.status === "pending" ? { ...o, status: "processing" as Order["status"] } : o
-      );
-      return updated;
-    });
-    toast({ title: "Order approved", description: `Order #${orderId} is now processing.` });
+  const handleViewOrder = async (orderId: number) => {
+    try {
+      const result = await apiService.get(`/admins/orders/${orderId}`);
+      setSelectedOrder(result.data);
+      setIsViewModalOpen(true);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to fetch order details.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const filteredOrders = orders
-    .filter((order) => (statusFilter === "all" ? true : order.status === statusFilter))
-    .filter((order) => {
-      const q = searchTerm.toLowerCase();
-      return (
-        String(order.id).includes(q) ||
-        (order.deliveryAddress ?? "").toLowerCase().includes(q) ||
-        (order.paymentStatus ?? "").toLowerCase().includes(q)
-      );
-    });
+  const filteredOrders = orders.filter((order) => {
+    const statusMatch = statusFilter === "all" || order.status === statusFilter;
+    const searchMatch =
+      order.id.toString().includes(searchTerm) ||
+      order.deliveryAddress.toLowerCase().includes(searchTerm.toLowerCase());
+    return statusMatch && searchMatch;
+  });
 
   return (
     <div className="flex flex-col">
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
         <div className="flex items-center justify-between">
           <h2 className="text-3xl font-bold tracking-tight">Orders</h2>
+          <Button onClick={() => fetchOrders(currentPage)} variant="outline">
+            Refresh
+          </Button>
         </div>
 
         <Card>
           <CardHeader>
             <CardTitle>All Orders</CardTitle>
-            <CardDescription>Manage customer orders</CardDescription>
+            <CardDescription>Manage and view all customer orders</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex items-center space-x-2 mb-4">
               <div className="relative flex-1 max-w-sm">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search orders..."
+                  placeholder="Search by order ID or address..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-8"
                 />
               </div>
-              <Select
-                value={statusFilter}
-                onValueChange={(value) => setStatusFilter(value)}
-              >
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Filter by status" />
                 </SelectTrigger>
@@ -197,48 +172,49 @@ export default function OrdersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Order</TableHead>
+                  <TableHead>Order ID</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Payment</TableHead>
-                  <TableHead>Total</TableHead>
                   <TableHead>Items</TableHead>
+                  <TableHead>Subtotal</TableHead>
+                  <TableHead>Delivery Fee</TableHead>
+                  <TableHead>Total</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center">
+                    <TableCell colSpan={8} className="text-center">
                       Loading...
+                    </TableCell>
+                  </TableRow>
+                ) : error ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center text-red-500">
+                      {error}
                     </TableCell>
                   </TableRow>
                 ) : filteredOrders.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center">
-                      No orders found
+                    <TableCell colSpan={8} className="text-center">
+                      No orders found.
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredOrders.map((order) => (
                     <TableRow key={order.id}>
+                      <TableCell>{order.id}</TableCell>
                       <TableCell>
-                        <div className="font-medium">Order #{order.id}</div>
-                        <div className="text-sm text-muted-foreground truncate max-w-[240px]">
-                          {order.deliveryAddress || "—"}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          className={`${statusColors[order.status]} hover:bg-opacity-80`}
-                        >
+                        <Badge className={statusColors[order.status]}>
                           {order.status}
                         </Badge>
                       </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{order.paymentStatus}</Badge>
-                      </TableCell>
+                      <TableCell>{order.paymentStatus}</TableCell>
+                      <TableCell>{order.orderItems?.length || 0}</TableCell>
+                      <TableCell>${order.subtotal.toFixed(2)}</TableCell>
+                      <TableCell>${order.deliveryFee.toFixed(2)}</TableCell>
                       <TableCell>${order.total.toFixed(2)}</TableCell>
-                      <TableCell>{order.itemsCount}</TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -248,16 +224,9 @@ export default function OrdersPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem
-                              disabled={order.status !== "pending"}
-                              onClick={() => handleApprove(order.id)}
+                              onClick={() => handleViewOrder(order.id)}
                             >
-                              <CheckCircle className="mr-2 h-4 w-4" /> Approve
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
                               <Eye className="mr-2 h-4 w-4" /> View
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="text-red-600">
-                              <XCircle className="mr-2 h-4 w-4" /> Cancel
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -267,9 +236,120 @@ export default function OrdersPage() {
                 )}
               </TableBody>
             </Table>
+            
+            {/* Pagination */}
+            <div className="mt-4">
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (currentPage > 1) setCurrentPage(currentPage - 1);
+                      }}
+                      className={currentPage <= 1 ? "pointer-events-none opacity-50" : ""}
+                    />
+                  </PaginationItem>
+
+                  {Array.from({ length: lastPage }, (_, i) => i + 1).map((pageNum) => (
+                    <PaginationItem key={pageNum}>
+                      <PaginationLink
+                        href="#"
+                        isActive={pageNum === currentPage}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setCurrentPage(pageNum);
+                        }}
+                      >
+                        {pageNum}
+                      </PaginationLink>
+                    </PaginationItem>
+                  ))}
+
+                  <PaginationItem>
+                    <PaginationNext
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (currentPage < lastPage) setCurrentPage(currentPage + 1);
+                      }}
+                      className={currentPage >= lastPage ? "pointer-events-none opacity-50" : ""}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+              <div className="mt-2 text-xs text-muted-foreground text-center">
+                {total > 0 ? (
+                  <>Showing {(currentPage - 1) * perPage + 1} - {Math.min(currentPage * perPage, total)} of {total}</>
+                ) : (
+                  <>No results</>
+                )}
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* View Order Dialog */}
+      <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Order Details</DialogTitle>
+            <DialogDescription>
+              Details for order #{selectedOrder?.id}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedOrder && (
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-2 items-center gap-4">
+                <Label>Status:</Label>
+                <Badge className={statusColors[selectedOrder.status]}>
+                  {selectedOrder.status}
+                </Badge>
+              </div>
+              <div className="grid grid-cols-2 items-center gap-4">
+                <Label>Payment Status:</Label>
+                <span>{selectedOrder.paymentStatus}</span>
+              </div>
+              <div className="grid grid-cols-2 items-center gap-4">
+                <Label>Total Items:</Label>
+                <span>{selectedOrder.orderItems.length}</span>
+              </div>
+              <div className="grid grid-cols-2 items-center gap-4">
+                <Label>Subtotal:</Label>
+                <span>${selectedOrder.subtotal.toFixed(2)}</span>
+              </div>
+              <div className="grid grid-cols-2 items-center gap-4">
+                <Label>Delivery Fee:</Label>
+                <span>${selectedOrder.deliveryFee.toFixed(2)}</span>
+              </div>
+              <div className="grid grid-cols-2 items-center gap-4">
+                <Label>Total:</Label>
+                <span>${selectedOrder.total.toFixed(2)}</span>
+              </div>
+              <div className="grid grid-cols-1 gap-2">
+                <Label>Delivery Address:</Label>
+                <p className="text-sm text-gray-500">{selectedOrder.deliveryAddress}</p>
+              </div>
+              <div className="grid gap-2">
+                <Label>Items:</Label>
+                <div className="space-y-2">
+                  {selectedOrder.orderItems.map((item) => (
+                    <div key={item.id} className="flex justify-between items-center">
+                      <span className="text-sm font-medium">{item.product.name}</span>
+                      <span className="text-sm text-gray-500">x{item.quantity}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={() => setIsViewModalOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
