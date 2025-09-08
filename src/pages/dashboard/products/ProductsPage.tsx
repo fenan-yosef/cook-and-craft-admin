@@ -14,7 +14,7 @@ import {
   PaginationEllipsis,
 } from "@/components/ui/pagination"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Search, MoreHorizontal, Plus, Edit, Trash2, Eye } from "lucide-react"
+import { Search, MoreHorizontal, Plus, Edit, Trash2, Eye, X } from "lucide-react"
 import { apiService } from "@/lib/api-service"
 import { useToast } from "@/hooks/use-toast"
 import {
@@ -41,6 +41,12 @@ interface Product {
   isPrivate?: boolean
   tags?: string[]
   categoryId?: number | null
+  // New fields from backend
+  original_price?: number
+  discountPrice?: number
+  isOnSale?: boolean
+  currency?: string
+  priceFormatted?: string
 }
 
 export default function ProductsPage() {
@@ -63,6 +69,12 @@ export default function ProductsPage() {
   productCategoryId: "",
   productVersionNumber: "",
   tagsString: "",
+  // new fields
+  sku: "",
+  original_price: "",
+  discountPrice: "",
+  is_on_sale: false,
+  currency: "",
   })
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -78,14 +90,21 @@ export default function ProductsPage() {
     quantity: "",
     is_active: false,
     is_private: false,
-    images: [] as File[],
+  images: [] as File[],
   existingImages: [] as string[],
   productCategoryId: "",
   productVersionNumber: "",
   tagsString: "",
+  // new fields
+  sku: "",
+  original_price: "",
+  discountPrice: "",
+  is_on_sale: false,
+  currency: "",
   })
   const [editImagePreviews, setEditImagePreviews] = useState<string[]>([])
   const editFileInputRef = useRef<HTMLInputElement>(null)
+  const [removedExistingImages, setRemovedExistingImages] = useState<string[]>([])
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
@@ -110,6 +129,9 @@ export default function ProductsPage() {
   const fetchProducts = async (page = 1) => {
     try {
       setLoading(true)
+  // Ensure auth token is set for this request (if available)
+  const token = localStorage.getItem("auth_token")
+  if (token) apiService.setAuthToken(token)
       const response = await apiService.get(`/admins/products?page=${page}`)
 
       // Normalize common API shapes for items and pagination meta
@@ -144,7 +166,7 @@ export default function ProductsPage() {
           }
         }
 
-        const metaSources = [top, top?.data, top?.meta, top?.pagination]
+  const metaSources = [top, top?.data, top?.meta, top?.pagination, top?.error]
         const meta: any = {}
         for (const src of metaSources) {
           if (!src) continue
@@ -172,12 +194,17 @@ export default function ProductsPage() {
         status: item.isProductActive ? "active" : "inactive",
         created_at: item.createdAt || new Date().toISOString(),
         images: item.productImages?.map((img: any) => img.imageUrl || img.url || img.path || img) || [],
-    sku: item.productSku,
-    isPrivate: !!item.isProductPrivate,
-    tags: (item.productTags || [])
+        sku: item.productSku,
+        isPrivate: !!item.isProductPrivate,
+        tags: (item.productTags || [])
           .map((t: any) => (typeof t === "string" ? t : (t?.name ?? t?.tagName ?? t?.label ?? t?.title ?? t?.slug ?? "")))
           .filter(Boolean),
-  categoryId: item.productCategoryId ?? item?.category_id ?? item?.categoryId ?? null,
+        categoryId: item.productCategoryId ?? item?.category_id ?? item?.categoryId ?? null,
+        original_price: item.productoriginal_price ?? undefined,
+        discountPrice: item.productDiscountPrice ?? undefined,
+        isOnSale: (item.isProductOnSale ?? 0) === 1,
+        currency: item.currency ?? undefined,
+        priceFormatted: item.priceFormatted ?? undefined,
       }))
       setProducts(mappedProducts)
       // store raw items for view modal
@@ -186,11 +213,19 @@ export default function ProductsPage() {
         if (it?.productId != null) rawMap[Number(it.productId)] = it
       })
       setRawProducts(rawMap)
-      // pagination meta (fallbacks if not present)
-      setCurrentPage(Number(meta.current_page ?? page) || 1)
-      setLastPage(Number(meta.last_page ?? 1) || 1)
-  setPerPage(Number((meta.per_page ?? mappedProducts.length) || 15))
-      setTotal(Number(meta.total ?? mappedProducts.length))
+      // pagination meta (robust fallbacks if not present)
+      const current = Number(meta.current_page ?? page) || 1
+  const per = Number((meta.per_page ?? items.length) || 15)
+      const totalCount = Number(meta.total ?? items.length)
+      let last = Number(meta.last_page)
+      if (!last || !Number.isFinite(last)) {
+        // Derive last page from total/per_page if API didn't provide it
+        last = per > 0 ? Math.ceil(totalCount / per) : 1
+      }
+      setCurrentPage(current)
+      setPerPage(per)
+      setTotal(totalCount)
+      setLastPage(last)
     } catch (error) {
       // Mock data for demonstration
       const mockProducts: Product[] = [
@@ -269,12 +304,33 @@ export default function ProductsPage() {
   // Handle Images
   const handleImagesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
     setAddForm((prev) => ({
       ...prev,
-      images: files,
+      images: [...prev.images, ...files],
     }))
-    // Preview
-    setImagePreviews(files.map((file) => URL.createObjectURL(file)))
+    // Append previews to keep alignment with files
+    setImagePreviews((prev) => [...prev, ...files.map((file) => URL.createObjectURL(file))])
+    // Reset input so selecting the same file again re-triggers onChange
+    e.currentTarget.value = ""
+  }
+
+  // Remove an image from Add form by index
+  const removeAddImageAt = (index: number) => {
+    setAddForm((prev) => {
+      const nextFiles = prev.images.slice()
+      nextFiles.splice(index, 1)
+      return { ...prev, images: nextFiles }
+    })
+    setImagePreviews((prev) => {
+      const toRemove = prev[index]
+      if (toRemove && toRemove.startsWith("blob:")) {
+        try { URL.revokeObjectURL(toRemove) } catch {}
+      }
+      const next = prev.slice()
+      next.splice(index, 1)
+      return next
+    })
   }
 
   // Reset Add Product Form
@@ -290,6 +346,11 @@ export default function ProductsPage() {
   productCategoryId: "",
   productVersionNumber: "",
   tagsString: "",
+  sku: "",
+  original_price: "",
+  discountPrice: "",
+  is_on_sale: false,
+  currency: "",
     })
     setImagePreviews([])
     if (fileInputRef.current) fileInputRef.current.value = ""
@@ -300,6 +361,12 @@ export default function ProductsPage() {
     e.preventDefault()
     setAddLoading(true)
     try {
+      // Require original price
+      if (!addForm.original_price || Number(addForm.original_price) < 0) {
+        toast({ title: "Validation", description: "Original Price is required.", variant: "destructive" })
+        setAddLoading(false)
+        return
+      }
       const formData = new FormData()
       formData.append("name", addForm.name)
       // Also include productName for backend compatibility
@@ -310,6 +377,15 @@ export default function ProductsPage() {
       formData.append("price", addForm.price)
   // Also include productPrice alias
   formData.append("productPrice", addForm.price)
+      // New pricing fields (send canonical and aliases)
+      if (addForm.original_price !== "") {
+        formData.append("original_price", addForm.original_price)
+        formData.append("productOriginalPrice", addForm.original_price)
+        formData.append("productoriginal_price", addForm.original_price)
+      }
+      if (addForm.discountPrice !== "") formData.append("productDiscountPrice", addForm.discountPrice)
+      formData.append("isProductOnSale", addForm.is_on_sale ? "1" : "0")
+      if (addForm.currency) formData.append("currency", addForm.currency)
       formData.append("quantity", addForm.quantity)
   // Also include productAvailableQuantity alias
   formData.append("productAvailableQuantity", addForm.quantity)
@@ -318,6 +394,11 @@ export default function ProductsPage() {
   // Also include isProductActive / isProductPrivate aliases
   formData.append("isProductActive", addForm.is_active ? "1" : "0")
   formData.append("isProductPrivate", addForm.is_private ? "1" : "0")
+      // SKU
+      if (addForm.sku) {
+        formData.append("productSku", addForm.sku)
+        formData.append("sku", addForm.sku)
+      }
       if (addForm.productCategoryId) {
         const catId = String(Number(addForm.productCategoryId))
         formData.append("productCategoryId", catId)
@@ -354,11 +435,11 @@ export default function ProductsPage() {
   // Open Edit Modal and pre-fill fields
   const openEditModal = (product: Product) => {
     const raw = rawProducts[product.id]
-    setEditForm({
+  setEditForm({
       id: String(product.id),
       name: product.name,
       description: product.description,
-      price: String(product.price),
+      price: String(raw?.productPrice),
       quantity: String(product.stock),
       is_active: product.status === "active",
       is_private: false, // You may need to map this from API if available
@@ -367,8 +448,15 @@ export default function ProductsPage() {
       productCategoryId: product.categoryId != null ? String(product.categoryId) : "",
       productVersionNumber: raw?.productVersionNumber != null ? String(raw.productVersionNumber) : "",
   tagsString: "",
+  sku: product.sku ?? raw?.productSku ?? "",
+  original_price: String(raw?.productOriginalPrice ?? ""),
+  discountPrice: String(raw?.productDiscountPrice ?? product.discountPrice ?? ""),
+  is_on_sale: (raw?.isProductOnSale ?? (product.isOnSale ? 1 : 0)) === 1,
+  currency: String(raw?.currency ?? product.currency ?? ""),
     })
-    setEditImagePreviews(product.images || [])
+  // Start with no new image previews; existing are shown from existingImages
+  setEditImagePreviews([])
+  setRemovedExistingImages([])
     setIsEditOpen(true)
   }
 
@@ -385,14 +473,41 @@ export default function ProductsPage() {
   // Handle Edit Images
   const handleEditImagesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
     setEditForm((prev) => ({
       ...prev,
-      images: files,
+      images: [...prev.images, ...files],
     }))
-    setEditImagePreviews([
-      ...(editForm.existingImages || []),
-      ...files.map((file) => URL.createObjectURL(file)),
-    ])
+    setEditImagePreviews((prev) => [...prev, ...files.map((file) => URL.createObjectURL(file))])
+    if (e.currentTarget) e.currentTarget.value = ""
+  }
+
+  // Remove an existing (server) image in Edit form by index
+  const removeExistingEditImageAt = (index: number) => {
+    setEditForm((prev) => {
+      const imgs = prev.existingImages.slice()
+      const [removed] = imgs.splice(index, 1)
+      if (removed) setRemovedExistingImages((old) => [...old, removed])
+      return { ...prev, existingImages: imgs }
+    })
+  }
+
+  // Remove a newly-added (local) image in Edit form by index
+  const removeNewEditImageAt = (index: number) => {
+    setEditForm((prev) => {
+      const files = prev.images.slice()
+      files.splice(index, 1)
+      return { ...prev, images: files }
+    })
+    setEditImagePreviews((prev) => {
+      const toRemove = prev[index]
+      if (toRemove && toRemove.startsWith("blob:")) {
+        try { URL.revokeObjectURL(toRemove) } catch {}
+      }
+      const next = prev.slice()
+      next.splice(index, 1)
+      return next
+    })
   }
 
   // Reset Edit Product Form
@@ -410,8 +525,14 @@ export default function ProductsPage() {
   productCategoryId: "",
   productVersionNumber: "",
   tagsString: "",
+  sku: "",
+  original_price: "",
+  discountPrice: "",
+  is_on_sale: false,
+  currency: "",
     })
     setEditImagePreviews([])
+  setRemovedExistingImages([])
     if (editFileInputRef.current) editFileInputRef.current.value = ""
   }
 
@@ -420,7 +541,13 @@ export default function ProductsPage() {
     e.preventDefault()
     setEditLoading(true)
     try {
-      const payload: any = {
+      // Require original price
+      if (!editForm.original_price || Number(editForm.original_price) < 0) {
+        toast({ title: "Validation", description: "Original Price is required.", variant: "destructive" })
+        setEditLoading(false)
+        return
+      }
+    const payload: any = {
         name: editForm.name,
         productName: editForm.name, // for backend compatibility
         description: editForm.description,
@@ -433,6 +560,23 @@ export default function ProductsPage() {
         ...(editForm.productVersionNumber && { productVersionNumber: Number(editForm.productVersionNumber) }),
   // tags are handled via Add Tag modal
         // images: not supported in JSON PATCH, only for FormData
+  ...(editForm.sku && { productSku: editForm.sku, sku: editForm.sku }),
+  ...(editForm.original_price !== "" && {
+    original_price: Number(editForm.original_price),
+    productOriginalPrice: Number(editForm.original_price),
+    productoriginal_price: Number(editForm.original_price),
+  }),
+  ...(editForm.discountPrice !== "" && { productDiscountPrice: Number(editForm.discountPrice), discountPrice: Number(editForm.discountPrice) }),
+  isProductOnSale: editForm.is_on_sale ? 1 : 0,
+  is_on_sale: editForm.is_on_sale ? 1 : 0,
+  ...(editForm.currency && { currency: editForm.currency }),
+      }
+
+      // If user removed any existing images, include hints for backend to remove them
+      if (removedExistingImages.length > 0) {
+        payload.removedImageUrls = removedExistingImages
+        payload.removeImageUrls = removedExistingImages
+        payload.remove_images = removedExistingImages
       }
 
       // Add alias category_id for compatibility if category provided
@@ -519,6 +663,15 @@ export default function ProductsPage() {
                 />
               </div>
               <div>
+                <Label htmlFor="sku">SKU</Label>
+                <Input
+                  id="sku"
+                  name="sku"
+                  value={addForm.sku}
+                  onChange={handleAddChange}
+                />
+              </div>
+              <div>
                 <Label htmlFor="description">Description</Label>
                 <Input
                   id="description"
@@ -552,6 +705,53 @@ export default function ProductsPage() {
                     onChange={handleAddChange}
                     required
                   />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <Label htmlFor="original_price">Original Price</Label>
+                  <Input
+                    id="original_price"
+                    name="original_price"
+                    type="number"
+                    min="0"
+                    value={addForm.original_price}
+                    onChange={handleAddChange}
+                    required
+                  />
+                </div>
+                <div className="flex-1">
+                  <Label htmlFor="discountPrice">Discount Price</Label>
+                  <Input
+                    id="discountPrice"
+                    name="discountPrice"
+                    type="number"
+                    min="0"
+                    value={addForm.discountPrice}
+                    onChange={handleAddChange}
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <Label htmlFor="currency">Currency</Label>
+                  <Input
+                    id="currency"
+                    name="currency"
+                    value={addForm.currency}
+                    onChange={handleAddChange}
+                    placeholder="e.g., USD"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="is_on_sale"
+                    name="is_on_sale"
+                    type="checkbox"
+                    checked={addForm.is_on_sale}
+                    onChange={handleAddChange}
+                  />
+                  <Label htmlFor="is_on_sale">On Sale</Label>
                 </div>
               </div>
               <div className="flex gap-2">
@@ -602,12 +802,22 @@ export default function ProductsPage() {
                 />
                 <div className="flex gap-2 mt-2 flex-wrap">
                   {imagePreviews.map((src, idx) => (
-                    <img
-                      key={idx}
-                      src={src}
-                      alt={`preview-${idx}`}
-                      className="w-16 h-16 object-cover rounded border"
-                    />
+                    <div key={idx} className="relative w-16 h-16">
+                      <img
+                        src={src}
+                        alt={`preview-${idx}`}
+                        className="w-16 h-16 object-cover rounded border"
+                      />
+                      <button
+                        type="button"
+                        aria-label="Remove image"
+                        onClick={() => removeAddImageAt(idx)}
+                        className="absolute -top-1 -right-1 bg-black/60 text-white rounded-full p-1 hover:bg-black"
+                        title="Remove"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -658,6 +868,22 @@ export default function ProductsPage() {
                   <div>
                     <div className="text-xs text-muted-foreground">Available Quantity</div>
                     <div className="font-medium">{viewProduct.productAvailableQuantity ?? "-"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Original Price</div>
+                    <div className="font-medium">{viewProduct.productOriginalPrice ?? viewProduct.originalPrice ?? "-"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Discount Price</div>
+                    <div className="font-medium">{viewProduct.productDiscountPrice ?? viewProduct.discountPrice ?? "-"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Currency</div>
+                    <div className="font-medium">{viewProduct.currency ?? "-"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">On Sale</div>
+                    <div className="font-medium">{(viewProduct.isProductOnSale ?? 0) === 1 ? "Yes" : "No"}</div>
                   </div>
                   <div>
                     <div className="text-xs text-muted-foreground">Active</div>
@@ -859,6 +1085,15 @@ export default function ProductsPage() {
                 />
               </div>
               <div>
+                <Label htmlFor="edit_sku">SKU</Label>
+                <Input
+                  id="edit_sku"
+                  name="sku"
+                  value={editForm.sku}
+                  onChange={handleEditChange}
+                />
+              </div>
+              <div>
                 <Label htmlFor="edit_description">Description</Label>
                 <Input
                   id="edit_description"
@@ -892,6 +1127,52 @@ export default function ProductsPage() {
                     onChange={handleEditChange}
                     required
                   />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <Label htmlFor="edit_original_price">Original Price</Label>
+                  <Input
+                    id="edit_original_price"
+                    name="original_price"
+                    type="number"
+                    min="0"
+                    value={editForm.original_price}
+                    onChange={handleEditChange}
+                  />
+                </div>
+                <div className="flex-1">
+                  <Label htmlFor="edit_discountPrice">Discount Price</Label>
+                  <Input
+                    id="edit_discountPrice"
+                    name="discountPrice"
+                    type="number"
+                    min="0"
+                    value={editForm.discountPrice}
+                    onChange={handleEditChange}
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <Label htmlFor="edit_currency">Currency</Label>
+                  <Input
+                    id="edit_currency"
+                    name="currency"
+                    value={editForm.currency}
+                    onChange={handleEditChange}
+                    placeholder="e.g., USD"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="edit_is_on_sale"
+                    name="is_on_sale"
+                    type="checkbox"
+                    checked={editForm.is_on_sale}
+                    onChange={handleEditChange}
+                  />
+                  <Label htmlFor="edit_is_on_sale">On Sale</Label>
                 </div>
               </div>
               <div className="flex gap-2">
@@ -941,13 +1222,43 @@ export default function ProductsPage() {
                   ref={editFileInputRef}
                 />
                 <div className="flex gap-2 mt-2 flex-wrap">
+                  {/* Existing server images */}
+                  {editForm.existingImages.map((src, idx) => (
+                    <div key={`existing-${idx}`} className="relative w-16 h-16">
+                      <img
+                        src={src}
+                        alt={`existing-${idx}`}
+                        className="w-16 h-16 object-cover rounded border"
+                      />
+                      <button
+                        type="button"
+                        aria-label="Remove existing image"
+                        onClick={() => removeExistingEditImageAt(idx)}
+                        className="absolute -top-1 -right-1 bg-black/60 text-white rounded-full p-1 hover:bg-black"
+                        title="Remove"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                  {/* Newly added local images */}
                   {editImagePreviews.map((src, idx) => (
-                    <img
-                      key={idx}
-                      src={src}
-                      alt={`preview-edit-${idx}`}
-                      className="w-16 h-16 object-cover rounded border"
-                    />
+                    <div key={`new-${idx}`} className="relative w-16 h-16">
+                      <img
+                        src={src}
+                        alt={`preview-edit-${idx}`}
+                        className="w-16 h-16 object-cover rounded border"
+                      />
+                      <button
+                        type="button"
+                        aria-label="Remove image"
+                        onClick={() => removeNewEditImageAt(idx)}
+                        className="absolute -top-1 -right-1 bg-black/60 text-white rounded-full p-1 hover:bg-black"
+                        title="Remove"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -1029,7 +1340,9 @@ export default function ProductsPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {typeof product.price === "number" ? `$${product.price.toFixed(2)}` : "N/A"}
+                        {typeof product.price === "number"
+                          ? product.priceFormatted || (product.currency ? `${product.currency} ${product.price.toFixed(2)}` : `$${product.price.toFixed(2)}`)
+                          : "N/A"}
                       </TableCell>
                       <TableCell>
                         <Badge variant={product.stock > 0 ? "default" : "destructive"}>{product.stock}</Badge>

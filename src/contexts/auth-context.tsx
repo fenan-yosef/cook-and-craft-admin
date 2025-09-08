@@ -9,6 +9,7 @@ type User = {
   name: string
   email: string
   role: string
+  phone?: string
 }
 
 type AuthContextType = {
@@ -68,6 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           name: fullName || adminProfile.adminEmail,
           email: adminProfile.adminEmail,
           role: adminProfile.adminRole || "admin",
+          phone: adminProfile.adminPhone || undefined,
         }
         setUser(loadedUser)
         localStorage.setItem(AUTH_USER_KEY, JSON.stringify(loadedUser))

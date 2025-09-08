@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { Search, MoreHorizontal, Eye, Utensils, Plus, Pen } from "lucide-react"
+import { Search, MoreHorizontal, Eye, Utensils, Pen } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { apiService } from "@/lib/api-service"
 import { useAuth } from "@/contexts/auth-context"

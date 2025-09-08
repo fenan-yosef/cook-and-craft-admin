@@ -2,13 +2,11 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Switch } from "@/components/ui/switch"
+// removed unused Textarea and Switch
 import { Search, Plus } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { apiService } from "@/lib/api-service"
@@ -25,12 +23,7 @@ interface PreferenceAnswers {
   updated_at: string
 }
 
-const AnswersTypeColors = {
-  single_choice: "bg-blue-100 text-blue-800",
-  multiple_choice: "bg-green-100 text-green-800",
-  text: "bg-purple-100 text-purple-800",
-  rating: "bg-orange-100 text-orange-800",
-}
+// removed unused AnswersTypeColors
 
 export default function AnswersPage() {
   const [answers, setanswers] = useState<PreferenceAnswers[]>([])

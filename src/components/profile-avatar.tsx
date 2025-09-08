@@ -35,10 +35,16 @@ export function ProfileAvatar() {
   const [profileData, setProfileData] = useState({
     name: user?.name || "",
     email: user?.email || "",
-  phone: (user as any)?.phone || "",
+    phone: user?.phone || "",
     newPassword: "",
     confirmPassword: "",
   })
+
+  // Basic email validator that requires a TLD (e.g., example.com)
+  const isValidEmail = (email: string) => {
+    const re = /^(?=.{1,254}$)(?=.{1,64}@)[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i
+    return re.test(email.trim())
+  }
 
   useEffect(() => {
     // Update profileData state when user context changes
@@ -47,7 +53,7 @@ export function ProfileAvatar() {
         ...prev,
         name: user.name,
         email: user.email,
-  phone: (user as any)?.phone || "",
+        phone: user.phone || "",
       }))
     }
   }, [user])
@@ -66,7 +72,16 @@ export function ProfileAvatar() {
 
   const handleProfileUpdate = async () => {
     try {
-  //
+      // Email validation
+      if (!isValidEmail(profileData.email)) {
+        toast({
+          title: "Invalid email",
+          description: "Please enter a valid email like user@example.com.",
+          variant: "destructive",
+        })
+        return
+      }
+      //
       // Validate passwords if changing
       if (profileData.newPassword) {
         if (profileData.newPassword !== profileData.confirmPassword) {
@@ -171,7 +186,7 @@ export function ProfileAvatar() {
     setProfileData({
       name: user?.name || "",
       email: user?.email || "",
-  phone: (user as any)?.phone || "",
+      phone: user?.phone || "",
       newPassword: "",
       confirmPassword: "",
     })
@@ -263,6 +278,8 @@ export function ProfileAvatar() {
                   type="email"
                   value={profileData.email}
                   onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
+                  pattern="^[^\s@]+@[^\s@]+\.[^\s@]{2,}$"
+                  title="Enter a valid email address (must include a domain like .com)"
                   className="col-span-3"
                   disabled={!isEditing}
                 />
