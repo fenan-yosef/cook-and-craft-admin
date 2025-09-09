@@ -150,55 +150,65 @@ export default function CouponsPage() {
     });
   }
 
-  const handleAddCoupon = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setAddLoading(true)
-    setAddErrors({})
-    try {
-      const payload = {
-        name: addForm.name,
-        discount_type: addForm.discountType,
-        discount_value: parseFloat(addForm.discountValue),
-        max_discount_value: parseFloat(addForm.maxDiscountValue),
-        scope: addForm.scope,
-        is_auto_apply: addForm.isAutoApply ? "1" : "0",
-        max_redemptions: addForm.maxRedemptions,
-        per_user_limit: addForm.perUserLimit,
-        starts_at: addForm.startsAt,
-        ends_at: addForm.endsAt,
-      }
-      const response = await apiService.post("/admins/coupons", payload)
-      toast({ title: "Success", description: response.message || "Coupon created successfully." })
-      setIsAddOpen(false)
-      setAddForm({ name:"", discountType:"percent", discountValue:"", maxDiscountValue:"", scope:"both", isAutoApply:false, maxRedemptions:"", perUserLimit:"", startsAt:"", endsAt:"" })
-      fetchCoupons(currentPage)
-    } catch (err: any) {
-      const errorData = err?.data?.error;
-      if (errorData) {
-          const mappedErrors: Record<string, string[]> = {};
-          if (errorData.discount_value) {
-            mappedErrors.discountValue = errorData.discount_value;
-          }
-          if (errorData.starts_at) {
-            mappedErrors.startsAt = errorData.starts_at;
-          }
-          setAddErrors(mappedErrors);
-          toast({
-              title: "Validation Error",
-              description: "Please correct the highlighted fields.",
-              variant: "destructive",
-          });
-      } else {
-          toast({
-              title: "Error",
-              description: err.message || "Failed to create coupon.",
-              variant: "destructive",
-          });
-      }
-    } finally {
-      setAddLoading(false)
+const handleAddCoupon = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setAddLoading(true);
+  setAddErrors({});
+  try {
+    const payload = {
+      name: addForm.name,
+      discount_type: addForm.discountType,
+      discount_value: parseFloat(addForm.discountValue),
+      max_discount_value: parseFloat(addForm.maxDiscountValue),
+      scope: addForm.scope,
+      is_auto_apply: addForm.isAutoApply ? "1" : "0",
+      max_redemptions: addForm.maxRedemptions,
+      per_user_limit: addForm.perUserLimit,
+      starts_at: addForm.startsAt,
+      ends_at: addForm.endsAt,
+    };
+    const response = await apiService.post("/admins/coupons", payload);
+    toast({ title: "Success", description: response.message || "Coupon created successfully." });
+    setIsAddOpen(false);
+    setAddForm({ name:"", discountType:"percent", discountValue:"", maxDiscountValue:"", scope:"both", isAutoApply:false, maxRedemptions:"", perUserLimit:"", startsAt:"", endsAt:"" });
+    fetchCoupons(currentPage);
+  } catch (err: any) {
+    // Try to parse err.message if it's raw JSON string
+    let backendPayload: any = null;
+    if (err?.message && typeof err.message === 'string') {
+      try { backendPayload = JSON.parse(err.message); } catch { /* not JSON */ }
     }
+    const backendError = err?.data?.error || err?.error || err?.response?.data?.error || backendPayload?.error;
+    if (backendError && typeof backendError === 'object') {
+      const firstKey = Object.keys(backendError)[0];
+      const firstVal = backendError[firstKey];
+      const messages = Array.isArray(firstVal) ? firstVal : [String(firstVal)];
+      // Update form errors ONLY for that field
+      const fieldMap: Record<string, string> = {
+        discount_value: 'discountValue',
+        max_discount_value: 'maxDiscountValue',
+        max_redemptions: 'maxRedemptions',
+        per_user_limit: 'perUserLimit',
+        starts_at: 'startsAt',
+        ends_at: 'endsAt',
+        discount_type: 'discountType',
+        scope: 'scope',
+        name: 'name'
+      };
+      const formKey = fieldMap[firstKey] || firstKey;
+      setAddErrors({ [formKey]: messages });
+      // Exact snippet desired
+      const snippet = `"${firstKey}": [\n  "${messages[0]}"\n]`;
+      toast({ title: 'Validation Error', description: snippet, variant: 'destructive' });
+    } else {
+      // Fallback: show generic
+      toast({ title: 'Error', description: 'Failed to create coupon.', variant: 'destructive' });
+    }
+  } finally {
+    setAddLoading(false);
   }
+};
+
 
   const openEditModal = (coupon: Coupon) => {
     setEditForm({
@@ -240,27 +250,32 @@ export default function CouponsPage() {
       setIsEditOpen(false)
       fetchCoupons(currentPage)
     } catch (err: any) {
-      const errorData = err?.data?.error;
-      if (errorData) {
-          const mappedErrors: Record<string, string[]> = {};
-          if (errorData.discount_value) {
-            mappedErrors.discountValue = errorData.discount_value;
-          }
-          if (errorData.starts_at) {
-            mappedErrors.startsAt = errorData.starts_at;
-          }
-          setEditErrors(mappedErrors);
-          toast({
-              title: "Validation Error",
-              description: "Please correct the highlighted fields.",
-              variant: "destructive",
-          });
+      let backendPayload: any = null;
+      if (err?.message && typeof err.message === 'string') {
+        try { backendPayload = JSON.parse(err.message); } catch { /* ignore */ }
+      }
+      const backendError = err?.data?.error || err?.error || err?.response?.data?.error || backendPayload?.error;
+      if (backendError && typeof backendError === 'object') {
+        const firstKey = Object.keys(backendError)[0];
+        const firstVal = backendError[firstKey];
+        const messages = Array.isArray(firstVal) ? firstVal : [String(firstVal)];
+        const fieldMap: Record<string, string> = {
+          discount_value: 'discountValue',
+          max_discount_value: 'maxDiscountValue',
+          max_redemptions: 'maxRedemptions',
+          per_user_limit: 'perUserLimit',
+          starts_at: 'startsAt',
+          ends_at: 'endsAt',
+          discount_type: 'discountType',
+          scope: 'scope',
+          name: 'name'
+        };
+        const formKey = fieldMap[firstKey] || firstKey;
+        setEditErrors({ [formKey]: messages });
+        const snippet = `"${firstKey}": [\n  "${messages[0]}"\n]`;
+        toast({ title: 'Validation Error', description: snippet, variant: 'destructive' });
       } else {
-          toast({
-              title: "Error",
-              description: err.message || "Failed to update coupon.",
-              variant: "destructive",
-          });
+        toast({ title: 'Error', description: 'Failed to update coupon.', variant: 'destructive' });
       }
     } finally {
       setEditLoading(false)
@@ -457,11 +472,17 @@ export default function CouponsPage() {
               <div className="flex gap-2">
                 <div className="flex-1">
                   <Label htmlFor="maxRedemptions">Max Redemptions</Label>
-                  <Input id="maxRedemptions" name="maxRedemptions" type="number" value={addForm.maxRedemptions} onChange={handleAddChange} required />
+                  <Input id="maxRedemptions" name="maxRedemptions" type="number" value={addForm.maxRedemptions} onChange={handleAddChange} required className={addErrors.maxRedemptions ? "border-red-500" : ""} />
+                  {addErrors.maxRedemptions && (
+                    <p className="text-red-500 text-sm mt-1">{addErrors.maxRedemptions[0]}</p>
+                  )}
                 </div>
                 <div className="flex-1">
                   <Label htmlFor="perUserLimit">Per User Limit</Label>
-                  <Input id="perUserLimit" name="perUserLimit" type="number" value={addForm.perUserLimit} onChange={handleAddChange} required />
+                  <Input id="perUserLimit" name="perUserLimit" type="number" value={addForm.perUserLimit} onChange={handleAddChange} required className={addErrors.perUserLimit ? "border-red-500" : ""} />
+                  {addErrors.perUserLimit && (
+                    <p className="text-red-500 text-sm mt-1">{addErrors.perUserLimit[0]}</p>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -485,7 +506,10 @@ export default function CouponsPage() {
               </div>
               <div>
                 <Label htmlFor="endsAt">Ends At</Label>
-                <Input id="endsAt" name="endsAt" type="datetime-local" value={addForm.endsAt} onChange={handleAddChange} required />
+                <Input id="endsAt" name="endsAt" type="datetime-local" value={addForm.endsAt} onChange={handleAddChange} required className={addErrors.endsAt ? "border-red-500" : ""} />
+                {addErrors.endsAt && (
+                  <p className="text-red-500 text-sm mt-1">{addErrors.endsAt[0]}</p>
+                )}
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>Cancel</Button>
@@ -536,11 +560,17 @@ export default function CouponsPage() {
               <div className="flex gap-2">
                 <div className="flex-1">
                   <Label htmlFor="edit_maxRedemptions">Max Redemptions</Label>
-                  <Input id="edit_maxRedemptions" name="maxRedemptions" type="number" value={editForm.maxRedemptions} onChange={handleEditChange} required />
+                  <Input id="edit_maxRedemptions" name="maxRedemptions" type="number" value={editForm.maxRedemptions} onChange={handleEditChange} required className={editErrors.maxRedemptions ? "border-red-500" : ""} />
+                  {editErrors.maxRedemptions && (
+                    <p className="text-red-500 text-sm mt-1">{editErrors.maxRedemptions[0]}</p>
+                  )}
                 </div>
                 <div className="flex-1">
                   <Label htmlFor="edit_perUserLimit">Per User Limit</Label>
-                  <Input id="edit_perUserLimit" name="perUserLimit" type="number" value={editForm.perUserLimit} onChange={handleEditChange} required />
+                  <Input id="edit_perUserLimit" name="perUserLimit" type="number" value={editForm.perUserLimit} onChange={handleEditChange} required className={editErrors.perUserLimit ? "border-red-500" : ""} />
+                  {editErrors.perUserLimit && (
+                    <p className="text-red-500 text-sm mt-1">{editErrors.perUserLimit[0]}</p>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -564,7 +594,10 @@ export default function CouponsPage() {
               </div>
               <div>
                 <Label htmlFor="edit_endsAt">Ends At</Label>
-                <Input id="edit_endsAt" name="endsAt" type="datetime-local" value={editForm.endsAt} onChange={handleEditChange} required />
+                <Input id="edit_endsAt" name="endsAt" type="datetime-local" value={editForm.endsAt} onChange={handleEditChange} required className={editErrors.endsAt ? "border-red-500" : ""} />
+                {editErrors.endsAt && (
+                  <p className="text-red-500 text-sm mt-1">{editErrors.endsAt[0]}</p>
+                )}
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)}>Cancel</Button>
