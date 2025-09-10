@@ -1,3 +1,4 @@
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   LayoutDashboard,
   Users,
@@ -37,13 +38,14 @@ const menuItems = [
     icon: LayoutDashboard,
   },
   {
+    title: "Users",
+    url: "/dashboard/users",
+    icon: Users,
+  },
+  {
     title: "Shop Management",
     icon: ShoppingCart,
     items: [
-      {
-        title: "Users",
-        url: "/dashboard/users",
-      },
       {
         title: "Products",
         url: "/dashboard/products",
@@ -51,10 +53,6 @@ const menuItems = [
       {
         title: "Orders",
         url: "/dashboard/orders",
-      },
-      {
-        title: "Coupons",
-        url: "/dashboard/coupons",
       },
       {
         title: "Delivery Zones",
@@ -77,6 +75,24 @@ const menuItems = [
       {
         title: "Metrics",
         url: "/dashboard/metrics",
+      },
+    ],
+  },
+  {
+    title: "Loyality and Rewards",
+    icon: Settings,
+    items: [
+      {
+        title: "Offers",
+        url: "/dashboard/loyality-and-rewards/offers",
+      },
+      {
+        title: "Rewards",
+        url: "/dashboard/loyality-and-rewards/rewards",
+      },
+      {
+        title: "Coupons",
+        url: "/dashboard/coupons",
       },
     ],
   },
@@ -138,8 +154,66 @@ export function AdminSidebar() {
   const user = auth?.user
   const logout = auth?.logout
 
+  // Resizable width state (persisted)
+  const DEFAULT_WIDTH = 260
+  const MIN_WIDTH = 200
+  const MAX_WIDTH = 480
+  const [width, setWidth] = useState<number>(() => {
+    const stored = typeof window !== 'undefined' ? localStorage.getItem('admin_sidebar_width') : null
+    const w = stored ? parseInt(stored, 10) : DEFAULT_WIDTH
+    return isNaN(w) ? DEFAULT_WIDTH : Math.min(Math.max(MIN_WIDTH, w), MAX_WIDTH)
+  })
+  const resizingRef = useRef(false)
+  const lastXRef = useRef(0)
+
+  const onMouseMove = useCallback((e: MouseEvent) => {
+    if (!resizingRef.current) return
+    const delta = e.clientX - lastXRef.current
+    lastXRef.current = e.clientX
+    setWidth(prev => {
+      const next = Math.min(Math.max(prev + delta, MIN_WIDTH), MAX_WIDTH)
+      return next
+    })
+  }, [])
+
+  const stopResizing = useCallback(() => {
+    if (resizingRef.current) {
+      resizingRef.current = false
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('admin_sidebar_width', String(width))
+      }
+    }
+  }, [width])
+
+  const startResizing = useCallback((e: React.MouseEvent) => {
+    resizingRef.current = true
+    lastXRef.current = e.clientX
+  }, [])
+
+  useEffect(() => {
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', stopResizing)
+    window.addEventListener('mouseleave', stopResizing)
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', stopResizing)
+      window.removeEventListener('mouseleave', stopResizing)
+    }
+  }, [onMouseMove, stopResizing])
+
+  // Allow text wrapping for long titles
+  const longTitleClass = "whitespace-normal break-words"
+
   return (
-    <Sidebar>
+    <div
+      className="relative flex h-full select-none"
+      style={{ width: width, minWidth: width }}
+      data-resizable-sidebar
+    >
+      <Sidebar
+        style={{ width: width, minWidth: width, ['--sidebar-width' as any]: width + 'px' }}
+        className="border-r"
+      >
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
@@ -175,7 +249,7 @@ export function AdminSidebar() {
                       <CollapsibleTrigger asChild>
                         <SidebarMenuButton>
                           <item.icon />
-                          <span>{item.title}</span>
+                          <span className={longTitleClass}>{item.title}</span>
                           <ChevronRight className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-90" />
                         </SidebarMenuButton>
                       </CollapsibleTrigger>
@@ -188,7 +262,7 @@ export function AdminSidebar() {
                                   <CollapsibleTrigger asChild>
                                     <SidebarMenuSubButton>
                                       {subItem.icon && <subItem.icon />}
-                                      <span>{subItem.title}</span>
+                                      <span className={longTitleClass}>{subItem.title}</span>
                                       <ChevronRight className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-90" />
                                     </SidebarMenuSubButton>
                                   </CollapsibleTrigger>
@@ -198,7 +272,7 @@ export function AdminSidebar() {
                                         <SidebarMenuSubItem key={nested.title}>
                                           <SidebarMenuSubButton asChild isActive={location.pathname === nested.url!}>
                                             <Link to={nested.url!}>
-                                              <span>{nested.title}</span>
+                                              <span className={longTitleClass}>{nested.title}</span>
                                             </Link>
                                           </SidebarMenuSubButton>
                                         </SidebarMenuSubItem>
@@ -209,7 +283,7 @@ export function AdminSidebar() {
                               ) : (
                                 <SidebarMenuSubButton asChild isActive={location.pathname === subItem.url!}>
                                   <Link to={subItem.url!}>
-                                    <span>{subItem.title}</span>
+                                    <span className={longTitleClass}>{subItem.title}</span>
                                   </Link>
                                 </SidebarMenuSubButton>
                               )}
@@ -222,7 +296,7 @@ export function AdminSidebar() {
                     <SidebarMenuButton asChild isActive={location.pathname === item.url}>
                       <Link to={item.url}>
                         <item.icon />
-                        <span>{item.title}</span>
+                        <span className={longTitleClass}>{item.title}</span>
                       </Link>
                     </SidebarMenuButton>
                   )}
@@ -255,8 +329,15 @@ export function AdminSidebar() {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
-
       <SidebarRail />
-    </Sidebar>
+      </Sidebar>
+      {/* Resize Handle */}
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        onMouseDown={startResizing}
+        className="absolute top-0 right-0 h-full w-1 cursor-col-resize bg-transparent hover:bg-primary/40 active:bg-primary/60 transition-colors"
+      />
+    </div>
   )
 }

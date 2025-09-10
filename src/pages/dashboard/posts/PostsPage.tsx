@@ -546,6 +546,28 @@ export default function PostsPage() {
     postId: number,
     status: "published" | "pending" | "draft" | "hidden" | "deleted"
   ) => {
+    // If publishing the post, also publish the latest version so computed status updates correctly
+    if (status === "published") {
+      const targetPost = posts.find(p => p.id === postId);
+      if (targetPost && targetPost.post_versions && targetPost.post_versions.length > 0) {
+        // Find latest version by created/updated time
+        const latest = [...targetPost.post_versions].sort((a: any, b: any) => {
+          const bt = new Date(b.updated_at || b.created_at || 0).getTime();
+          const at = new Date(a.updated_at || a.created_at || 0).getTime();
+          return bt - at;
+        })[0];
+        if (latest) {
+          // Optimistic UI update
+            setPosts(prev => prev.map(p => p.id === postId ? {
+              ...p,
+              status: 'published',
+              post_versions: p.post_versions.map(v => v.id === latest.id ? { ...v, status: 'published' } : v)
+            } : p));
+          await handleUpdateVersionStatus(postId, latest.id, 'published');
+          return;
+        }
+      }
+    }
     if (token) apiService.setAuthToken(token);
     try {
       await apiService.put(`/posts/${postId}`, {

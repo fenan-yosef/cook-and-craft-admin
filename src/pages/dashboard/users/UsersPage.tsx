@@ -16,7 +16,7 @@ import {
   DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Search, MoreHorizontal, UserCheck, UserX } from "lucide-react"
+import { Search, MoreHorizontal, UserCheck, UserX, Plus } from "lucide-react"
 import { apiService } from "@/lib/api-service"
 import { useToast } from "@/hooks/use-toast"
 import {
@@ -77,6 +77,24 @@ export default function UsersPage() {
   const [perPage, setPerPage] = useState(15)
   const [total, setTotal] = useState(0)
 
+  // Add User modal state
+  const [isAddOpen, setIsAddOpen] = useState(false)
+  const [addLoading, setAddLoading] = useState(false)
+  const [addForm, setAddForm] = useState({
+    first_name: "",
+    last_name: "",
+    birth_day: "",
+    birth_month: "",
+    birth_year: "",
+    email: "",
+    phone: "",
+    password: "",
+    password_confirmation: "",
+  })
+  const [addErrors, setAddErrors] = useState<Record<string, string[]>>({})
+  const [showPwd, setShowPwd] = useState(false)
+  const [showPwdConfirm, setShowPwdConfirm] = useState(false)
+
   useEffect(() => {
     fetchUsers(currentPage)
   }, [])
@@ -125,7 +143,8 @@ export default function UsersPage() {
           }
         }
 
-        const metaSources = [top, top?.data, top?.meta, top?.pagination]
+        // Some backends (ours included) return meta nested under `error` ¯\\_(ツ)_/¯
+        const metaSources = [top, top?.data, top?.meta, top?.pagination, (typeof top?.error === 'object' ? top.error : undefined)]
         const meta: any = {}
         for (const src of metaSources) {
           if (!src) continue
@@ -137,6 +156,13 @@ export default function UsersPage() {
             meta.per_page = src.per_page ?? src.perPage ?? src.limit ?? src.page_size ?? src.pageSize
           if (meta.total == null)
             meta.total = src.total ?? src.totalItems ?? src.total_results ?? src.totalResults
+        }
+
+        // Derive last_page if still missing but we have total & per_page
+        if ((meta.last_page == null || isNaN(Number(meta.last_page))) && meta.total != null && meta.per_page != null) {
+          const per = Number(meta.per_page) || 15
+          const tot = Number(meta.total) || 0
+          meta.last_page = Math.max(1, Math.ceil(tot / per))
         }
 
         return { items, meta }
@@ -178,6 +204,71 @@ export default function UsersPage() {
       })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const openAddModal = () => {
+    setIsAddOpen(true)
+    setAddErrors({})
+  }
+
+  const handleAddChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target
+    setAddForm((prev) => ({ ...prev, [name]: value }))
+    setAddErrors((prev) => {
+      const next = { ...prev }
+      delete next[name]
+      return next
+    })
+  }
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setAddLoading(true)
+    setAddErrors({})
+    try {
+      // Optional basic validation
+      if (addForm.password !== addForm.password_confirmation) {
+        setAddErrors({ password_confirmation: ["Passwords do not match."] })
+        return
+      }
+      const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
+      if (token) apiService.setAuthToken(token)
+      const payload = { ...addForm }
+      const res = await apiService.post("/users/sign-up", payload)
+      toast({ title: "Success", description: res?.message || "User created successfully." })
+      setIsAddOpen(false)
+      setAddForm({
+        first_name: "",
+        last_name: "",
+        birth_day: "",
+        birth_month: "",
+        birth_year: "",
+        email: "",
+        phone: "",
+        password: "",
+        password_confirmation: "",
+      })
+      fetchUsers(currentPage)
+    } catch (err: any) {
+      // Try to parse JSON error and extract first field
+      let backendPayload: any = null
+      if (err?.message && typeof err.message === "string") {
+        try { backendPayload = JSON.parse(err.message) } catch {}
+      }
+      const backendError = err?.data?.error || err?.error || err?.response?.data?.error || backendPayload?.error
+      if (backendError && typeof backendError === "object") {
+        const firstKey = Object.keys(backendError)[0]
+        const firstVal = backendError[firstKey]
+        const messages = Array.isArray(firstVal) ? firstVal : [String(firstVal)]
+        setAddErrors({ [firstKey]: messages })
+        const snippet = `"${firstKey}": [\n  "${messages[0]}"\n]`
+        toast({ title: "Validation Error", description: snippet, variant: "destructive" })
+      } else {
+        toast({ title: "Error", description: "Failed to create user.", variant: "destructive" })
+      }
+    } finally {
+      setAddLoading(false)
     }
   }
 
@@ -250,6 +341,10 @@ export default function UsersPage() {
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
         <div className="flex items-center justify-between">
           <h2 className="text-3xl font-bold tracking-tight">Users</h2>
+          <Button onClick={openAddModal}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add User
+          </Button>
         </div>
 
         <Card>
@@ -499,6 +594,93 @@ export default function UsersPage() {
                 <div className="flex items-center justify-between"><span className="text-muted-foreground">Account Created</span><span>{selectedUser.created_at ? new Date(selectedUser.created_at).toLocaleString() : "-"}</span></div>
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Add User Modal */}
+        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Add User</DialogTitle>
+              <DialogDescription>Enter the user details to create an account.</DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleCreateUser} className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-sm" htmlFor="first_name">First name</label>
+                  <Input id="first_name" name="first_name" value={addForm.first_name} onChange={handleAddChange} required className={addErrors.first_name ? 'border-red-500' : ''} />
+                  {addErrors.first_name && <p className="text-red-500 text-xs mt-1">{addErrors.first_name[0]}</p>}
+                </div>
+                <div>
+                  <label className="text-sm" htmlFor="last_name">Last name</label>
+                  <Input id="last_name" name="last_name" value={addForm.last_name} onChange={handleAddChange} required className={addErrors.last_name ? 'border-red-500' : ''} />
+                  {addErrors.last_name && <p className="text-red-500 text-xs mt-1">{addErrors.last_name[0]}</p>}
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="text-sm" htmlFor="birth_day">Birth day</label>
+                  <Input id="birth_day" name="birth_day" type="number" min={1} max={31} value={addForm.birth_day} onChange={handleAddChange} required className={addErrors.birth_day ? 'border-red-500' : ''} />
+                  {addErrors.birth_day && <p className="text-red-500 text-xs mt-1">{addErrors.birth_day[0]}</p>}
+                </div>
+                <div>
+                  <label className="text-sm" htmlFor="birth_month">Birth month</label>
+                  <Input id="birth_month" name="birth_month" type="number" min={1} max={12} value={addForm.birth_month} onChange={handleAddChange} required className={addErrors.birth_month ? 'border-red-500' : ''} />
+                  {addErrors.birth_month && <p className="text-red-500 text-xs mt-1">{addErrors.birth_month[0]}</p>}
+                </div>
+                <div>
+                  <label className="text-sm" htmlFor="birth_year">Birth year</label>
+                  <Input id="birth_year" name="birth_year" type="number" min={1900} max={3000} value={addForm.birth_year} onChange={handleAddChange} required className={addErrors.birth_year ? 'border-red-500' : ''} />
+                  {addErrors.birth_year && <p className="text-red-500 text-xs mt-1">{addErrors.birth_year[0]}</p>}
+                </div>
+              </div>
+              <div>
+                <label className="text-sm" htmlFor="email">Email</label>
+                <Input id="email" name="email" type="email" value={addForm.email} onChange={handleAddChange} required className={addErrors.email ? 'border-red-500' : ''} />
+                {addErrors.email && <p className="text-red-500 text-xs mt-1">{addErrors.email[0]}</p>}
+              </div>
+              <div>
+                <label className="text-sm" htmlFor="phone">Phone</label>
+                <Input id="phone" name="phone" value={addForm.phone} onChange={handleAddChange} required className={addErrors.phone ? 'border-red-500' : ''} />
+                {addErrors.phone && <p className="text-red-500 text-xs mt-1">{addErrors.phone[0]}</p>}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-sm" htmlFor="password">Password</label>
+                  <div className="relative">
+                    <Input id="password" name="password" type={showPwd ? 'text' : 'password'} value={addForm.password} onChange={handleAddChange} required className={`pr-9 ${addErrors.password ? 'border-red-500' : ''}`} />
+                    <button type="button" className="absolute inset-y-0 right-2 flex items-center text-muted-foreground hover:text-foreground" onClick={() => setShowPwd(v => !v)} aria-label={showPwd ? 'Hide password' : 'Show password'}>
+                      {showPwd ? (
+                        // eye-off icon
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3l18 18"/><path d="M10.58 10.58A2 2 0 0 0 12 14a2 2 0 0 0 1.42-.58"/><path d="M16.24 16.24A8.5 8.5 0 0 1 12 18.5c-4.48 0-8.27-2.94-10-7 1.05-2.6 2.92-4.74 5.24-6.06"/><path d="M9.88 5.58A8.5 8.5 0 0 1 12 5.5c4.48 0 8.27 2.94 10 7-.46 1.14-1.07 2.18-1.82 3.1"/></svg>
+                      ) : (
+                        // eye icon
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+                      )}
+                    </button>
+                  </div>
+                  {addErrors.password && <p className="text-red-500 text-xs mt-1">{addErrors.password[0]}</p>}
+                </div>
+                <div>
+                  <label className="text-sm" htmlFor="password_confirmation">Confirm Password</label>
+                  <div className="relative">
+                    <Input id="password_confirmation" name="password_confirmation" type={showPwdConfirm ? 'text' : 'password'} value={addForm.password_confirmation} onChange={handleAddChange} required className={`pr-9 ${addErrors.password_confirmation ? 'border-red-500' : ''}`} />
+                    <button type="button" className="absolute inset-y-0 right-2 flex items-center text-muted-foreground hover:text-foreground" onClick={() => setShowPwdConfirm(v => !v)} aria-label={showPwdConfirm ? 'Hide password' : 'Show password'}>
+                      {showPwdConfirm ? (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3l18 18"/><path d="M10.58 10.58A2 2 0 0 0 12 14a2 2 0 0 0 1.42-.58"/><path d="M16.24 16.24A8.5 8.5 0 0 1 12 18.5c-4.48 0-8.27-2.94-10-7 1.05-2.6 2.92-4.74 5.24-6.06"/><path d="M9.88 5.58A8.5 8.5 0 0 1 12 5.5c4.48 0 8.27 2.94 10 7-.46 1.14-1.07 2.18-1.82 3.1"/></svg>
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+                      )}
+                    </button>
+                  </div>
+                  {addErrors.password_confirmation && <p className="text-red-500 text-xs mt-1">{addErrors.password_confirmation[0]}</p>}
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>Cancel</Button>
+                <Button type="submit" disabled={addLoading}>{addLoading ? 'Creating...' : 'Create User'}</Button>
+              </div>
+            </form>
           </DialogContent>
         </Dialog>
 

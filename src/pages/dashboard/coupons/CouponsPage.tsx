@@ -87,11 +87,25 @@ export default function CouponsPage() {
     }
   }
 
-  const filteredCoupons = coupons.filter(
-    (coupon) =>
-      coupon.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (coupon.name || "").toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const filteredCoupons = (() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return coupons;
+    const single = term.length === 1;
+    return coupons.filter(coupon => {
+      const code = (coupon.code || '').toLowerCase();
+      const name = (coupon.name || '').toLowerCase();
+      if (single) {
+        // Single letter: only match if code OR name starts with that letter
+        return code.startsWith(term) || name.startsWith(term);
+      }
+      // Multi-char term: broader matching
+      if (code.includes(term)) return true;
+      if (name === term) return true;
+      if (name.startsWith(term)) return true;
+      if (term.length > 2 && name.includes(term)) return true;
+      return false;
+    });
+  })();
 
   // Add Coupon modal state and form
   const [isAddOpen, setIsAddOpen] = useState(false)
@@ -158,8 +172,8 @@ const handleAddCoupon = async (e: React.FormEvent) => {
     const payload = {
       name: addForm.name,
       discount_type: addForm.discountType,
-      discount_value: parseFloat(addForm.discountValue),
-      max_discount_value: parseFloat(addForm.maxDiscountValue),
+      discount_value: (addForm.discountValue),
+      max_discount_value: (addForm.maxDiscountValue),
       scope: addForm.scope,
       is_auto_apply: addForm.isAutoApply ? "1" : "0",
       max_redemptions: addForm.maxRedemptions,
@@ -236,8 +250,8 @@ const handleAddCoupon = async (e: React.FormEvent) => {
       const payload = {
         name: editForm.name,
         discount_type: editForm.discountType,
-        discount_value: parseFloat(editForm.discountValue),
-        max_discount_value: parseFloat(editForm.maxDiscountValue),
+        discount_value: (editForm.discountValue),
+        max_discount_value: (editForm.maxDiscountValue),
         scope: editForm.scope,
         is_auto_apply: editForm.isAutoApply ? "1" : "0",
         max_redemptions: editForm.maxRedemptions,
@@ -450,7 +464,7 @@ const handleAddCoupon = async (e: React.FormEvent) => {
                       id="discountValue"
                       name="discountValue"
                       type="number"
-                      step="0.01"
+                      // step="0.01"
                       value={addForm.discountValue}
                       onChange={handleAddChange}
                       required
@@ -538,7 +552,7 @@ const handleAddCoupon = async (e: React.FormEvent) => {
                       id="edit_discountValue"
                       name="discountValue"
                       type="number"
-                      step="0.01"
+                      // step="0.01"
                       value={editForm.discountValue}
                       onChange={handleEditChange}
                       required

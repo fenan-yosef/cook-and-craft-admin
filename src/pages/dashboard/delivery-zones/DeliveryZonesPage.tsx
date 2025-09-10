@@ -67,11 +67,25 @@ export default function DeliveryZonesPage() {
     }
   };
 
-  const filteredZones = zones.filter(
-    (zone) =>
-      zone.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      zone.scope.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredZones = (() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return zones;
+    const single = term.length === 1;
+    return zones.filter(zone => {
+      const name = (zone.name || '').toLowerCase();
+      const scope = (zone.scope || '').toLowerCase();
+     if (single) {
+        // Single letter: only match if code OR name starts with that letter
+        return scope.startsWith(term) || name.startsWith(term);
+      }
+      // Multi-char term: broader matching
+      if (scope.includes(term)) return true;
+      if (name === term) return true;
+      if (name.startsWith(term)) return true;
+      if (term.length > 2 && name.includes(term)) return true;
+      return false;
+    });
+  })();
 
   // Open Edit Zone modal
   const openEditModal = (zone: DeliveryZone) => {
@@ -122,7 +136,7 @@ export default function DeliveryZonesPage() {
                   scope: addForm.scope,
                   geographical_location: locations,
                   fee: parseFloat(addForm.fee),
-                  is_active: addForm.is_active ? 1 : 0,
+                  is_active: addForm.is_active ? true : false,
                   days: days,
                 };
                 await apiService.post('/admins/delivery-zones', payload);
@@ -178,7 +192,7 @@ export default function DeliveryZonesPage() {
                   scope: editForm.scope,
                   geographical_location: locations,
                   fee: parseFloat(editForm.fee),
-                  is_active: editForm.is_active ? 1 : 0,
+                  is_active: editForm.is_active ? true : false,
                   days: days,
                 };
                 await apiService.patch(`/admins/delivery-zones/${editForm.id}`, payload);
