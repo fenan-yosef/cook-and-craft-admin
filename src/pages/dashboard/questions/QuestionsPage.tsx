@@ -144,6 +144,20 @@ export default function QuestionsPage() {
       (q.description || "").toLowerCase().includes(searchTerm.toLowerCase()),
   )
 
+  const handleDeleteQuestion = async (id: number) => {
+    const confirmed = window.confirm("Are you sure you want to delete this question?")
+    if (!confirmed) return
+    try {
+      const storedToken = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
+      if (storedToken) apiService.setAuthToken(storedToken)
+      await apiService.delete(`/preference_questions/${id}`)
+      setQuestions((prev) => prev.filter((q) => q.id !== id))
+      toast({ title: "Deleted", description: "Question removed successfully." })
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to delete question", variant: "destructive" })
+    }
+  }
+
   return (
     <div className="flex flex-col">
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -252,7 +266,7 @@ export default function QuestionsPage() {
                               <Pencil className="mr-2 h-4 w-4" />
                               Edit
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="text-red-600">
+                            <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteQuestion(q.id)}>
                               <Trash className="mr-2 h-4 w-4" />
                               Delete
                             </DropdownMenuItem>

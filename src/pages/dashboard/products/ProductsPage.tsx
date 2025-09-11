@@ -695,7 +695,7 @@ export default function ProductsPage() {
                   />
                 </div>
                 <div className="flex-1">
-                  <Label htmlFor="quantity">Quantity</Label>
+                  <Label htmlFor="quantity">Quantity in Stock</Label>
                   <Input
                     id="quantity"
                     name="quantity"
@@ -1117,7 +1117,7 @@ export default function ProductsPage() {
                   />
                 </div>
                 <div className="flex-1">
-                  <Label htmlFor="edit_quantity">Quantity</Label>
+                  <Label htmlFor="edit_quantity">Quantity in Stock</Label>
                   <Input
                     id="edit_quantity"
                     name="quantity"

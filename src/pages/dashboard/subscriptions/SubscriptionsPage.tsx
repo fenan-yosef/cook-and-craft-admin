@@ -122,6 +122,12 @@ export default function SubscriptionsPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const { toast } = useToast()
 
+  // Dropdown options state
+  const [intervalOptions, setIntervalOptions] = useState<Array<{ id: number; title: string }>>([])
+  const [intervalsLoading, setIntervalsLoading] = useState<boolean>(false)
+  const [locationOptions, setLocationOptions] = useState<Array<{ id: number; label: string }>>([])
+  const [locationsLoading, setLocationsLoading] = useState<boolean>(false)
+
   // State for the new subscription form with the correct payload structure
   const [newSubscriptionForm, setNewSubscriptionForm] = useState({
     first_interval_id: 0,
@@ -153,6 +159,8 @@ export default function SubscriptionsPage() {
   useEffect(() => {
     if (token) {
       fetchSubscriptions()
+  loadIntervals()
+  loadLocations()
     } else {
       setLoading(false)
       toast({
@@ -190,6 +198,53 @@ export default function SubscriptionsPage() {
       })
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Fetch interval options for dropdown
+  const loadIntervals = async () => {
+    if (!token) return
+    try {
+      setIntervalsLoading(true)
+      const res = await fetch(`${API_BASE_URL}/subscription_intervals`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error("Failed to fetch intervals")
+      const data = await res.json()
+      const items = (data.data ?? data ?? []).map((it: any) => ({ id: it.id, title: it.title }))
+      setIntervalOptions(items)
+    } catch (e) {
+      // keep empty options but notify softly in console; surfaced errors handled elsewhere
+      console.warn("Intervals fetch failed", e)
+    } finally {
+      setIntervalsLoading(false)
+    }
+  }
+
+  // Fetch user locations for dropdown
+  const loadLocations = async () => {
+    if (!token) return
+    try {
+      setLocationsLoading(true)
+      const res = await fetch(`${API_BASE_URL}/user-locations`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error("Failed to fetch user locations")
+      const data = await res.json()
+      const items = (data.data ?? data ?? []).map((loc: any) => ({
+        id: loc.id,
+        label:
+          loc.label ||
+          [loc.address_line, loc.city, loc.state, loc.zip]
+            .filter(Boolean)
+            .join(", ") ||
+          `Location #${loc.id}`,
+      }))
+      setLocationOptions(items)
+    } catch (e) {
+      console.warn("Locations fetch failed", e)
+    } finally {
+      setLocationsLoading(false)
     }
   }
 
@@ -667,16 +722,21 @@ export default function SubscriptionsPage() {
           <form onSubmit={handleCreateSubscription} className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="first_interval_id" className="text-right">
-                First Interval ID
+                First Interval
               </Label>
-              <Input
-                id="first_interval_id"
-                type="number"
-                value={newSubscriptionForm.first_interval_id}
-                onChange={(e) => setNewSubscriptionForm({ ...newSubscriptionForm, first_interval_id: parseInt(e.target.value) })}
-                className="col-span-3"
-                required
-              />
+              <Select
+                value={newSubscriptionForm.first_interval_id ? String(newSubscriptionForm.first_interval_id) : undefined}
+                onValueChange={(val) => setNewSubscriptionForm({ ...newSubscriptionForm, first_interval_id: parseInt(val) })}
+              >
+                <SelectTrigger id="first_interval_id" className="col-span-3">
+                  <SelectValue placeholder={intervalsLoading ? "Loading intervals..." : "Select an interval"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {intervalOptions.map((opt) => (
+                    <SelectItem key={opt.id} value={String(opt.id)}>{opt.title}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="people_count" className="text-right">
@@ -731,16 +791,21 @@ export default function SubscriptionsPage() {
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="user_location_id" className="text-right">
-                User Location ID
+                User Location
               </Label>
-              <Input
-                id="user_location_id"
-                type="number"
-                value={newSubscriptionForm.user_location_id}
-                onChange={(e) => setNewSubscriptionForm({ ...newSubscriptionForm, user_location_id: parseInt(e.target.value) })}
-                className="col-span-3"
-                required
-              />
+              <Select
+                value={newSubscriptionForm.user_location_id ? String(newSubscriptionForm.user_location_id) : undefined}
+                onValueChange={(val) => setNewSubscriptionForm({ ...newSubscriptionForm, user_location_id: parseInt(val) })}
+              >
+                <SelectTrigger id="user_location_id" className="col-span-3">
+                  <SelectValue placeholder={locationsLoading ? "Loading locations..." : "Select a user location"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {locationOptions.map((loc) => (
+                    <SelectItem key={loc.id} value={String(loc.id)}>{loc.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="coupon_code" className="text-right">
@@ -829,16 +894,21 @@ export default function SubscriptionsPage() {
           <form onSubmit={handleUpdateSubscription} className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="edit_first_interval_id" className="text-right">
-                First Interval ID
+                First Interval
               </Label>
-              <Input
-                id="edit_first_interval_id"
-                type="number"
-                value={editSubscriptionForm.first_interval_id}
-                onChange={(e) => setEditSubscriptionForm({ ...editSubscriptionForm, first_interval_id: parseInt(e.target.value) })}
-                className="col-span-3"
-                required
-              />
+              <Select
+                value={editSubscriptionForm.first_interval_id ? String(editSubscriptionForm.first_interval_id) : undefined}
+                onValueChange={(val) => setEditSubscriptionForm({ ...editSubscriptionForm, first_interval_id: parseInt(val) })}
+              >
+                <SelectTrigger id="edit_first_interval_id" className="col-span-3">
+                  <SelectValue placeholder={intervalsLoading ? "Loading intervals..." : "Select an interval"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {intervalOptions.map((opt) => (
+                    <SelectItem key={opt.id} value={String(opt.id)}>{opt.title}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="edit_people_count" className="text-right">
@@ -893,16 +963,21 @@ export default function SubscriptionsPage() {
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="edit_user_location_id" className="text-right">
-                User Location ID
+                User Location
               </Label>
-              <Input
-                id="edit_user_location_id"
-                type="number"
-                value={editSubscriptionForm.user_location_id}
-                onChange={(e) => setEditSubscriptionForm({ ...editSubscriptionForm, user_location_id: parseInt(e.target.value) })}
-                className="col-span-3"
-                required
-              />
+              <Select
+                value={editSubscriptionForm.user_location_id ? String(editSubscriptionForm.user_location_id) : undefined}
+                onValueChange={(val) => setEditSubscriptionForm({ ...editSubscriptionForm, user_location_id: parseInt(val) })}
+              >
+                <SelectTrigger id="edit_user_location_id" className="col-span-3">
+                  <SelectValue placeholder={locationsLoading ? "Loading locations..." : "Select a user location"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {locationOptions.map((loc) => (
+                    <SelectItem key={loc.id} value={String(loc.id)}>{loc.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="edit_coupon_code" className="text-right">

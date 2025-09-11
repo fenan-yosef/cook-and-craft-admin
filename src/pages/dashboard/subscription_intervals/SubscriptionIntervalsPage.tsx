@@ -16,13 +16,15 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface Interval {
   id: number
   title: string
   start_date: string
   end_date: string
-  status: "active" | "inactive"
+  status: "active"
+  is_served: number
   price_per_serving_cents: number
 }
 
@@ -39,7 +41,7 @@ export default function SubscriptionIntervalsPage() {
     title: "",
     start_date: "",
     end_date: "",
-    is_active: false,
+    status: "active" as "active" | "expired",
     price_per_serving_cents: "",
   })
 
@@ -51,7 +53,7 @@ export default function SubscriptionIntervalsPage() {
     title: "",
     start_date: "",
     end_date: "",
-    is_active: false,
+    status: "active" as "active" | "expired",
     price_per_serving_cents: "",
   })
 
@@ -81,6 +83,7 @@ export default function SubscriptionIntervalsPage() {
           start_date: "2025-09-01",
           end_date: "2025-10-14",
           status: "active",
+          is_served: 1,
           price_per_serving_cents: 0,
         },
       ]
@@ -93,10 +96,10 @@ export default function SubscriptionIntervalsPage() {
   // Handle Add Product Form Changes
   const handleAddChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const target = e.target as HTMLInputElement
-    const { name, value, type } = target
+  const { name, value } = target
     setAddForm((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? target.checked : value,
+      [name]: value,
     }))
   }
 
@@ -106,7 +109,7 @@ export default function SubscriptionIntervalsPage() {
       title: "",
       start_date: "",
       end_date: "",
-      is_active: false,
+      status: "active",
       price_per_serving_cents: "",
     })
   }
@@ -120,7 +123,7 @@ export default function SubscriptionIntervalsPage() {
         title: addForm.title,
         start_date: addForm.start_date,
         end_date: addForm.end_date,
-        status: addForm.is_active ? "active" : "inactive",
+  status: addForm.status,
         price_per_serving_cents: Number(addForm.price_per_serving_cents) * 100,
       }
 
@@ -152,7 +155,7 @@ export default function SubscriptionIntervalsPage() {
       title: interval.title,
       start_date: interval.start_date,
       end_date: interval.end_date,
-      is_active: interval.status === "active",
+      status: (interval.status as "active" | "expired") ?? "active",
       price_per_serving_cents: (interval.price_per_serving_cents / 100).toString(),
     })
     setIsEditOpen(true)
@@ -161,10 +164,10 @@ export default function SubscriptionIntervalsPage() {
   // Handle Edit Product Form Changes
   const handleEditChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const target = e.target as HTMLInputElement
-    const { name, value, type } = target
+  const { name, value } = target
     setEditForm((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? target.checked : value,
+      [name]: value,
     }))
   }
 
@@ -175,7 +178,7 @@ export default function SubscriptionIntervalsPage() {
       title: "",
       start_date: "",
       end_date: "",
-      is_active: false,
+      status: "active",
       price_per_serving_cents: "",
     })
   }
@@ -190,7 +193,7 @@ export default function SubscriptionIntervalsPage() {
       formData.append("title", editForm.title)
       formData.append("start_date", editForm.start_date)
       formData.append("end_date", editForm.end_date)
-      formData.append("status", editForm.is_active ? "active" : "inactive")
+  formData.append("status", editForm.status)
       formData.append("price_per_serving_cents", String(Number(editForm.price_per_serving_cents) * 100))
 
       const response = await apiService.postMultipart(`/subscription_intervals/${editForm.id}?_method=put`, formData)
@@ -272,17 +275,17 @@ export default function SubscriptionIntervalsPage() {
                   />
                 </div>
               </div>
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <input
-                    id="is_active"
-                    name="is_active"
-                    type="checkbox"
-                    checked={addForm.is_active}
-                    onChange={handleAddChange}
-                  />
-                  <Label htmlFor="is_active">Active</Label>
-                </div>
+              <div>
+                <Label htmlFor="status">Status</Label>
+                <Select value={addForm.status} onValueChange={(val: "active" | "expired") => setAddForm(prev => ({ ...prev, status: val }))}>
+                  <SelectTrigger id="status">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="expired">Expired</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label htmlFor="price_per_serving_cents">Price per Serving ($)</Label>
@@ -351,17 +354,17 @@ export default function SubscriptionIntervalsPage() {
                   />
                 </div>
               </div>
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <input
-                    id="edit_is_active"
-                    name="is_active"
-                    type="checkbox"
-                    checked={editForm.is_active}
-                    onChange={handleEditChange}
-                  />
-                  <Label htmlFor="edit_is_active">Active</Label>
-                </div>
+              <div>
+                <Label htmlFor="edit_status">Status</Label>
+                <Select value={editForm.status} onValueChange={(val: "active" | "expired") => setEditForm(prev => ({ ...prev, status: val }))}>
+                  <SelectTrigger id="edit_status">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="expired">Expired</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label htmlFor="edit_price_per_serving_cents">Price per Serving ($)</Label>

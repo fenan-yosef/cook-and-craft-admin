@@ -6,8 +6,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 // removed unused Textarea and Switch
-import { Search, Plus } from "lucide-react"
+import { Search, Plus, Trash } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { apiService } from "@/lib/api-service"
 
@@ -145,6 +146,20 @@ export default function AnswersPage() {
       (q.description || "").toLowerCase().includes(searchTerm.toLowerCase()),
   )
 
+  const handleDeleteAnswer = async (id: number) => {
+    const confirmed = window.confirm("Are you sure you want to delete this answer?")
+    if (!confirmed) return
+    try {
+      const storedToken = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
+      if (storedToken) apiService.setAuthToken(storedToken)
+      await apiService.delete(`/preference_answers/${id}`)
+      setanswers((prev) => prev.filter((q) => q.id !== id))
+      toast({ title: "Deleted", description: "Answer removed successfully." })
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to delete answer", variant: "destructive" })
+    }
+  }
+
   return (
     <div className="flex flex-col">
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -220,8 +235,8 @@ export default function AnswersPage() {
                               <Search className="mr-2 h-4 w-4" />
                               Edit
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="text-red-600">
-                              <Search className="mr-2 h-4 w-4" />
+                            <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteAnswer(q.id)}>
+                              <Trash className="mr-2 h-4 w-4" />
                               Delete
                             </DropdownMenuItem>
                           </DropdownMenuContent>
@@ -248,17 +263,21 @@ export default function AnswersPage() {
           <div className="grid gap-4 py-4">
             <div>
               <Label htmlFor="question_id">Question</Label>
-              <select
-                id="question_id"
-                className="w-full border rounded px-2 py-2"
-                value={newAnswers.question_id}
-                onChange={e => setNewAnswers({ ...newAnswers, question_id: Number(e.target.value) })}
+              <Select
+                value={newAnswers.question_id ? String(newAnswers.question_id) : undefined}
+                onValueChange={(val) => setNewAnswers({ ...newAnswers, question_id: Number(val) })}
               >
-                <option value={0}>Select a question...</option>
-                {questions.map(q => (
-                  <option key={q.id} value={q.id}>{q.question}</option>
-                ))}
-              </select>
+                <SelectTrigger id="question_id" className="w-full">
+                  <SelectValue placeholder="Select a question..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {questions.map((q) => (
+                    <SelectItem key={q.id} value={String(q.id)}>
+                      {q.question}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label htmlFor="answer_text">Answer Text</Label>
