@@ -43,7 +43,7 @@ interface Product {
   categoryId?: number | null
   // New fields from backend
   original_price?: number
-  discountPrice?: number
+  discount_price?: number
   isOnSale?: boolean
   currency?: string
   priceFormatted?: string
@@ -61,20 +61,17 @@ export default function ProductsPage() {
   const [addForm, setAddForm] = useState({
     name: "",
     description: "",
-    price: "",
     quantity: "",
     is_active: false,
     is_private: false,
-  images: [] as File[],
-  productCategoryId: "",
-  productVersionNumber: "",
-  tagsString: "",
-  // new fields
-  sku: "",
-  original_price: "",
-  discountPrice: "",
-  is_on_sale: false,
-  currency: "",
+    images: [] as File[],
+    productCategoryId: "",
+    productVersionNumber: "",
+    tagsString: "",
+    original_price: "",
+    discount_price: "",
+    is_on_sale: false,
+    currency: "",
   })
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -86,21 +83,18 @@ export default function ProductsPage() {
     id: "",
     name: "",
     description: "",
-    price: "",
     quantity: "",
     is_active: false,
     is_private: false,
-  images: [] as File[],
-  existingImages: [] as string[],
-  productCategoryId: "",
-  productVersionNumber: "",
-  tagsString: "",
-  // new fields
-  sku: "",
-  original_price: "",
-  discountPrice: "",
-  is_on_sale: false,
-  currency: "",
+    images: [] as File[],
+    existingImages: [] as string[],
+    productCategoryId: "",
+    productVersionNumber: "",
+    tagsString: "",
+    original_price: "",
+    discount_price: "",
+    is_on_sale: false,
+    currency: "",
   })
   const [editImagePreviews, setEditImagePreviews] = useState<string[]>([])
   const editFileInputRef = useRef<HTMLInputElement>(null)
@@ -201,7 +195,7 @@ export default function ProductsPage() {
           .filter(Boolean),
         categoryId: item.productCategoryId ?? item?.category_id ?? item?.categoryId ?? null,
         original_price: item.productoriginal_price ?? undefined,
-        discountPrice: item.productDiscountPrice ?? undefined,
+        discount_price: item.productdiscount_price ?? undefined,
         isOnSale: (item.isProductOnSale ?? 0) === 1,
         currency: item.currency ?? undefined,
         priceFormatted: item.priceFormatted ?? undefined,
@@ -338,7 +332,6 @@ export default function ProductsPage() {
     setAddForm({
       name: "",
       description: "",
-      price: "",
       quantity: "",
       is_active: false,
       is_private: false,
@@ -346,9 +339,8 @@ export default function ProductsPage() {
   productCategoryId: "",
   productVersionNumber: "",
   tagsString: "",
-  sku: "",
   original_price: "",
-  discountPrice: "",
+  discount_price: "",
   is_on_sale: false,
   currency: "",
     })
@@ -374,16 +366,13 @@ export default function ProductsPage() {
       formData.append("description", addForm.description)
   // Also include productDescription alias
   formData.append("productDescription", addForm.description)
-      formData.append("price", addForm.price)
-  // Also include productPrice alias
-  formData.append("productPrice", addForm.price)
       // New pricing fields (send canonical and aliases)
       if (addForm.original_price !== "") {
         formData.append("original_price", addForm.original_price)
         formData.append("productOriginalPrice", addForm.original_price)
         formData.append("productoriginal_price", addForm.original_price)
       }
-      if (addForm.discountPrice !== "") formData.append("productDiscountPrice", addForm.discountPrice)
+      if (addForm.discount_price !== "") formData.append("productdiscount_price", addForm.discount_price)
       formData.append("isProductOnSale", addForm.is_on_sale ? "1" : "0")
       if (addForm.currency) formData.append("currency", addForm.currency)
       formData.append("quantity", addForm.quantity)
@@ -395,10 +384,6 @@ export default function ProductsPage() {
   formData.append("isProductActive", addForm.is_active ? "1" : "0")
   formData.append("isProductPrivate", addForm.is_private ? "1" : "0")
       // SKU
-      if (addForm.sku) {
-        formData.append("productSku", addForm.sku)
-        formData.append("sku", addForm.sku)
-      }
       if (addForm.productCategoryId) {
         const catId = String(Number(addForm.productCategoryId))
         formData.append("productCategoryId", catId)
@@ -435,11 +420,13 @@ export default function ProductsPage() {
   // Open Edit Modal and pre-fill fields
   const openEditModal = (product: Product) => {
     const raw = rawProducts[product.id]
+    // Normalize discount & original price from any possible backend field names
+    const rawOriginal = raw?.productOriginalPrice ?? raw?.productoriginal_price ?? raw?.original_price ?? raw?.originalPrice ?? (product as any).original_price ?? (product as any).originalPrice
+    const rawDiscount = raw?.productDiscountPrice ?? raw?.productdiscount_price ?? raw?.discount_price ?? raw?.discountPrice ?? (product as any).discount_price ?? (product as any).discountPrice
   setEditForm({
       id: String(product.id),
       name: product.name,
       description: product.description,
-      price: String(raw?.productPrice),
       quantity: String(product.stock),
       is_active: product.status === "active",
       is_private: false, // You may need to map this from API if available
@@ -448,9 +435,8 @@ export default function ProductsPage() {
       productCategoryId: product.categoryId != null ? String(product.categoryId) : "",
       productVersionNumber: raw?.productVersionNumber != null ? String(raw.productVersionNumber) : "",
   tagsString: "",
-  sku: product.sku ?? raw?.productSku ?? "",
-  original_price: String(raw?.productOriginalPrice ?? ""),
-  discountPrice: String(raw?.productDiscountPrice ?? product.discountPrice ?? ""),
+  original_price: rawOriginal != null && rawOriginal !== "" ? String(rawOriginal) : "",
+  discount_price: rawDiscount != null && rawDiscount !== "" ? String(rawDiscount) : "",
   is_on_sale: (raw?.isProductOnSale ?? (product.isOnSale ? 1 : 0)) === 1,
   currency: String(raw?.currency ?? product.currency ?? ""),
     })
@@ -516,7 +502,6 @@ export default function ProductsPage() {
       id: "",
       name: "",
       description: "",
-      price: "",
       quantity: "",
       is_active: false,
       is_private: false,
@@ -525,9 +510,8 @@ export default function ProductsPage() {
   productCategoryId: "",
   productVersionNumber: "",
   tagsString: "",
-  sku: "",
   original_price: "",
-  discountPrice: "",
+  discount_price: "",
   is_on_sale: false,
   currency: "",
     })
@@ -547,12 +531,11 @@ export default function ProductsPage() {
         setEditLoading(false)
         return
       }
-    const payload: any = {
-        name: editForm.name,
+  const payload: any = {
+        name: editForm.name,      
         productName: editForm.name, // for backend compatibility
         description: editForm.description,
         productDescription: editForm.description,
-        price: Number(editForm.price),
         quantity: Number(editForm.quantity),
         is_active: editForm.is_active ? 1 : 0,
         is_private: editForm.is_private ? 1 : 0,
@@ -560,13 +543,12 @@ export default function ProductsPage() {
         ...(editForm.productVersionNumber && { productVersionNumber: Number(editForm.productVersionNumber) }),
   // tags are handled via Add Tag modal
         // images: not supported in JSON PATCH, only for FormData
-  ...(editForm.sku && { productSku: editForm.sku, sku: editForm.sku }),
   ...(editForm.original_price !== "" && {
     original_price: Number(editForm.original_price),
     productOriginalPrice: Number(editForm.original_price),
     productoriginal_price: Number(editForm.original_price),
   }),
-  ...(editForm.discountPrice !== "" && { productDiscountPrice: Number(editForm.discountPrice), discountPrice: Number(editForm.discountPrice) }),
+  ...(editForm.discount_price !== "" && { productdiscount_price: Number(editForm.discount_price), discount_price: Number(editForm.discount_price) }),
   isProductOnSale: editForm.is_on_sale ? 1 : 0,
   is_on_sale: editForm.is_on_sale ? 1 : 0,
   ...(editForm.currency && { currency: editForm.currency }),
@@ -612,6 +594,39 @@ export default function ProductsPage() {
       (product.name?.toLowerCase() ?? "").includes(searchTerm.toLowerCase()) ||
       (product.description?.toLowerCase() ?? "").includes(searchTerm.toLowerCase()),
   )
+
+  // Toggle product active/inactive status using edit endpoint
+  const toggleProductStatus = async (product: Product) => {
+    try {
+      const token = localStorage.getItem("auth_token")
+      if (token) apiService.setAuthToken(token)
+      const nextActive = product.status !== "active"
+      // Build minimal payload with aliases for broad backend compatibility
+      const payload: any = {
+        is_active: nextActive ? 1 : 0,
+        isProductActive: nextActive ? 1 : 0,
+        status: nextActive ? "active" : "inactive",
+      }
+      await apiService.patchJson(`/products/${product.id}`, payload)
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.id === product.id
+            ? { ...p, status: nextActive ? "active" : "inactive" }
+            : p,
+        ),
+      )
+      toast({
+        title: "Status Updated",
+        description: `Product ${nextActive ? "activated" : "deactivated"}.`,
+      })
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err?.message || "Failed to update status.",
+        variant: "destructive",
+      })
+    }
+  }
 
   return (
     <div className="flex flex-col">
@@ -663,15 +678,6 @@ export default function ProductsPage() {
                 />
               </div>
               <div>
-                <Label htmlFor="sku">SKU</Label>
-                <Input
-                  id="sku"
-                  name="sku"
-                  value={addForm.sku}
-                  onChange={handleAddChange}
-                />
-              </div>
-              <div>
                 <Label htmlFor="description">Description</Label>
                 <Input
                   id="description"
@@ -682,18 +688,6 @@ export default function ProductsPage() {
                 />
               </div>
               <div className="flex gap-2">
-                <div className="flex-1">
-                  <Label htmlFor="price">Price</Label>
-                  <Input
-                    id="price"
-                    name="price"
-                    type="number"
-                    min="0"
-                    value={addForm.price}
-                    onChange={handleAddChange}
-                    required
-                  />
-                </div>
                 <div className="flex-1">
                   <Label htmlFor="quantity">Quantity in Stock</Label>
                   <Input
@@ -721,13 +715,13 @@ export default function ProductsPage() {
                   />
                 </div>
                 <div className="flex-1">
-                  <Label htmlFor="discountPrice">Discount Price</Label>
+                  <Label htmlFor="discount_price">Discount Price</Label>
                   <Input
-                    id="discountPrice"
-                    name="discountPrice"
+                    id="discount_price"
+                    name="discount_price"
                     type="number"
                     min="0"
-                    value={addForm.discountPrice}
+                    value={addForm.discount_price}
                     onChange={handleAddChange}
                   />
                 </div>
@@ -862,10 +856,6 @@ export default function ProductsPage() {
                     <div className="font-medium">{viewProduct.productVersionNumber ?? "-"}</div>
                   </div>
                   <div>
-                    <div className="text-xs text-muted-foreground">Price</div>
-                    <div className="font-medium">{viewProduct.productPrice ?? "-"}</div>
-                  </div>
-                  <div>
                     <div className="text-xs text-muted-foreground">Available Quantity</div>
                     <div className="font-medium">{viewProduct.productAvailableQuantity ?? "-"}</div>
                   </div>
@@ -875,7 +865,7 @@ export default function ProductsPage() {
                   </div>
                   <div>
                     <div className="text-xs text-muted-foreground">Discount Price</div>
-                    <div className="font-medium">{viewProduct.productDiscountPrice ?? viewProduct.discountPrice ?? "-"}</div>
+                    <div className="font-medium">{viewProduct.productdiscount_price ?? viewProduct.discount_price ?? "-"}</div>
                   </div>
                   <div>
                     <div className="text-xs text-muted-foreground">Currency</div>
@@ -1085,15 +1075,6 @@ export default function ProductsPage() {
                 />
               </div>
               <div>
-                <Label htmlFor="edit_sku">SKU</Label>
-                <Input
-                  id="edit_sku"
-                  name="sku"
-                  value={editForm.sku}
-                  onChange={handleEditChange}
-                />
-              </div>
-              <div>
                 <Label htmlFor="edit_description">Description</Label>
                 <Input
                   id="edit_description"
@@ -1104,18 +1085,6 @@ export default function ProductsPage() {
                 />
               </div>
               <div className="flex gap-2">
-                <div className="flex-1">
-                  <Label htmlFor="edit_price">Price</Label>
-                  <Input
-                    id="edit_price"
-                    name="price"
-                    type="number"
-                    min="0"
-                    value={editForm.price}
-                    onChange={handleEditChange}
-                    required
-                  />
-                </div>
                 <div className="flex-1">
                   <Label htmlFor="edit_quantity">Quantity in Stock</Label>
                   <Input
@@ -1142,13 +1111,13 @@ export default function ProductsPage() {
                   />
                 </div>
                 <div className="flex-1">
-                  <Label htmlFor="edit_discountPrice">Discount Price</Label>
+                  <Label htmlFor="edit_discount_price">Discount Price</Label>
                   <Input
-                    id="edit_discountPrice"
-                    name="discountPrice"
+                    id="edit_discount_price"
+                    name="discount_price"
                     type="number"
                     min="0"
-                    value={editForm.discountPrice}
+                    value={editForm.discount_price}
                     onChange={handleEditChange}
                   />
                 </div>
@@ -1340,9 +1309,20 @@ export default function ProductsPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {typeof product.price === "number"
-                          ? product.priceFormatted || (product.currency ? `${product.currency} ${product.price.toFixed(2)}` : `$${product.price.toFixed(2)}`)
-                          : "N/A"}
+                        {(() => {
+                          // Accept multiple possible backend field names
+                          const rawDiscount = (product as any).discount_price ?? (product as any).discountPrice
+                          const discountNum = rawDiscount === "" || rawDiscount == null ? NaN : Number(rawDiscount)
+                          const hasDiscount = Number.isFinite(discountNum) && discountNum > 0
+
+                          const rawOriginal = (product as any).original_price ?? (product as any).originalPrice ?? (product as any).productOriginalPrice ?? product.price
+                          const originalNum = rawOriginal === "" || rawOriginal == null ? NaN : Number(rawOriginal)
+
+                          const value = hasDiscount ? discountNum : originalNum
+                          if (!Number.isFinite(value)) return "N/A"
+                          const currency = (product as any).currency
+                          return (product as any).priceFormatted || (currency ? `${currency} ${value.toFixed(2)}` : `$${value.toFixed(2)}`)
+                        })()}
                       </TableCell>
                       <TableCell>
                         <Badge variant={product.stock > 0 ? "default" : "destructive"}>{product.stock}</Badge>
@@ -1371,9 +1351,9 @@ export default function ProductsPage() {
                               <Edit className="mr-2 h-4 w-4" />
                               Edit
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="text-red-600">
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Delete
+                            <DropdownMenuItem onClick={() => toggleProductStatus(product)}>
+                              <Trash2 className="mr-2 h-4 w-4 rotate-90" />
+                              {product.status === "active" ? "Deactivate" : "Activate"}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
