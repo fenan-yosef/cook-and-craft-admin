@@ -49,6 +49,8 @@ const getTitleFromPathname = (pathname: string) => {
       return "Delivery Zones Management"
     case "coupons":
       return "Coupons Management"
+    case "wallets":
+      return "Wallets Management"
     default:
       return "Dashboard"
   }

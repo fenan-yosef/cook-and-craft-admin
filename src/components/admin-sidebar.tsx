@@ -84,6 +84,10 @@ const menuItems = [
         url: "/dashboard/orders",
       },
       {
+        title: "Wallets",
+        url: "/dashboard/wallets",
+      },
+      {
         title: "Delivery Zones",
         url: "/dashboard/delivery-zones",
       },
