@@ -135,7 +135,8 @@ export default function PostsPage() {
 
         if (token) apiService.setAuthToken(token);
 
-        const url = `/posts?withLikes=true&withPolls=true&withVersions=true&page=${page}&isDeleted=${showDeleted}&authorId=${user.id}`;
+        const url = `/posts?withLikes=true&withPolls=true&withVersions=true&page=${page}&isDeleted=${showDeleted}&authorId=${user.id}`
+          + `&order=desc&sort=desc&orderBy=created_at&sortBy=created_at`;
 
         const res = await apiService.get(url);
 
@@ -296,7 +297,9 @@ export default function PostsPage() {
         pollCloseAt: "",
       });
 
-      fetchPosts(lastPage);
+      // Show newest posts at top: go to page 1 and refetch
+      setCurrentPage(1);
+      await fetchPosts(1);
     } catch (error: any) {
       console.error(error);
       const errorMessage =
