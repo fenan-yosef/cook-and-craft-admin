@@ -29,6 +29,8 @@ const getTitleFromPathname = (pathname: string) => {
       return "Recipes Management"
     case "products":
       return "Products Management"
+    case "addons":
+      return "Addons Management"
     case "questions":
       return "Questions Management"
     case "answers":

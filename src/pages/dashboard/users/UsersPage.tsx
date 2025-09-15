@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -69,6 +69,13 @@ export default function UsersPage() {
     userId: number
     role: "Admin" | "Driver" | "Customer"
   } | null>(null)
+  // User preference answers state
+  const [userAnswers, setUserAnswers] = useState<any[]>([])
+  const [answersLoading, setAnswersLoading] = useState(false)
+  const [answersError, setAnswersError] = useState<string | null>(null)
+  // Track in-flight requests to avoid stale overwrite
+  const answersReqRef = useRef(0)
+  const lastAnswersUserIdRef = useRef<number | null>(null)
   const { toast } = useToast()
 
   // Pagination state
@@ -330,11 +337,93 @@ export default function UsersPage() {
     }
   }
 
+  // Fetch all preference answers then filter for selected user
+  const fetchAndFilterUserAnswers = async (userId: number) => {
+  const reqId = ++answersReqRef.current
+  setAnswersLoading(true)
+  setAnswersError(null)
+  setUserAnswers([])
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
+      if (token) apiService.setAuthToken(token)
+      const res = await apiService.get(`/users_preference_answers`)
+      // Attempt to locate array of answers in multiple shapes
+      let answers: any[] = []
+      const candidates = [
+        res,
+        res?.data,
+        res?.result,
+        res?.results,
+        res?.items,
+        res?.records,
+        res?.answers,
+        res?.user_preference_answers,
+        res?.data?.answers,
+        res?.data?.results,
+      ]
+      for (const c of candidates) {
+        if (Array.isArray(c)) { answers = c; break }
+        if (c && Array.isArray(c.data)) { answers = c.data; break }
+      }
+
+      if (!Array.isArray(answers)) answers = []
+
+      const normalized = answers.map((a: any) => {
+        const nestedUser = a.user || a.profile || a.account || {}
+        const extractedUserId = Number(
+          a.userId ?? a.user_id ?? a.user_id_fk ?? a.userID ??
+          nestedUser.id ?? nestedUser.userId ?? nestedUser.user_id ?? nestedUser.userID
+        )
+        return {
+          id: a.id ?? a.answerId ?? a.userPreferenceAnswerId ?? a.user_preference_answer_id,
+          userId: extractedUserId,
+          questionId: a.preferenceQuestionId ?? a.questionId ?? a.preference_question_id ?? a.prefQuestionId,
+          question: a.question?.text ?? a.question?.title ?? a.question ?? a.preferenceQuestion ?? a.preference_question_text ?? a.questionText ?? a.preference_question ?? a.prefQuestionText,
+          answer: a.answer?.text ?? a.answer?.value ?? a.answer ?? a.value ?? a.answerValue ?? a.response ?? a.answer_text,
+          createdAt: a.created_at ?? a.createdAt ?? a.timestamp ?? a.createdOn,
+          _raw: a,
+        }
+      })
+
+      let filtered = normalized.filter(a => a.userId === userId && !isNaN(a.userId))
+
+      // Fallback: if nothing matched but we DO have answers whose userId is missing/NaN, try loose match
+      if (filtered.length === 0 && normalized.length > 0) {
+        const loose = normalized.filter(a => String(a._raw?.userId ?? a._raw?.user_id ?? a._raw?.user_id_fk ?? a._raw?.userID ?? a._raw?.user?.id ?? '') === String(userId))
+        if (loose.length > 0) {
+          filtered = loose
+        }
+      }
+
+      // Final fallback: if still none, show all (to help diagnose) but tag them
+      if (filtered.length === 0 && normalized.length > 0) {
+        console.warn('[UsersPage] No direct userId match for answers. Showing all answers for debugging.')
+        filtered = normalized.map(a => ({ ...a, question: a.question || '(Unknown Question)', answer: a.answer }))
+      }
+
+  // If a newer request started, ignore this result
+  if (reqId !== answersReqRef.current) return
+  lastAnswersUserIdRef.current = userId
+  setUserAnswers(filtered)
+    } catch (err: any) {
+  if (reqId !== answersReqRef.current) return
+  setAnswersError(err?.message || 'Failed to load answers')
+    } finally {
+  if (reqId === answersReqRef.current) setAnswersLoading(false)
+    }
+  }
+
   const filteredUsers = users.filter(
     (user) =>
       user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.email.toLowerCase().includes(searchTerm.toLowerCase()),
   )
+
+  const handleOpenUserDialog = (user: User) => {
+    setSelectedUser(user)
+    setIsDialogOpen(true)
+    fetchAndFilterUserAnswers(user.id)
+  }
 
   return (
     <div className="flex flex-col">
@@ -395,10 +484,7 @@ export default function UsersPage() {
                     <TableRow
                       key={user.id}
                       className="cursor-pointer hover:bg-muted/40"
-                      onClick={() => {
-                        setSelectedUser(user)
-                        setIsDialogOpen(true)
-                      }}
+                      onClick={() => handleOpenUserDialog(user)}
                     >
                       <TableCell className="font-medium">{user.name}</TableCell>
                       <TableCell>{user.email}</TableCell>
@@ -557,7 +643,21 @@ export default function UsersPage() {
           </CardContent>
         </Card>
 
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog
+          open={isDialogOpen}
+          onOpenChange={(open) => {
+            setIsDialogOpen(open)
+            if (!open) {
+              // reset answers state when dialog closes
+              // also invalidate any in-flight requests
+              answersReqRef.current += 1
+              lastAnswersUserIdRef.current = null
+              setUserAnswers([])
+              setAnswersError(null)
+              setAnswersLoading(false)
+            }
+          }}
+        >
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle>User Details</DialogTitle>
@@ -592,6 +692,35 @@ export default function UsersPage() {
                 <div className="flex items-center justify-between"><span className="text-muted-foreground">Login Count</span><span>{selectedUser.userLoginCount ?? 0}</span></div>
                 <div className="flex items-center justify-between"><span className="text-muted-foreground">Last Login</span><span>{selectedUser.last_login ? new Date(selectedUser.last_login).toLocaleString() : "Never"}</span></div>
                 <div className="flex items-center justify-between"><span className="text-muted-foreground">Account Created</span><span>{selectedUser.created_at ? new Date(selectedUser.created_at).toLocaleString() : "-"}</span></div>
+
+                {/* User Answer Section */}
+                <div className="mt-4 border-t pt-3">
+                  <h4 className="text-sm font-semibold mb-2">User Answer</h4>
+                  {answersLoading && (
+                    <div className="text-xs text-muted-foreground">Loading answers...</div>
+                  )}
+                  {!answersLoading && answersError && (
+                    <div className="text-xs text-red-500">{answersError}</div>
+                  )}
+                  {!answersLoading && !answersError && userAnswers.length === 0 && (
+                    <div className="text-xs text-muted-foreground">No answers found.</div>
+                  )}
+                  {!answersLoading && !answersError && userAnswers.length > 0 && (
+                    <ul className="space-y-2 max-h-60 overflow-auto pr-1">
+                      {userAnswers.map((ans) => (
+                        <li key={ans.id} className="rounded-md border p-2">
+                          <p className="text-xs font-medium mb-1">{ans.question || 'Question'}</p>
+                          <p className="text-xs text-muted-foreground break-words">{ans.answer || '—'}</p>
+                          {ans.createdAt && (
+                            <p className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                              {new Date(ans.createdAt).toLocaleString()}
+                            </p>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </div>
             )}
           </DialogContent>

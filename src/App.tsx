@@ -1,3 +1,4 @@
+import AddonsPage from "@/pages/dashboard/addons/AddonsPage"
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom"
 import { AuthProvider } from "@/contexts/auth-context"
 import { Toaster } from "@/components/ui/toaster"
@@ -46,6 +47,7 @@ function App() {
             <Route path="questions" element={<QuestionsPage />} />
             <Route path="preferences" element={<PreferencesPage />} />
             <Route path="user-answers" element={<UserAnswersPage />} />
+            <Route path="addons" element={<AddonsPage />} />
             <Route path="subscription-intervals" element={<SubscriptionIntervalsPage />} />
             <Route path="subscription-meal-selections" element={<SubscriptionAndMealSelections />} />
           </Route>

@@ -39,8 +39,33 @@ const menuItems = [
   },
   {
     title: "Users",
-    url: "/dashboard/users",
+    // url: "/dashboard/users",
     icon: Users,
+    items: [
+      {
+        title: "All Users",
+        url: "/dashboard/users",
+        icon: Users,
+      },
+      {
+        title: "User Preferences",
+        icon: Settings,
+        items: [
+          {
+            title: "Questions",
+            url: "/dashboard/questions",
+          },
+          {
+            title: "Answers",
+            url: "/dashboard/answers",
+          },
+          {
+            title: "User Answers",
+            url: "/dashboard/user-answers",
+          },
+        ],
+      }, 
+    ]
   },
   {
     title: "Shop Management",
@@ -49,6 +74,10 @@ const menuItems = [
       {
         title: "Products",
         url: "/dashboard/products",
+      },
+      {
+        title: "Addons",
+        url: "/dashboard/addons",
       },
       {
         title: "Orders",
@@ -118,24 +147,7 @@ const menuItems = [
           },
         ],
       },
-      {
-        title: "UserPreferences",
-        icon: Settings,
-        items: [
-          {
-            title: "Questions",
-            url: "/dashboard/questions",
-          },
-          {
-            title: "Answers",
-            url: "/dashboard/answers",
-          },
-          {
-            title: "User Answers",
-            url: "/dashboard/user-answers",
-          },
-        ],
-      },
+      
       {
         title: "Recipes",
         url: "/dashboard/recipes",
