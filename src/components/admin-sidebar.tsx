@@ -55,10 +55,10 @@ const menuItems = [
             title: "Questions",
             url: "/dashboard/questions",
           },
-          {
-            title: "Answers",
-            url: "/dashboard/answers",
-          },
+          // {
+          //   title: "Answers",
+          //   url: "/dashboard/answers",
+          // },
           {
             title: "User Answers",
             url: "/dashboard/user-answers",

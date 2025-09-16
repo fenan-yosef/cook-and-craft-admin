@@ -43,6 +43,7 @@ export default function QuestionsPage() {
     sort_order: 1,
   })
   const [editAnswers, setEditAnswers] = useState<string[]>([])
+  const [existingAnswers, setExistingAnswers] = useState<Array<{ id: number; text: string; sort: number }>>([])
   const [newQuestion, setNewQuestion] = useState({
     question: "",
     allow_multiple: 0,
@@ -51,6 +52,24 @@ export default function QuestionsPage() {
   })
   const [newAnswers, setNewAnswers] = useState<string[]>([])
   const { toast } = useToast()
+
+  // Load existing answers for a question using question text comparison
+  const loadExistingAnswersByQuestionText = async (questionText: string) => {
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+      if (token) apiService.setAuthToken(token)
+      const resp = await apiService.get('/preference_answers')
+      const raw = Array.isArray(resp?.data) ? resp.data : Array.isArray(resp) ? resp : []
+      const norm = (s: any) => String(s ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
+      const targetQ = norm(questionText)
+      const mapped = raw
+        .filter((it: any) => norm(it?.Question) === targetQ)
+        .map((it: any) => ({ id: Number(it.ID), text: String(it.Answer ?? ''), sort: Number(it.Sort ?? 1) }))
+      setExistingAnswers(mapped)
+    } catch (e) {
+      setExistingAnswers([])
+    }
+  }
 
   useEffect(() => {
     fetchPreferences()
@@ -298,6 +317,8 @@ export default function QuestionsPage() {
                                   sort_order: q.order_index,
                                 })
                                 setEditAnswers([])
+                                // Fetch existing answers for this question text
+                                void loadExistingAnswersByQuestionText(q.question)
                                 setIsEditDialogOpen(true)
                               }}
                             >
@@ -464,7 +485,10 @@ export default function QuestionsPage() {
         open={isEditDialogOpen}
         onOpenChange={(open) => {
           setIsEditDialogOpen(open)
-          if (!open) setEditAnswers([])
+          if (!open) {
+            setEditAnswers([])
+            setExistingAnswers([])
+          }
         }}
       >
         <DialogContent className="sm:max-w-lg">
@@ -480,6 +504,44 @@ export default function QuestionsPage() {
                 value={editQuestion.question}
                 onChange={(e) => setEditQuestion({ ...editQuestion, question: e.target.value })}
               />
+            </div>
+            {/* Existing answers list with delete */}
+            <div>
+              <Label>Existing Answers</Label>
+              <div className="mt-2 space-y-2">
+                {existingAnswers.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">No existing answers.</div>
+                ) : (
+                  existingAnswers
+                    .sort((a, b) => a.sort - b.sort)
+                    .map((ans) => (
+                      <div key={ans.id} className="flex items-center gap-2">
+                        <div className="flex-1 text-sm">{ans.text}</div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            const confirmed = window.confirm('Remove this answer?')
+                            if (!confirmed) return
+                            try {
+                              const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+                              if (token) apiService.setAuthToken(token)
+                              await apiService.delete(`/preference_answers/${ans.id}`)
+                              setExistingAnswers((prev) => prev.filter((a) => a.id !== ans.id))
+                              setQuestions((prev) => prev.map((q) => (q.id === editTargetId ? { ...q, answers: (q.answers || []).filter((ea: any) => Number(ea?.ID ?? ea?.id) !== ans.id) } : q)))
+                              toast({ title: 'Deleted', description: 'Answer removed.' })
+                            } catch (err) {
+                              toast({ title: 'Error', description: 'Failed to remove answer', variant: 'destructive' })
+                            }
+                          }}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    ))
+                )}
+              </div>
             </div>
             <div className="flex items-center space-x-2">
               <Label htmlFor="edit_allow_multiple">Allow Multiple</Label>
