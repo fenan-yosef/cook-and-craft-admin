@@ -42,12 +42,14 @@ export default function QuestionsPage() {
     is_active: 1,
     sort_order: 1,
   })
+  const [editAnswers, setEditAnswers] = useState<string[]>([])
   const [newQuestion, setNewQuestion] = useState({
     question: "",
     allow_multiple: 0,
     is_active: 1,
     sort_order: 1,
   })
+  const [newAnswers, setNewAnswers] = useState<string[]>([])
   const { toast } = useToast()
 
   useEffect(() => {
@@ -125,10 +127,45 @@ export default function QuestionsPage() {
         answers: Array.isArray(item.answers) ? item.answers : [],
         multiple: Boolean(item.Multiple ?? (newQuestion.allow_multiple === 1)),
       }
-      setQuestions((prev) => [...prev, created])
-      toast({ title: "Success", description: "Question created successfully" })
+      // If admin added inline answers, create them now, sequentially
+      const answersToCreate = newAnswers
+        .map((a) => (typeof a === "string" ? a.trim() : ""))
+        .filter((a) => a.length > 0)
+
+      let createdAnswers: any[] = []
+      if (answersToCreate.length > 0) {
+        for (let i = 0; i < answersToCreate.length; i++) {
+          try {
+            const ar = await apiService.post("/preference_answers", {
+              question_id: created.id,
+              answer_text: answersToCreate[i],
+              sort_order: i + 1,
+            })
+            if (ar?.data) createdAnswers.push(ar.data)
+          } catch (e) {
+            // continue creating remaining answers, but notify user
+          }
+        }
+      }
+
+      const finalCreated: PreferenceQuestion = {
+        ...created,
+        answers: createdAnswers.length
+          ? createdAnswers
+          : created.answers,
+      }
+
+      setQuestions((prev) => [...prev, finalCreated])
+      toast({
+        title: "Success",
+        description:
+          answersToCreate.length > 0
+            ? `Question and ${answersToCreate.length} answer(s) created`
+            : "Question created successfully",
+      })
       setIsCreateQuestionDialogOpen(false)
       setNewQuestion({ question: "", allow_multiple: 0, is_active: 1, sort_order: 1 })
+      setNewAnswers([])
     } catch (error: any) {
       const backendMsg = error?.response?.data?.error
       const msg = typeof backendMsg === "object" && backendMsg?.question_text?.[0]
@@ -260,6 +297,7 @@ export default function QuestionsPage() {
                                   is_active: q.is_active ? 1 : 0,
                                   sort_order: q.order_index,
                                 })
+                                setEditAnswers([])
                                 setIsEditDialogOpen(true)
                               }}
                             >
@@ -283,7 +321,16 @@ export default function QuestionsPage() {
       </div>
 
       {/* Create Question Dialog */}
-      <Dialog open={isCreateQuestionDialogOpen} onOpenChange={setIsCreateQuestionDialogOpen}>
+      <Dialog
+        open={isCreateQuestionDialogOpen}
+        onOpenChange={(open) => {
+          setIsCreateQuestionDialogOpen(open)
+          if (!open) {
+            setNewQuestion({ question: "", allow_multiple: 0, is_active: 1, sort_order: 1 })
+            setNewAnswers([])
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Create Question</DialogTitle>
@@ -325,6 +372,40 @@ export default function QuestionsPage() {
                 value={newQuestion.sort_order}
                 onChange={(e) => setNewQuestion({ ...newQuestion, sort_order: Number(e.target.value) })}
               />
+            </div>
+            <div>
+              <div className="flex items-center justify-between">
+                <Label>Answers</Label>
+                <Button type="button" size="sm" variant="secondary" onClick={() => setNewAnswers((prev) => [...prev, ""]) }>
+                  Add Answer
+                </Button>
+              </div>
+              <div className="mt-2 space-y-2">
+                {newAnswers.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">No answers added yet.</div>
+                ) : (
+                  newAnswers.map((val, idx) => (
+                    <div key={idx} className="flex gap-2">
+                      <Input
+                        placeholder={`Answer #${idx + 1}`}
+                        value={val}
+                        onChange={(e) => {
+                          const copy = [...newAnswers]
+                          copy[idx] = e.target.value
+                          setNewAnswers(copy)
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setNewAnswers((prev) => prev.filter((_, i) => i !== idx))}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
           <DialogFooter>
@@ -379,7 +460,13 @@ export default function QuestionsPage() {
       </Dialog>
 
       {/* Edit Question Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+      <Dialog
+        open={isEditDialogOpen}
+        onOpenChange={(open) => {
+          setIsEditDialogOpen(open)
+          if (!open) setEditAnswers([])
+        }}
+      >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Edit Question</DialogTitle>
@@ -420,6 +507,40 @@ export default function QuestionsPage() {
                 onChange={(e) => setEditQuestion({ ...editQuestion, sort_order: Number(e.target.value) })}
               />
             </div>
+            <div>
+              <div className="flex items-center justify-between">
+                <Label>Add Answers</Label>
+                <Button type="button" size="sm" variant="secondary" onClick={() => setEditAnswers((prev) => [...prev, ""]) }>
+                  Add Answer
+                </Button>
+              </div>
+              <div className="mt-2 space-y-2">
+                {editAnswers.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">No new answers to add.</div>
+                ) : (
+                  editAnswers.map((val, idx) => (
+                    <div key={idx} className="flex gap-2">
+                      <Input
+                        placeholder={`Answer #${idx + 1}`}
+                        value={val}
+                        onChange={(e) => {
+                          const copy = [...editAnswers]
+                          copy[idx] = e.target.value
+                          setEditAnswers(copy)
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setEditAnswers((prev) => prev.filter((_, i) => i !== idx))}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button onClick={() => setIsEditDialogOpen(false)} variant="outline">Cancel</Button>
@@ -434,6 +555,25 @@ export default function QuestionsPage() {
                     sort_order: editQuestion.sort_order,
                   }
                   await apiService.post(`/preference_questions/${editTargetId}?_method=put`, payload)
+                  // Create any new answers added in the edit dialog
+                  const answersToCreate = editAnswers
+                    .map((a) => (typeof a === "string" ? a.trim() : ""))
+                    .filter((a) => a.length > 0)
+                  let createdAnswers: any[] = []
+                  if (answersToCreate.length > 0) {
+                    for (let i = 0; i < answersToCreate.length; i++) {
+                      try {
+                        const ar = await apiService.post("/preference_answers", {
+                          question_id: editTargetId,
+                          answer_text: answersToCreate[i],
+                          sort_order: i + 1,
+                        })
+                        if (ar?.data) createdAnswers.push(ar.data)
+                      } catch (e) {
+                        // continue
+                      }
+                    }
+                  }
                   setQuestions((prev) =>
                     prev.map((it) =>
                       it.id === editTargetId
@@ -444,12 +584,14 @@ export default function QuestionsPage() {
                             is_active: editQuestion.is_active === 1,
                             order_index: editQuestion.sort_order,
                             updated_at: new Date().toISOString(),
+                            answers: createdAnswers.length ? [...(it.answers || []), ...createdAnswers] : it.answers,
                           }
                         : it,
                     ),
                   )
                   toast({ title: "Success", description: "Question updated successfully" })
                   setIsEditDialogOpen(false)
+                  setEditAnswers([])
                 } catch (error) {
                   toast({ title: "Error", description: "Failed to update question", variant: "destructive" })
                 }
