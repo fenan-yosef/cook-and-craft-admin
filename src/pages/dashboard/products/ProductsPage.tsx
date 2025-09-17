@@ -41,6 +41,10 @@ interface Product {
   isPrivate?: boolean
   tags?: string[]
   categoryId?: number | null
+  productCategories?: {
+    id: number
+    name: string
+  }
   // New fields from backend
   original_price?: number
   discount_price?: number
@@ -72,6 +76,13 @@ export default function ProductsPage() {
     discount_price: "",
     is_on_sale: false,
     currency: "",
+    nutritionFacts: { calories: "", fat: "", protein: "" },
+    ingredientsMain: [{ name: "", emoji: "", amount: "" }] as Array<{ name: string; emoji: string; amount: string }>,
+    ingredientsExtra: [] as Array<{ name: string; emoji: string; amount: string }>,
+    ingredientsNotIncluded: [] as string[],
+    utensils: [] as string[],
+    dessertSuggestions: [] as Array<{ name: string; price: string; imageFile: File | null; imagePreview?: string }>,
+    servingOptions: [] as Array<{ servings: string; label: string; price: string }>,
   })
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -95,6 +106,13 @@ export default function ProductsPage() {
     discount_price: "",
     is_on_sale: false,
     currency: "",
+    nutritionFacts: { calories: "", fat: "", protein: "" },
+    ingredientsMain: [{ name: "", emoji: "", amount: "" }] as Array<{ name: string; emoji: string; amount: string }>,
+    ingredientsExtra: [] as Array<{ name: string; emoji: string; amount: string }>,
+    ingredientsNotIncluded: [] as string[],
+    utensils: [] as string[],
+    dessertSuggestions: [] as Array<{ name: string; price: string; imageFile: File | null; imagePreview?: string }>,
+    servingOptions: [] as Array<{ servings: string; label: string; price: string }>,
   })
   const [editImagePreviews, setEditImagePreviews] = useState<string[]>([])
   const editFileInputRef = useRef<HTMLInputElement>(null)
@@ -179,27 +197,41 @@ export default function ProductsPage() {
 
       const { items, meta } = normalize(response)
 
-      const mappedProducts: Product[] = items.map((item: any) => ({
-        id: item.productId,
-        name: item.productName,
-        description: item.productDescription ?? item.productSku ?? "",
-        price: item.productPrice,
-        stock: item.productAvailableQuantity,
-        status: item.isProductActive ? "active" : "inactive",
-        created_at: item.createdAt || new Date().toISOString(),
-        images: item.productImages?.map((img: any) => img.imageUrl || img.url || img.path || img) || [],
-        sku: item.productSku,
-        isPrivate: !!item.isProductPrivate,
-        tags: (item.productTags || [])
-          .map((t: any) => (typeof t === "string" ? t : (t?.name ?? t?.tagName ?? t?.label ?? t?.title ?? t?.slug ?? "")))
-          .filter(Boolean),
-        categoryId: item.productCategoryId ?? item?.category_id ?? item?.categoryId ?? null,
-        original_price: item.productoriginal_price ?? undefined,
-        discount_price: item.productdiscount_price ?? undefined,
-        isOnSale: (item.isProductOnSale ?? 0) === 1,
-        currency: item.currency ?? undefined,
-        priceFormatted: item.priceFormatted ?? undefined,
-      }))
+      const mappedProducts: Product[] = items.map((item: any) => {
+        const firstCategory = Array.isArray(item.productCategories) && item.productCategories.length > 0
+          ? item.productCategories[0]
+          : null
+        const categoryId = item.productCategoryId
+          ?? item?.category_id
+          ?? item?.categoryId
+          ?? (firstCategory?.id != null ? Number(firstCategory.id) : null)
+        const simpleCategory = firstCategory
+          ? { id: Number(firstCategory.id), name: String(firstCategory.name ?? firstCategory.slug ?? "") }
+          : undefined
+
+        return {
+          id: item.productId,
+          name: item.productName,
+          description: item.productDescription ?? item.productSku ?? "",
+          price: item.productPrice,
+          stock: item.productAvailableQuantity,
+          status: item.isProductActive ? "active" : "inactive",
+          created_at: item.createdAt || new Date().toISOString(),
+          images: item.productImages?.map((img: any) => img.imageUrl || img.url || img.path || img) || [],
+          sku: item.productSku,
+          isPrivate: !!item.isProductPrivate,
+          tags: (item.productTags || [])
+            .map((t: any) => (typeof t === "string" ? t : (t?.name ?? t?.tagName ?? t?.label ?? t?.title ?? t?.slug ?? "")))
+            .filter(Boolean),
+          categoryId,
+          productCategories: simpleCategory,
+          original_price: item.productoriginal_price ?? undefined,
+          discount_price: item.productdiscount_price ?? undefined,
+          isOnSale: (item.isProductOnSale ?? 0) === 1,
+          currency: item.currency ?? undefined,
+          priceFormatted: item.priceFormatted ?? undefined,
+        }
+      })
       setProducts(mappedProducts)
       // store raw items for view modal
       const rawMap: Record<number, any> = {}
@@ -221,34 +253,36 @@ export default function ProductsPage() {
       setTotal(totalCount)
       setLastPage(last)
     } catch (error) {
-      // Mock data for demonstration
-      const mockProducts: Product[] = [
-        {
-          id: 1,
-          name: "Premium Coffee Beans",
-          description: "High-quality arabica coffee beans",
-          price: 29.99,
-          stock: 150,
-          status: "active",
-          created_at: "2024-01-15T10:30:00Z",
-          images: [],
-        },
-        {
-          id: 2,
-          name: "Organic Tea Set",
-          description: "Collection of organic herbal teas",
-          price: 45.0,
-          stock: 0,
-          status: "inactive",
-          created_at: "2024-01-10T09:15:00Z",
-          images: [],
-        },
-      ]
-      setProducts(mockProducts)
-      setCurrentPage(1)
-      setLastPage(1)
-      setPerPage(mockProducts.length)
-      setTotal(mockProducts.length)
+      // // Mock data for demonstration
+      // const mockProducts: Product[] = [
+      //   {
+      //     id: 1,
+      //     name: "Premium Coffee Beans",
+      //     productCategories: [{id:1, name:"Beverages"}],
+      //     description: "High-quality arabica coffee beans",
+      //     price: 29.99,
+      //     stock: 150,
+      //     status: "active",
+      //     created_at: "2024-01-15T10:30:00Z",
+      //     images: [],
+      //   },
+      //   {
+      //     id: 2,
+      //     name: "Organic Tea Set",
+      //     productCategories: [{id:2, name:"Beverages"}],
+      //     description: "Collection of organic herbal teas",
+      //     price: 45.0,
+      //     stock: 0,
+      //     status: "inactive",
+      //     created_at: "2024-01-10T09:15:00Z",
+      //     images: [],
+      //   },
+      // ]
+      // setProducts(mockProducts)
+      // setCurrentPage(1)
+      // setLastPage(1)
+      // setPerPage(mockProducts.length)
+      // setTotal(mockProducts.length)
     } finally {
       setLoading(false)
     }
@@ -343,6 +377,13 @@ export default function ProductsPage() {
   discount_price: "",
   is_on_sale: false,
   currency: "",
+  nutritionFacts: { calories: "", fat: "", protein: "" },
+  ingredientsMain: [{ name: "", emoji: "", amount: "" }],
+  ingredientsExtra: [],
+  ingredientsNotIncluded: [],
+  utensils: [],
+  dessertSuggestions: [],
+  servingOptions: [],
     })
     setImagePreviews([])
     if (fileInputRef.current) fileInputRef.current.value = ""
@@ -394,6 +435,49 @@ export default function ProductsPage() {
   // tags are handled via Add Tag modal
       addForm.images.forEach((file) => formData.append("images[]", file))
 
+      // Nutrition facts
+      if (addForm.nutritionFacts.calories !== "") formData.append("nutrition_facts[calories]", addForm.nutritionFacts.calories)
+      if (addForm.nutritionFacts.fat !== "") formData.append("nutrition_facts[fat]", addForm.nutritionFacts.fat)
+      if (addForm.nutritionFacts.protein !== "") formData.append("nutrition_facts[protein]", addForm.nutritionFacts.protein)
+
+      // Ingredients main
+      addForm.ingredientsMain.forEach((ing, i) => {
+        if (ing.name !== "") formData.append(`ingredients_main[${i}][name]`, ing.name)
+        if (ing.emoji !== "") formData.append(`ingredients_main[${i}][emoji]`, ing.emoji)
+        if (ing.amount !== "") formData.append(`ingredients_main[${i}][amount]`, ing.amount)
+      })
+
+      // Ingredients extra
+      addForm.ingredientsExtra.forEach((ing, i) => {
+        if (ing.name !== "") formData.append(`ingredients_extra[${i}][name]`, ing.name)
+        if (ing.emoji !== "") formData.append(`ingredients_extra[${i}][emoji]`, ing.emoji)
+        if (ing.amount !== "") formData.append(`ingredients_extra[${i}][amount]`, ing.amount)
+      })
+
+      // Ingredients not included
+      addForm.ingredientsNotIncluded.forEach((val, i) => {
+        if (val !== "") formData.append(`ingredients_not_included[${i}]`, val)
+      })
+
+      // Utensils
+      addForm.utensils.forEach((val, i) => {
+        if (val !== "") formData.append(`utensils[${i}]`, val)
+      })
+
+      // Dessert suggestions
+      addForm.dessertSuggestions.forEach((d, i) => {
+        if (d.name !== "") formData.append(`dessert_suggestions[${i}][name]`, d.name)
+        if (d.price !== "") formData.append(`dessert_suggestions[${i}][price]`, d.price)
+        if (d.imageFile) formData.append(`dessert_suggestions[${i}][image]`, d.imageFile)
+      })
+
+      // Serving options
+      addForm.servingOptions.forEach((s, i) => {
+        if (s.servings !== "") formData.append(`serving_options[${i}][servings]`, s.servings)
+        if (s.label !== "") formData.append(`serving_options[${i}][label]`, s.label)
+        if (s.price !== "") formData.append(`serving_options[${i}][price]`, s.price)
+      })
+
   // Use api service with base URL and token from localStorage
   const token = localStorage.getItem("auth_token")
   if (token) apiService.setAuthToken(token)
@@ -439,6 +523,43 @@ export default function ProductsPage() {
   discount_price: rawDiscount != null && rawDiscount !== "" ? String(rawDiscount) : "",
   is_on_sale: (raw?.isProductOnSale ?? (product.isOnSale ? 1 : 0)) === 1,
   currency: String(raw?.currency ?? product.currency ?? ""),
+  nutritionFacts: {
+    calories: String(raw?.nutrition_facts?.calories ?? ""),
+    fat: String(raw?.nutrition_facts?.fat ?? ""),
+    protein: String(raw?.nutrition_facts?.protein ?? ""),
+  },
+  ingredientsMain: Array.isArray(raw?.ingredients_main)
+    ? raw.ingredients_main.map((r: any) => ({
+        name: String(r?.name ?? ""),
+        emoji: String(r?.emoji ?? ""),
+        amount: String(r?.amount ?? ""),
+      }))
+    : [{ name: "", emoji: "", amount: "" }],
+  ingredientsExtra: Array.isArray(raw?.ingredients_extra)
+    ? raw.ingredients_extra.map((r: any) => ({
+        name: String(r?.name ?? ""),
+        emoji: String(r?.emoji ?? ""),
+        amount: String(r?.amount ?? ""),
+      }))
+    : [],
+  ingredientsNotIncluded: Array.isArray(raw?.ingredients_not_included)
+    ? raw.ingredients_not_included.map((s: any) => String(s))
+    : [],
+  utensils: Array.isArray(raw?.utensils) ? raw.utensils.map((s: any) => String(s)) : [],
+  dessertSuggestions: Array.isArray(raw?.dessert_suggestions)
+    ? raw.dessert_suggestions.map((d: any) => ({
+        name: String(d?.name ?? ""),
+        price: String(d?.price ?? ""),
+        imageFile: null,
+      }))
+    : [],
+  servingOptions: Array.isArray(raw?.serving_options)
+    ? raw.serving_options.map((s: any) => ({
+        servings: String(s?.servings ?? ""),
+        label: String(s?.label ?? ""),
+        price: String(s?.price ?? ""),
+      }))
+    : [],
     })
   // Start with no new image previews; existing are shown from existingImages
   setEditImagePreviews([])
@@ -514,6 +635,13 @@ export default function ProductsPage() {
   discount_price: "",
   is_on_sale: false,
   currency: "",
+  nutritionFacts: { calories: "", fat: "", protein: "" },
+  ingredientsMain: [{ name: "", emoji: "", amount: "" }],
+  ingredientsExtra: [],
+  ingredientsNotIncluded: [],
+  utensils: [],
+  dessertSuggestions: [],
+  servingOptions: [],
     })
     setEditImagePreviews([])
   setRemovedExistingImages([])
@@ -531,43 +659,96 @@ export default function ProductsPage() {
         setEditLoading(false)
         return
       }
-  const payload: any = {
-        name: editForm.name,      
-        productName: editForm.name, // for backend compatibility
-        description: editForm.description,
-        productDescription: editForm.description,
-        quantity: Number(editForm.quantity),
-        is_active: editForm.is_active ? 1 : 0,
-        is_private: editForm.is_private ? 1 : 0,
-        ...(editForm.productCategoryId && { productCategoryId: Number(editForm.productCategoryId) }),
-        ...(editForm.productVersionNumber && { productVersionNumber: Number(editForm.productVersionNumber) }),
-  // tags are handled via Add Tag modal
-        // images: not supported in JSON PATCH, only for FormData
-  ...(editForm.original_price !== "" && {
-    original_price: Number(editForm.original_price),
-    productOriginalPrice: Number(editForm.original_price),
-    productoriginal_price: Number(editForm.original_price),
-  }),
-  ...(editForm.discount_price !== "" && { productdiscount_price: Number(editForm.discount_price), discount_price: Number(editForm.discount_price) }),
-  isProductOnSale: editForm.is_on_sale ? 1 : 0,
-  is_on_sale: editForm.is_on_sale ? 1 : 0,
-  ...(editForm.currency && { currency: editForm.currency }),
+      // Switch to multipart + method override so we can send arrays properly
+      const formData = new FormData()
+      formData.append("_method", "PATCH")
+      formData.append("name", editForm.name)
+      formData.append("productName", editForm.name)
+      formData.append("description", editForm.description)
+      formData.append("productDescription", editForm.description)
+      formData.append("quantity", String(editForm.quantity))
+      formData.append("is_active", editForm.is_active ? "1" : "0")
+      formData.append("isProductActive", editForm.is_active ? "1" : "0")
+      formData.append("is_private", editForm.is_private ? "1" : "0")
+      formData.append("isProductPrivate", editForm.is_private ? "1" : "0")
+      if (editForm.productCategoryId) formData.append("productCategoryId", String(editForm.productCategoryId))
+      if (editForm.productCategoryId) formData.append("category_id", String(editForm.productCategoryId))
+      if (editForm.productVersionNumber) formData.append("productVersionNumber", String(editForm.productVersionNumber))
+      if (editForm.original_price !== "") {
+        formData.append("original_price", String(editForm.original_price))
+        formData.append("productOriginalPrice", String(editForm.original_price))
+        formData.append("productoriginal_price", String(editForm.original_price))
       }
+      if (editForm.discount_price !== "") {
+        formData.append("productdiscount_price", String(editForm.discount_price))
+        formData.append("discount_price", String(editForm.discount_price))
+      }
+      formData.append("isProductOnSale", editForm.is_on_sale ? "1" : "0")
+      formData.append("is_on_sale", editForm.is_on_sale ? "1" : "0")
+      if (editForm.currency) formData.append("currency", editForm.currency)
+
+      // Removed server images
+      removedExistingImages.forEach((url) => {
+        formData.append("removedImageUrls[]", url)
+        formData.append("removeImageUrls[]", url)
+        formData.append("remove_images[]", url)
+      })
+
+      // New images
+      editForm.images.forEach((f) => formData.append("images[]", f))
+
+      // Nutrition facts
+      if (editForm.nutritionFacts.calories !== "") formData.append("nutrition_facts[calories]", editForm.nutritionFacts.calories)
+      if (editForm.nutritionFacts.fat !== "") formData.append("nutrition_facts[fat]", editForm.nutritionFacts.fat)
+      if (editForm.nutritionFacts.protein !== "") formData.append("nutrition_facts[protein]", editForm.nutritionFacts.protein)
+
+      // Ingredients main
+      editForm.ingredientsMain.forEach((ing, i) => {
+        if (ing.name !== "") formData.append(`ingredients_main[${i}][name]`, ing.name)
+        if (ing.emoji !== "") formData.append(`ingredients_main[${i}][emoji]`, ing.emoji)
+        if (ing.amount !== "") formData.append(`ingredients_main[${i}][amount]`, ing.amount)
+      })
+
+      // Ingredients extra
+      editForm.ingredientsExtra.forEach((ing, i) => {
+        if (ing.name !== "") formData.append(`ingredients_extra[${i}][name]`, ing.name)
+        if (ing.emoji !== "") formData.append(`ingredients_extra[${i}][emoji]`, ing.emoji)
+        if (ing.amount !== "") formData.append(`ingredients_extra[${i}][amount]`, ing.amount)
+      })
+
+      // Ingredients not included
+      editForm.ingredientsNotIncluded.forEach((val, i) => {
+        if (val !== "") formData.append(`ingredients_not_included[${i}]`, val)
+      })
+
+      // Utensils
+      editForm.utensils.forEach((val, i) => {
+        if (val !== "") formData.append(`utensils[${i}]`, val)
+      })
+
+      // Dessert suggestions (no image editing upload here unless new one chosen)
+      editForm.dessertSuggestions.forEach((d, i) => {
+        if (d.name !== "") formData.append(`dessert_suggestions[${i}][name]`, d.name)
+        if (d.price !== "") formData.append(`dessert_suggestions[${i}][price]`, d.price)
+        if (d.imageFile) formData.append(`dessert_suggestions[${i}][image]`, d.imageFile)
+      })
+
+      // Serving options
+      editForm.servingOptions.forEach((s, i) => {
+        if (s.servings !== "") formData.append(`serving_options[${i}][servings]`, s.servings)
+        if (s.label !== "") formData.append(`serving_options[${i}][label]`, s.label)
+        if (s.price !== "") formData.append(`serving_options[${i}][price]`, s.price)
+      })
 
       // If user removed any existing images, include hints for backend to remove them
       if (removedExistingImages.length > 0) {
-        payload.removedImageUrls = removedExistingImages
-        payload.removeImageUrls = removedExistingImages
-        payload.remove_images = removedExistingImages
+        // sent below as formData arrays
       }
 
-      // Add alias category_id for compatibility if category provided
-      if (editForm.productCategoryId) {
-        payload.category_id = Number(editForm.productCategoryId)
-      }
-
-      // Use /products/{id} endpoint for PATCH
-      const response = await apiService.patchJson(`/products/${editForm.id}`, payload)
+      // Use method override multipart to PATCH
+      const token = localStorage.getItem("auth_token")
+      if (token) apiService.setAuthToken(token)
+      const response = await apiService.postMultipart(`/products/${editForm.id}`, formData)
       console.log("PATCH response:", response)
 
       toast({
@@ -761,6 +942,415 @@ export default function ProductsPage() {
                   />
                 </div>
               </div>
+              {/* Nutrition Facts */}
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <Label>Calories</Label>
+                  <Input
+                    value={addForm.nutritionFacts.calories}
+                    onChange={(e) =>
+                      setAddForm((p) => ({
+                        ...p,
+                        nutritionFacts: { ...p.nutritionFacts, calories: e.target.value },
+                      }))
+                    }
+                    placeholder="e.g., 100"
+                  />
+                </div>
+                <div>
+                  <Label>Fat</Label>
+                  <Input
+                    value={addForm.nutritionFacts.fat}
+                    onChange={(e) =>
+                      setAddForm((p) => ({
+                        ...p,
+                        nutritionFacts: { ...p.nutritionFacts, fat: e.target.value },
+                      }))
+                    }
+                    placeholder="g"
+                  />
+                </div>
+                <div>
+                  <Label>Protein</Label>
+                  <Input
+                    value={addForm.nutritionFacts.protein}
+                    onChange={(e) =>
+                      setAddForm((p) => ({
+                        ...p,
+                        nutritionFacts: { ...p.nutritionFacts, protein: e.target.value },
+                      }))
+                    }
+                    placeholder="g"
+                  />
+                </div>
+              </div>
+
+              {/* Ingredients (Main) */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Ingredients (Main)</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      setAddForm((p) => ({
+                        ...p,
+                        ingredientsMain: [...p.ingredientsMain, { name: "", emoji: "", amount: "" }],
+                      }))
+                    }
+                  >
+                    Add Row
+                  </Button>
+                </div>
+                {addForm.ingredientsMain.map((row, idx) => (
+                  <div key={idx} className="grid grid-cols-3 gap-2">
+                    <Input
+                      placeholder="Name"
+                      value={row.name}
+                      onChange={(e) =>
+                        setAddForm((p) => {
+                          const next = p.ingredientsMain.slice()
+                          next[idx] = { ...next[idx], name: e.target.value }
+                          return { ...p, ingredientsMain: next }
+                        })
+                      }
+                    />
+                    <Input
+                      placeholder="Emoji"
+                      value={row.emoji}
+                      onChange={(e) =>
+                        setAddForm((p) => {
+                          const next = p.ingredientsMain.slice()
+                          next[idx] = { ...next[idx], emoji: e.target.value }
+                          return { ...p, ingredientsMain: next }
+                        })
+                      }
+                    />
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Amount"
+                        value={row.amount}
+                        onChange={(e) =>
+                          setAddForm((p) => {
+                            const next = p.ingredientsMain.slice()
+                            next[idx] = { ...next[idx], amount: e.target.value }
+                            return { ...p, ingredientsMain: next }
+                          })
+                        }
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() =>
+                          setAddForm((p) => ({
+                            ...p,
+                            ingredientsMain: p.ingredientsMain.filter((_, i) => i !== idx),
+                          }))
+                        }
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Ingredients (Extra) */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Ingredients (Extra)</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      setAddForm((p) => ({
+                        ...p,
+                        ingredientsExtra: [...p.ingredientsExtra, { name: "", emoji: "", amount: "" }],
+                      }))
+                    }
+                  >
+                    Add Row
+                  </Button>
+                </div>
+                {addForm.ingredientsExtra.map((row, idx) => (
+                  <div key={idx} className="grid grid-cols-3 gap-2">
+                    <Input
+                      placeholder="Name"
+                      value={row.name}
+                      onChange={(e) =>
+                        setAddForm((p) => {
+                          const next = p.ingredientsExtra.slice()
+                          next[idx] = { ...next[idx], name: e.target.value }
+                          return { ...p, ingredientsExtra: next }
+                        })
+                      }
+                    />
+                    <Input
+                      placeholder="Emoji"
+                      value={row.emoji}
+                      onChange={(e) =>
+                        setAddForm((p) => {
+                          const next = p.ingredientsExtra.slice()
+                          next[idx] = { ...next[idx], emoji: e.target.value }
+                          return { ...p, ingredientsExtra: next }
+                        })
+                      }
+                    />
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Amount"
+                        value={row.amount}
+                        onChange={(e) =>
+                          setAddForm((p) => {
+                            const next = p.ingredientsExtra.slice()
+                            next[idx] = { ...next[idx], amount: e.target.value }
+                            return { ...p, ingredientsExtra: next }
+                          })
+                        }
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() =>
+                          setAddForm((p) => ({
+                            ...p,
+                            ingredientsExtra: p.ingredientsExtra.filter((_, i) => i !== idx),
+                          }))
+                        }
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Ingredients Not Included */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Ingredients Not Included</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setAddForm((p) => ({ ...p, ingredientsNotIncluded: [...p.ingredientsNotIncluded, ""] }))}
+                  >
+                    Add Item
+                  </Button>
+                </div>
+                {addForm.ingredientsNotIncluded.map((val, idx) => (
+                  <div key={idx} className="flex gap-2">
+                    <Input
+                      placeholder="Item"
+                      value={val}
+                      onChange={(e) =>
+                        setAddForm((p) => {
+                          const next = p.ingredientsNotIncluded.slice()
+                          next[idx] = e.target.value
+                          return { ...p, ingredientsNotIncluded: next }
+                        })
+                      }
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() =>
+                        setAddForm((p) => ({
+                          ...p,
+                          ingredientsNotIncluded: p.ingredientsNotIncluded.filter((_, i) => i !== idx),
+                        }))
+                      }
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Utensils */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Utensils</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setAddForm((p) => ({ ...p, utensils: [...p.utensils, ""] }))}
+                  >
+                    Add Utensil
+                  </Button>
+                </div>
+                {addForm.utensils.map((val, idx) => (
+                  <div key={idx} className="flex gap-2">
+                    <Input
+                      placeholder="Utensil"
+                      value={val}
+                      onChange={(e) =>
+                        setAddForm((p) => {
+                          const next = p.utensils.slice()
+                          next[idx] = e.target.value
+                          return { ...p, utensils: next }
+                        })
+                      }
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() =>
+                        setAddForm((p) => ({ ...p, utensils: p.utensils.filter((_, i) => i !== idx) }))
+                      }
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Dessert Suggestions */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Dessert Suggestions</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      setAddForm((p) => ({
+                        ...p,
+                        dessertSuggestions: [...p.dessertSuggestions, { name: "", price: "", imageFile: null }],
+                      }))
+                    }
+                  >
+                    Add Dessert
+                  </Button>
+                </div>
+                {addForm.dessertSuggestions.map((row, idx) => (
+                  <div key={idx} className="grid grid-cols-3 gap-2 items-center">
+                    <Input
+                      placeholder="Name"
+                      value={row.name}
+                      onChange={(e) =>
+                        setAddForm((p) => {
+                          const next = p.dessertSuggestions.slice()
+                          next[idx] = { ...next[idx], name: e.target.value }
+                          return { ...p, dessertSuggestions: next }
+                        })
+                      }
+                    />
+                    <Input
+                      placeholder="Price"
+                      value={row.price}
+                      onChange={(e) =>
+                        setAddForm((p) => {
+                          const next = p.dessertSuggestions.slice()
+                          next[idx] = { ...next[idx], price: e.target.value }
+                          return { ...p, dessertSuggestions: next }
+                        })
+                      }
+                    />
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] || null
+                          setAddForm((p) => {
+                            const next = p.dessertSuggestions.slice()
+                            next[idx] = {
+                              ...next[idx],
+                              imageFile: file,
+                              imagePreview: file ? URL.createObjectURL(file) : next[idx].imagePreview,
+                            }
+                            return { ...p, dessertSuggestions: next }
+                          })
+                        }}
+                      />
+                      {row.imagePreview ? (
+                        <img src={row.imagePreview} className="w-10 h-10 object-cover rounded border" />
+                      ) : null}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() =>
+                          setAddForm((p) => ({
+                            ...p,
+                            dessertSuggestions: p.dessertSuggestions.filter((_, i) => i !== idx),
+                          }))
+                        }
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Serving Options */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Serving Options</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      setAddForm((p) => ({
+                        ...p,
+                        servingOptions: [...p.servingOptions, { servings: "", label: "", price: "" }],
+                      }))
+                    }
+                  >
+                    Add Option
+                  </Button>
+                </div>
+                {addForm.servingOptions.map((row, idx) => (
+                  <div key={idx} className="grid grid-cols-3 gap-2">
+                    <Input
+                      placeholder="Servings"
+                      value={row.servings}
+                      onChange={(e) =>
+                        setAddForm((p) => {
+                          const next = p.servingOptions.slice()
+                          next[idx] = { ...next[idx], servings: e.target.value }
+                          return { ...p, servingOptions: next }
+                        })
+                      }
+                    />
+                    <Input
+                      placeholder="Label"
+                      value={row.label}
+                      onChange={(e) =>
+                        setAddForm((p) => {
+                          const next = p.servingOptions.slice()
+                          next[idx] = { ...next[idx], label: e.target.value }
+                          return { ...p, servingOptions: next }
+                        })
+                      }
+                    />
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Price"
+                        value={row.price}
+                        onChange={(e) =>
+                          setAddForm((p) => {
+                            const next = p.servingOptions.slice()
+                            next[idx] = { ...next[idx], price: e.target.value }
+                            return { ...p, servingOptions: next }
+                          })
+                        }
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() =>
+                          setAddForm((p) => ({
+                            ...p,
+                            servingOptions: p.servingOptions.filter((_, i) => i !== idx),
+                          }))
+                        }
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
                   <input
@@ -840,7 +1430,15 @@ export default function ProductsPage() {
                   <div>
                     <div className="text-xs text-muted-foreground">Category</div>
                     <div className="font-medium">
-                      {categoryMap[viewProduct.productCategoryId] || viewProduct.productCategoryId || "-"}
+                      {(() => {
+                        const byId = categoryMap[Number(viewProduct.productCategoryId)]
+                        if (byId) return byId
+                        if (Array.isArray(viewProduct.productCategories) && viewProduct.productCategories.length > 0) {
+                          const first = viewProduct.productCategories[0]
+                          return first?.name ?? first?.slug ?? viewProduct.productCategoryId ?? "-"
+                        }
+                        return viewProduct.productCategoryId ?? "-"
+                      })()}
                     </div>
                   </div>
                   <div>
@@ -887,6 +1485,98 @@ export default function ProductsPage() {
                 <div>
                   <div className="text-xs text-muted-foreground">Description</div>
                   <div className="mt-1 text-sm">{viewProduct.productDescription || "-"}</div>
+                </div>
+                {/* Nutrition Facts */}
+                <div>
+                  <div className="text-xs text-muted-foreground">Nutrition Facts</div>
+                  <div className="mt-1 text-sm">
+                    {(() => {
+                      const n = viewProduct.nutrition_facts || {}
+                      const parts: string[] = []
+                      if (n.calories != null && n.calories !== "") parts.push(`Calories: ${n.calories}`)
+                      if (n.fat != null && n.fat !== "") parts.push(`Fat: ${n.fat}`)
+                      if (n.protein != null && n.protein !== "") parts.push(`Protein: ${n.protein}`)
+                      return parts.length ? parts.join(" • ") : "-"
+                    })()}
+                  </div>
+                </div>
+
+                {/* Ingredients */}
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Ingredients (Main)</div>
+                  {Array.isArray(viewProduct.ingredients_main) && viewProduct.ingredients_main.length > 0 ? (
+                    <div className="text-sm space-y-1">
+                      {viewProduct.ingredients_main.map((r: any, i: number) => (
+                        <div key={i}>{[r?.emoji, r?.name, r?.amount].filter(Boolean).join(" ")}</div>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">-</span>
+                  )}
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Ingredients (Extra)</div>
+                  {Array.isArray(viewProduct.ingredients_extra) && viewProduct.ingredients_extra.length > 0 ? (
+                    <div className="text-sm space-y-1">
+                      {viewProduct.ingredients_extra.map((r: any, i: number) => (
+                        <div key={i}>{[r?.emoji, r?.name, r?.amount].filter(Boolean).join(" ")}</div>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">-</span>
+                  )}
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Ingredients Not Included</div>
+                  {Array.isArray(viewProduct.ingredients_not_included) && viewProduct.ingredients_not_included.length > 0 ? (
+                    <div className="text-sm">{viewProduct.ingredients_not_included.join(", ")}</div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">-</span>
+                  )}
+                </div>
+
+                {/* Utensils */}
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Utensils</div>
+                  {Array.isArray(viewProduct.utensils) && viewProduct.utensils.length > 0 ? (
+                    <div className="text-sm">{viewProduct.utensils.join(", ")}</div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">-</span>
+                  )}
+                </div>
+
+                {/* Dessert Suggestions */}
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Dessert Suggestions</div>
+                  {Array.isArray(viewProduct.dessert_suggestions) && viewProduct.dessert_suggestions.length > 0 ? (
+                    <div className="flex flex-wrap gap-3">
+                      {viewProduct.dessert_suggestions.map((d: any, i: number) => (
+                        <div key={i} className="text-sm">
+                          <div className="font-medium">{d?.name ?? "-"}</div>
+                          <div className="text-xs text-muted-foreground">{d?.price ?? "-"}</div>
+                          {d?.image && (
+                            <img src={d.image} className="w-16 h-16 object-cover rounded border mt-1" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">-</span>
+                  )}
+                </div>
+
+                {/* Serving Options */}
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Serving Options</div>
+                  {Array.isArray(viewProduct.serving_options) && viewProduct.serving_options.length > 0 ? (
+                    <div className="text-sm space-y-1">
+                      {viewProduct.serving_options.map((s: any, i: number) => (
+                        <div key={i}>{[s?.servings && `${s.servings} servings`, s?.label, s?.price && `Price: ${s.price}`].filter(Boolean).join(" • ")}</div>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">-</span>
+                  )}
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">Tags</div>
@@ -1157,6 +1847,166 @@ export default function ProductsPage() {
                   />
                 </div>
               </div>
+              {/* Nutrition Facts (Edit) */}
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <Label>Calories</Label>
+                  <Input
+                    value={editForm.nutritionFacts.calories}
+                    onChange={(e) => setEditForm((p) => ({ ...p, nutritionFacts: { ...p.nutritionFacts, calories: e.target.value } }))}
+                  />
+                </div>
+                <div>
+                  <Label>Fat</Label>
+                  <Input
+                    value={editForm.nutritionFacts.fat}
+                    onChange={(e) => setEditForm((p) => ({ ...p, nutritionFacts: { ...p.nutritionFacts, fat: e.target.value } }))}
+                  />
+                </div>
+                <div>
+                  <Label>Protein</Label>
+                  <Input
+                    value={editForm.nutritionFacts.protein}
+                    onChange={(e) => setEditForm((p) => ({ ...p, nutritionFacts: { ...p.nutritionFacts, protein: e.target.value } }))}
+                  />
+                </div>
+              </div>
+
+              {/* Ingredients (Main) Edit */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Ingredients (Main)</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setEditForm((p) => ({ ...p, ingredientsMain: [...p.ingredientsMain, { name: "", emoji: "", amount: "" }] }))}
+                  >
+                    Add Row
+                  </Button>
+                </div>
+                {editForm.ingredientsMain.map((row, idx) => (
+                  <div key={idx} className="grid grid-cols-3 gap-2">
+                    <Input
+                      placeholder="Name"
+                      value={row.name}
+                      onChange={(e) => setEditForm((p) => { const next = p.ingredientsMain.slice(); next[idx] = { ...next[idx], name: e.target.value }; return { ...p, ingredientsMain: next } })}
+                    />
+                    <Input
+                      placeholder="Emoji"
+                      value={row.emoji}
+                      onChange={(e) => setEditForm((p) => { const next = p.ingredientsMain.slice(); next[idx] = { ...next[idx], emoji: e.target.value }; return { ...p, ingredientsMain: next } })}
+                    />
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Amount"
+                        value={row.amount}
+                        onChange={(e) => setEditForm((p) => { const next = p.ingredientsMain.slice(); next[idx] = { ...next[idx], amount: e.target.value }; return { ...p, ingredientsMain: next } })}
+                      />
+                      <Button type="button" variant="ghost" onClick={() => setEditForm((p) => ({ ...p, ingredientsMain: p.ingredientsMain.filter((_, i) => i !== idx) }))}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Ingredients (Extra) Edit */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Ingredients (Extra)</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setEditForm((p) => ({ ...p, ingredientsExtra: [...p.ingredientsExtra, { name: "", emoji: "", amount: "" }] }))}
+                  >
+                    Add Row
+                  </Button>
+                </div>
+                {editForm.ingredientsExtra.map((row, idx) => (
+                  <div key={idx} className="grid grid-cols-3 gap-2">
+                    <Input placeholder="Name" value={row.name} onChange={(e) => setEditForm((p) => { const next = p.ingredientsExtra.slice(); next[idx] = { ...next[idx], name: e.target.value }; return { ...p, ingredientsExtra: next } })} />
+                    <Input placeholder="Emoji" value={row.emoji} onChange={(e) => setEditForm((p) => { const next = p.ingredientsExtra.slice(); next[idx] = { ...next[idx], emoji: e.target.value }; return { ...p, ingredientsExtra: next } })} />
+                    <div className="flex gap-2">
+                      <Input placeholder="Amount" value={row.amount} onChange={(e) => setEditForm((p) => { const next = p.ingredientsExtra.slice(); next[idx] = { ...next[idx], amount: e.target.value }; return { ...p, ingredientsExtra: next } })} />
+                      <Button type="button" variant="ghost" onClick={() => setEditForm((p) => ({ ...p, ingredientsExtra: p.ingredientsExtra.filter((_, i) => i !== idx) }))}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Ingredients Not Included Edit */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Ingredients Not Included</Label>
+                  <Button type="button" variant="outline" onClick={() => setEditForm((p) => ({ ...p, ingredientsNotIncluded: [...p.ingredientsNotIncluded, ""] }))}>Add Item</Button>
+                </div>
+                {editForm.ingredientsNotIncluded.map((val, idx) => (
+                  <div key={idx} className="flex gap-2">
+                    <Input placeholder="Item" value={val} onChange={(e) => setEditForm((p) => { const next = p.ingredientsNotIncluded.slice(); next[idx] = e.target.value; return { ...p, ingredientsNotIncluded: next } })} />
+                    <Button type="button" variant="ghost" onClick={() => setEditForm((p) => ({ ...p, ingredientsNotIncluded: p.ingredientsNotIncluded.filter((_, i) => i !== idx) }))}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Utensils Edit */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Utensils</Label>
+                  <Button type="button" variant="outline" onClick={() => setEditForm((p) => ({ ...p, utensils: [...p.utensils, ""] }))}>Add Utensil</Button>
+                </div>
+                {editForm.utensils.map((val, idx) => (
+                  <div key={idx} className="flex gap-2">
+                    <Input placeholder="Utensil" value={val} onChange={(e) => setEditForm((p) => { const next = p.utensils.slice(); next[idx] = e.target.value; return { ...p, utensils: next } })} />
+                    <Button type="button" variant="ghost" onClick={() => setEditForm((p) => ({ ...p, utensils: p.utensils.filter((_, i) => i !== idx) }))}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Dessert Suggestions Edit */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Dessert Suggestions</Label>
+                  <Button type="button" variant="outline" onClick={() => setEditForm((p) => ({ ...p, dessertSuggestions: [...p.dessertSuggestions, { name: "", price: "", imageFile: null }] }))}>Add Dessert</Button>
+                </div>
+                {editForm.dessertSuggestions.map((row, idx) => (
+                  <div key={idx} className="grid grid-cols-3 gap-2 items-center">
+                    <Input placeholder="Name" value={row.name} onChange={(e) => setEditForm((p) => { const next = p.dessertSuggestions.slice(); next[idx] = { ...next[idx], name: e.target.value }; return { ...p, dessertSuggestions: next } })} />
+                    <Input placeholder="Price" value={row.price} onChange={(e) => setEditForm((p) => { const next = p.dessertSuggestions.slice(); next[idx] = { ...next[idx], price: e.target.value }; return { ...p, dessertSuggestions: next } })} />
+                    <div className="flex items-center gap-2">
+                      <Input type="file" accept="image/*" onChange={(e) => { const file = e.target.files?.[0] || null; setEditForm((p) => { const next = p.dessertSuggestions.slice(); next[idx] = { ...next[idx], imageFile: file }; return { ...p, dessertSuggestions: next } }) }} />
+                      <Button type="button" variant="ghost" onClick={() => setEditForm((p) => ({ ...p, dessertSuggestions: p.dessertSuggestions.filter((_, i) => i !== idx) }))}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Serving Options Edit */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Serving Options</Label>
+                  <Button type="button" variant="outline" onClick={() => setEditForm((p) => ({ ...p, servingOptions: [...p.servingOptions, { servings: "", label: "", price: "" }] }))}>Add Option</Button>
+                </div>
+                {editForm.servingOptions.map((row, idx) => (
+                  <div key={idx} className="grid grid-cols-3 gap-2">
+                    <Input placeholder="Servings" value={row.servings} onChange={(e) => setEditForm((p) => { const next = p.servingOptions.slice(); next[idx] = { ...next[idx], servings: e.target.value }; return { ...p, servingOptions: next } })} />
+                    <Input placeholder="Label" value={row.label} onChange={(e) => setEditForm((p) => { const next = p.servingOptions.slice(); next[idx] = { ...next[idx], label: e.target.value }; return { ...p, servingOptions: next } })} />
+                    <div className="flex gap-2">
+                      <Input placeholder="Price" value={row.price} onChange={(e) => setEditForm((p) => { const next = p.servingOptions.slice(); next[idx] = { ...next[idx], price: e.target.value }; return { ...p, servingOptions: next } })} />
+                      <Button type="button" variant="ghost" onClick={() => setEditForm((p) => ({ ...p, servingOptions: p.servingOptions.filter((_, i) => i !== idx) }))}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
                   <input
@@ -1293,9 +2143,7 @@ export default function ProductsPage() {
                     <TableRow key={product.id}>
                       <TableCell className="font-medium">{product.name}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">
-                        {product.categoryId != null && categoryMap[product.categoryId]
-                          ? categoryMap[product.categoryId]
-                          : "-"}
+                        {categoryMap[Number(product.categoryId ?? -1)] || product.productCategories?.name || "-"}
                       </TableCell>
                       <TableCell>
                         {product.images && product.images.length > 0 ? (

@@ -23,6 +23,7 @@ import SubscriptionAndMealSelections from "./pages/dashboard/subscription_and_me
 import QuestionsPage from "./pages/dashboard/questions/QuestionsPage"
 import AnswersPage from "./pages/dashboard/answers/AnswersPage"
 import UserAnswersPage from "./pages/dashboard/users_answers/UserAnswersPage"
+import ContactUsPage from "./pages/dashboard/contact-us/ContactUsPage"
 
 function App() {
   return (
@@ -48,6 +49,7 @@ function App() {
             <Route path="questions" element={<QuestionsPage />} />
             <Route path="preferences" element={<PreferencesPage />} />
             <Route path="user-answers" element={<UserAnswersPage />} />
+            <Route path="contact-us-messages" element={<ContactUsPage />} />
             <Route path="addons" element={<AddonsPage />} />
             <Route path="wallets" element={<WalletsPage />} />
             <Route path="subscription-intervals" element={<SubscriptionIntervalsPage />} />

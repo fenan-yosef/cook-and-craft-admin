@@ -65,6 +65,11 @@ const menuItems = [
           },
         ],
       }, 
+      {
+        title: "Contact Us Messages",
+        url: "/dashboard/contact-us-messages",
+        icon: Settings,
+      }
     ]
   },
   {
