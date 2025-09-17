@@ -66,6 +66,11 @@ interface Post {
   content: string;
   likes_count: number;
   comments_count: number;
+  user?: {
+    id: number;
+    full_name: string;
+    display_name: string;
+  };
   post_versions: {
     id: number;
     description: string;
@@ -135,7 +140,7 @@ export default function PostsPage() {
 
         if (token) apiService.setAuthToken(token);
 
-        const url = `/posts?withLikes=true&withPolls=true&withVersions=true&page=${page}&isDeleted=${showDeleted}&authorId=${user.id}`
+        const url = `/posts?withLikes=true&withPolls=true&withVersions=true&page=${page}&isDeleted=${showDeleted}`
           + `&order=desc&sort=desc&orderBy=created_at&sortBy=created_at`;
 
         const res = await apiService.get(url);
@@ -1062,6 +1067,12 @@ export default function PostsPage() {
                 <div className="grid grid-cols-4 items-center gap-4">
                   <span className="col-span-1 text-sm font-medium">Likes:</span>
                   <span className="col-span-3">{selectedPost.likes_count}</span>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <span className="col-span-1 text-sm font-medium">
+                    Posted by:
+                  </span>
+                  <span className="col-span-3">{selectedPost.user?.full_name || selectedPost.user?.display_name}</span>
                 </div>
                 {selectedPost.post_poll && (
                   <div className="grid gap-2 mt-4">
