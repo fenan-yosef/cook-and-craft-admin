@@ -51,6 +51,20 @@ interface Product {
   isOnSale?: boolean
   currency?: string
   priceFormatted?: string
+  // Extended backend fields (for view/edit/add consistency)
+  nutrition_facts?: {
+    calories?: number | string
+    fat?: number | string
+    protein?: number | string
+    [key: string]: any
+  }
+  ingredients_main?: Array<{ name?: string; emoji?: string; amount?: string }>
+  ingredients_extra?: Array<{ name?: string; emoji?: string; amount?: string }>
+  ingredients_not_included?: string[]
+  utensils?: string[]
+  dessert_suggestions?: Array<{ name?: string; image?: string; price?: number | string }>
+  serving_options?: Array<{ servings?: number | string; label?: string; price?: number | string }>
+  productVersionNumber?: number | string
 }
 
 export default function ProductsPage() {
@@ -230,6 +244,16 @@ export default function ProductsPage() {
           isOnSale: (item.isProductOnSale ?? 0) === 1,
           currency: item.currency ?? undefined,
           priceFormatted: item.priceFormatted ?? undefined,
+          // Add any additional fields you need to map here
+          nutrition_facts: item.nutrition_facts ?? undefined,
+          ingredients_main: item.ingredients_main ?? undefined,
+          ingredients_extra: item.ingredients_extra ?? undefined,
+          ingredients_not_included: item.ingredients_not_included ?? undefined,
+          utensils: item.utensils ?? undefined,
+          dessert_suggestions: item.dessert_suggestions ?? undefined,
+          serving_options: item.serving_options ?? undefined,
+          productVersionNumber: item.productVersionNumber ?? undefined,
+          
         }
       })
       setProducts(mappedProducts)

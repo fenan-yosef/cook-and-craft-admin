@@ -24,6 +24,7 @@ import QuestionsPage from "./pages/dashboard/questions/QuestionsPage"
 import AnswersPage from "./pages/dashboard/answers/AnswersPage"
 import UserAnswersPage from "./pages/dashboard/users_answers/UserAnswersPage"
 import ContactUsPage from "./pages/dashboard/contact-us/ContactUsPage"
+import ConversionRulesPage from "./pages/dashboard/conversion-rules/ConversionRulesPage"
 
 function App() {
   return (
@@ -54,6 +55,7 @@ function App() {
             <Route path="wallets" element={<WalletsPage />} />
             <Route path="subscription-intervals" element={<SubscriptionIntervalsPage />} />
             <Route path="subscription-meal-selections" element={<SubscriptionAndMealSelections />} />
+            <Route path="conversion-rules" element={<ConversionRulesPage />} />
           </Route>
         </Routes>
         <Toaster />

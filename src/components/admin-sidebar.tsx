@@ -69,6 +69,11 @@ const menuItems = [
         title: "Contact Us Messages",
         url: "/dashboard/contact-us-messages",
         icon: Settings,
+      },
+      {
+        title: "Conversion Rules",
+        url: "/dashboard/conversion-rules",
+        icon: Settings,
       }
     ]
   },
