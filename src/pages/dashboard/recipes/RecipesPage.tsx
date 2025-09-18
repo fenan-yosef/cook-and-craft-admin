@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Search, MoreHorizontal, Eye, Plus } from "lucide-react"
+import { Search, MoreHorizontal, Eye, Plus, Check, X } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { apiService } from "@/lib/api-service"
 import { useAuth } from "@/contexts/auth-context"
@@ -32,6 +32,14 @@ type ApiRecipe = {
   Nutrition_facts?: Array<{ label?: string; value?: string } | string>
   Utensils?: Array<string | { name?: string }>
 }
+
+// Pending recipe requests (waiting for admin approval)
+type PendingRecipe = ApiRecipe & {
+  Requested_By?: string
+  Requested_At?: string
+}
+
+const PENDING_STORAGE_KEY = "mock_recipe_requests"
 
 // Best-effort image URL extraction from various backend formats
 function getImageSrc(img: any): string | null {
@@ -59,6 +67,9 @@ export default function RecipesPage() {
   const [recipes, setRecipes] = useState<ApiRecipe[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
+  // Mock: pending recipe requests
+  const [pending, setPending] = useState<PendingRecipe[]>([])
+  const [pendingLoading, setPendingLoading] = useState(false)
   const [selectedRecipe, setSelectedRecipe] = useState<ApiRecipe | null>(null)
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
@@ -104,11 +115,104 @@ export default function RecipesPage() {
   useEffect(() => {
     if (token) {
       fetchRecipes()
+      loadPending()
     } else if (!authLoading) {
       setLoading(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, authLoading])
+
+  // Mock loaders for pending requests
+  const loadPending = () => {
+    setPendingLoading(true)
+    try {
+      const raw = localStorage.getItem(PENDING_STORAGE_KEY)
+      if (raw) {
+        const list = JSON.parse(raw)
+        if (Array.isArray(list)) {
+          setPending(list)
+          return
+        }
+      }
+      // Seed with mock items if none
+      const seed: PendingRecipe[] = [
+        {
+          Recipe_ID: 9001,
+          Name: "Grilled Veggie Wrap",
+          Description: "Whole-wheat wrap with grilled vegetables and hummus",
+          Calories: 520,
+          Prep_minutes: 15,
+          Is_active: 0,
+          Images: [],
+          Ingredients: [
+            { name: "Whole-wheat wrap", amount: "1" },
+            { name: "Grilled zucchini", amount: "100g" },
+          ],
+          Nutrition_facts: [
+            { label: "Protein", value: "14g" },
+            { label: "Carbs", value: "65g" },
+          ],
+          Utensils: ["Pan", "Tongs"],
+          Requested_By: "user_123",
+          Requested_At: new Date().toISOString(),
+        },
+        {
+          Recipe_ID: 9002,
+          Name: "Berry Yogurt Parfait",
+          Description: "Layers of yogurt, granola, and fresh berries",
+          Calories: 380,
+          Prep_minutes: 10,
+          Is_active: 0,
+          Images: [],
+          Ingredients: [
+            { name: "Greek yogurt", amount: "200g" },
+            { name: "Granola", amount: "50g" },
+          ],
+          Nutrition_facts: [
+            { label: "Protein", value: "18g" },
+          ],
+          Utensils: ["Glass", "Spoon"],
+          Requested_By: "user_456",
+          Requested_At: new Date(Date.now() - 86400000).toISOString(),
+        },
+      ]
+      setPending(seed)
+      localStorage.setItem(PENDING_STORAGE_KEY, JSON.stringify(seed))
+    } catch {
+      // ignore
+    } finally {
+      setPendingLoading(false)
+    }
+  }
+
+  const persistPending = (list: PendingRecipe[]) => {
+    setPending(list)
+    try { localStorage.setItem(PENDING_STORAGE_KEY, JSON.stringify(list)) } catch {}
+  }
+
+  const approveRequest = (req: PendingRecipe) => {
+    // Move to recipes list (mock) and remove from pending
+    const newRecipe: ApiRecipe = {
+      Recipe_ID: req.Recipe_ID,
+      Name: req.Name,
+      Description: req.Description,
+      Calories: req.Calories,
+      Prep_minutes: req.Prep_minutes,
+      Is_active: 1,
+      Images: req.Images || [],
+      Ingredients: req.Ingredients,
+      Nutrition_facts: req.Nutrition_facts,
+      Utensils: req.Utensils,
+    }
+    setRecipes((prev) => [newRecipe, ...prev])
+    persistPending(pending.filter((p) => p.Recipe_ID !== req.Recipe_ID))
+    toast({ title: "Approved", description: `${req.Name} moved to recipes.` })
+  }
+
+  const rejectRequest = (req: PendingRecipe) => {
+    persistPending(pending.filter((p) => p.Recipe_ID !== req.Recipe_ID))
+    toast({ title: "Rejected", description: `${req.Name} request removed.` })
+  }
 
   // Generate object URLs for new image previews
   useEffect(() => {
@@ -639,6 +743,112 @@ export default function RecipesPage() {
                       </TableCell>
                     </TableRow>
                   ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        {/* Recipes Requests (pending approval) */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Recipes Requests</CardTitle>
+            <CardDescription>Submissions waiting for admin approval</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center space-x-2 mb-4">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search pending recipes..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
+              <Button variant="outline" onClick={loadPending}>Refresh</Button>
+            </div>
+
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Recipe</TableHead>
+                  <TableHead>Requested By</TableHead>
+                  <TableHead>Requested At</TableHead>
+                  <TableHead>Calories (kcal)</TableHead>
+                  <TableHead>Prep (min)</TableHead>
+                  <TableHead>Images</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pendingLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center">Loading...</TableCell>
+                  </TableRow>
+                ) : pending.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center">No pending requests</TableCell>
+                  </TableRow>
+                ) : (
+                  pending
+                    .filter((r) => {
+                      const term = searchTerm.toLowerCase()
+                      return (
+                        r.Name?.toLowerCase().includes(term) ||
+                        r.Description?.toLowerCase().includes(term) ||
+                        (r.Requested_By || "").toLowerCase().includes(term)
+                      )
+                    })
+                    .map((r) => (
+                      <TableRow key={r.Recipe_ID}>
+                        <TableCell>
+                          <div className="max-w-xs">
+                            <div className="font-medium flex items-center">{r.Name}</div>
+                            <div className="text-sm text-muted-foreground truncate">{r.Description}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell>{r.Requested_By ?? "—"}</TableCell>
+                        <TableCell>
+                          {r.Requested_At ? new Date(r.Requested_At).toLocaleString() : "—"}
+                        </TableCell>
+                        <TableCell>{r.Calories ?? "-"}</TableCell>
+                        <TableCell>{r.Prep_minutes ?? "-"}</TableCell>
+                        <TableCell>
+                          {Array.isArray(r.Images) && r.Images.length > 0 ? (
+                            <div className="flex items-center gap-2">
+                              {r.Images.slice(0, 3).map((img: any, i: number) => {
+                                const src = getImageSrc(img)
+                                return (
+                                  <div key={i} className="w-10 h-10 rounded overflow-hidden border bg-muted">
+                                    {src ? (
+                                      <img src={src} alt={`Img ${i + 1}`} className="w-full h-full object-cover" />
+                                    ) : (
+                                      <div className="w-full h-full bg-muted" />
+                                    )}
+                                  </div>
+                                )
+                              })}
+                              {r.Images.length > 3 ? (
+                                <span className="text-xs text-muted-foreground">+{r.Images.length - 3}</span>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button size="sm" variant="secondary" onClick={() => approveRequest(r)}>
+                              <Check className="mr-1 h-4 w-4" /> Approve
+                            </Button>
+                            <Button size="sm" variant="destructive" onClick={() => rejectRequest(r)}>
+                              <X className="mr-1 h-4 w-4" /> Reject
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
                 )}
               </TableBody>
             </Table>
