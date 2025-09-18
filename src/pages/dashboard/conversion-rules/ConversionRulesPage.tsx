@@ -256,7 +256,7 @@ export default function ConversionRulesPage() {
       </Card>
 
       <div className="text-xs text-muted-foreground">
-        This page uses mock data stored in your browser. When the API is ready, replace loads/saves with the proper endpoints.
+        This page uses mock data stored in the browser. When the API is ready, replace loads/saves with the proper endpoints.
       </div>
     </div>
   )
