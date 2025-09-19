@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,9 @@ export default function DeliveryZonesPage() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [addLoading, setAddLoading] = useState(false);
   const [addForm, setAddForm] = useState({ name: "", scope: "", locationsCsv: "", fee: "", is_enabled: false, daysCsv: "" });
+  const [addMapPoints, setAddMapPoints] = useState<{ latitude: number; longitude: number }[]>([]);
+  const addMapInstance = useRef<any>(null);
+  const viewMapInstance = useRef<any>(null);
   // Edit Zone modal state
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
@@ -59,6 +62,90 @@ export default function DeliveryZonesPage() {
     apiService.setAuthToken(token);
     fetchZones();
   }, []);
+
+  // Initialize Leaflet map for Add Zone when modal opens
+  useEffect(() => {
+    if (!isAddOpen) {
+      // Clean up map instance when closed
+      if (addMapInstance.current?.map) {
+        addMapInstance.current.map.remove();
+        addMapInstance.current = null;
+      }
+      setAddMapPoints([]);
+      return;
+    }
+    const init = () => {
+      const el = document.getElementById('add-zone-map');
+      const L:any = (window as any).L;
+      if (!el || !L) return;
+      if (addMapInstance.current?.map) {
+        addMapInstance.current.map.remove();
+        addMapInstance.current = null;
+      }
+      const map = L.map(el).setView([30.0444, 31.2357], 6);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
+      const markers: any[] = [];
+      const addMarker = (lat:number, lng:number) => {
+        const m = L.marker([lat, lng]).addTo(map);
+        markers.push(m);
+        setAddMapPoints(prev => ([...prev, { latitude: lat, longitude: lng }]));
+      };
+      map.on('click', (e:any) => addMarker(e.latlng.lat, e.latlng.lng));
+      addMapInstance.current = { map, markers };
+    };
+    // Defer until dialog content is in DOM
+    const id = window.requestAnimationFrame(init);
+    return () => window.cancelAnimationFrame(id);
+  }, [isAddOpen]);
+
+  // Initialize Leaflet map for View Zone when modal opens and data is available
+  useEffect(() => {
+    if (!isViewOpen) {
+      if (viewMapInstance.current?.map) {
+        viewMapInstance.current.map.remove();
+        viewMapInstance.current = null;
+      }
+      return;
+    }
+    const init = () => {
+      const el = document.getElementById('view-zone-map');
+      const L: any = (window as any).L;
+      if (!el || !L || !viewData) return;
+      if (viewMapInstance.current?.map) {
+        viewMapInstance.current.map.remove();
+        viewMapInstance.current = null;
+      }
+      const locs = (viewData as any).deliveryZoneGeographicalLocation ?? (viewData as any).locations;
+      const map = L.map(el);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
+      const markers: any[] = [];
+      if (Array.isArray(locs) && locs.length > 0) {
+        const bounds = L.latLngBounds([]);
+        locs.forEach((p: any) => {
+          const lat = p?.latitude; const lng = p?.longitude;
+          if (typeof lat === 'number' && typeof lng === 'number') {
+            const m = L.marker([lat, lng]).addTo(map);
+            markers.push(m);
+            bounds.extend([lat, lng]);
+          }
+        });
+        if (bounds.isValid()) {
+          map.fitBounds(bounds, { padding: [20, 20] });
+        } else {
+          map.setView([30.0444, 31.2357], 6);
+        }
+      } else {
+        map.setView([30.0444, 31.2357], 6);
+      }
+      viewMapInstance.current = { map, markers };
+    };
+    const id = window.requestAnimationFrame(init);
+    return () => window.cancelAnimationFrame(id);
+  }, [isViewOpen, viewData]);
 
   const fetchZones = async () => {
     try {
@@ -165,23 +252,17 @@ export default function DeliveryZonesPage() {
               e.preventDefault();
               setAddLoading(true);
               try {
-                const locations = addForm.locationsCsv.split(';').map(s => {
-                  const [lat, lng] = s.split(',').map(v => v.trim());
-                  return { latitude: parseFloat(lat), longitude: parseFloat(lng) };
-                });
-                if (locations.length < 4) {
-                  toast({ title: 'Error', description: 'Please enter at least 4 locations.', variant: 'destructive' });
-                  setAddLoading(false);
+                const locations = addMapPoints;
+                if (!Array.isArray(locations) || locations.length < 4) {
+                  toast({ title: 'Error', description: 'Please add at least 4 pins on the map.', variant: 'destructive' });
                   return;
                 }
-                const days = addForm.daysCsv.split(',').map(d => d.trim());
-                const payload = {
+                const payload: any = {
                   name: addForm.name,
                   scope: addForm.scope,
                   geographical_location: locations,
                   fee: parseFloat(addForm.fee),
-                  is_enabled: addForm.is_enabled ? true : false,
-                  days: days,
+                  is_enabled: !!addForm.is_enabled,
                 };
                 await apiService.post('/admins/delivery-zones', payload);
                 toast({ title: 'Success', description: 'Zone added.' });
@@ -191,7 +272,7 @@ export default function DeliveryZonesPage() {
                 const res = err?.response?.data || err?.response;
                 if (res?.message === 'Validation failed.' && res?.error) {
                   // Show only validation errors from backend (object of arrays)
-                  const errorMessages = Object.values(res.error)
+                  const errorMessages = Object.values(res.error as any)
                     .flat()
                     .join(' ');
                   toast({ title: 'Validation Error', description: errorMessages, variant: 'destructive' });
@@ -201,16 +282,44 @@ export default function DeliveryZonesPage() {
               } finally { setAddLoading(false); }
             }} className="space-y-4">
               <div><Label htmlFor="name">Name</Label><Input id="name" name="name" value={addForm.name} onChange={e=>setAddForm(prev=>({...prev,name:e.target.value}))} required/></div>
-              <div><Label htmlFor="scope">Scope</Label><Input id="scope" name="scope" value={addForm.scope} onChange={e=>setAddForm(prev=>({...prev,scope:e.target.value}))} required/></div>
-              <div><Label htmlFor="locationsCsv">Locations (lat,lng;...)</Label><Input id="locationsCsv" name="locationsCsv" value={addForm.locationsCsv} onChange={e=>setAddForm(prev=>({...prev,locationsCsv:e.target.value}))} placeholder="31.2304,121.4737; 30.0444,31.2357; 29.9765,31.1313; 29.9820,31.1325" required/></div>
+              <div>
+                <Label htmlFor="scope">Status</Label>
+                <select id="scope" className="mt-2 w-full border rounded px-3 py-2" value={addForm.scope} onChange={e=>setAddForm(prev=>({...prev,scope:e.target.value}))} required>
+                  <option value="" disabled>Select status</option>
+                  <option value="shop">shop</option>
+                  <option value="subs">subs</option>
+                  <option value="both">both</option>
+                </select>
+              </div>
+              <div>
+                <Label>Locations</Label>
+                <div className="mt-2 space-y-2">
+                  <div id="add-zone-map" className="h-64 rounded border" />
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs text-muted-foreground">Click the map to add pins (min 4).</div>
+                    <Button type="button" variant="outline" size="sm" onClick={() => {
+                      if (addMapInstance.current) {
+                        addMapInstance.current.markers.forEach((m:any)=>m.remove());
+                        addMapInstance.current.markers = [];
+                      }
+                      setAddMapPoints([]);
+                    }}>Clear pins</Button>
+                  </div>
+                  {addMapPoints.length > 0 && (
+                    <div className="max-h-24 overflow-auto border rounded p-2 text-xs">
+                      {addMapPoints.map((p, i) => (
+                        <div key={i}>{p.latitude.toFixed(6)}, {p.longitude.toFixed(6)}</div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
               <div><Label htmlFor="fee">Fee</Label><Input id="fee" name="fee" type="number" value={addForm.fee} onChange={e=>setAddForm(prev=>({...prev,fee:e.target.value}))} required/></div>
               <div className="flex items-center gap-2"><input id="is_enabled" name="is_enabled" type="checkbox" checked={addForm.is_enabled} onChange={e=>setAddForm(prev=>({...prev,is_enabled:e.target.checked}))}/><Label htmlFor="is_enabled">Active</Label></div>
               <DialogFooter><Button variant="outline" onClick={()=>setIsAddOpen(false)}>Cancel</Button><Button type="submit" disabled={addLoading}>{addLoading?'Adding...':'Add'}</Button></DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
-
-        {/* Edit Zone Modal */}
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
           <DialogContent className="sm:max-w-[600px]">
             <DialogHeader>
@@ -321,7 +430,7 @@ export default function DeliveryZonesPage() {
                           </div>
                         ))}
                       </TableCell>
-                      <TableCell className="cursor-pointer" onClick={() => openViewById(zone.id)}>${zone.fee.toFixed(2)}</TableCell>
+                      <TableCell className="cursor-pointer" onClick={() => openViewById(zone.id)}>SAR {zone.fee.toFixed(2)}</TableCell>
                       <TableCell className="cursor-pointer" onClick={() => openViewById(zone.id)}>
                         <Badge variant={zone.is_enabled ? "default" : "destructive"}>
                           {zone.is_enabled ? "Active" : "Inactive"}
@@ -371,7 +480,6 @@ export default function DeliveryZonesPage() {
               <div className="space-y-4">
                 {/* Quick summary when common fields exist */}
                 {(() => {
-                  const id = (viewData as any).deliveryZoneId ?? (viewData as any).id;
                   const name = (viewData as any).deliveryZoneName ?? (viewData as any).name;
                   const scope = (viewData as any).deliveryZoneScope ?? (viewData as any).scope;
                   const fee = (viewData as any).deliveryZoneFee ?? (viewData as any).fee;
@@ -401,13 +509,14 @@ export default function DeliveryZonesPage() {
                         </div>
                       )}
                       {Array.isArray(locs) && (
-                        <div className="sm:col-span-2">
+                        <div className="sm:col-span-2 space-y-2">
                           <span className="text-muted-foreground">Locations:</span>
-                          <div className="mt-1 max-h-40 overflow-auto border rounded p-2">
+                          <div className="max-h-40 overflow-auto border rounded p-2">
                             {locs.map((l:any, i:number) => (
                               <div key={i} className="text-xs">{l.latitude}, {l.longitude}</div>
                             ))}
                           </div>
+                          <div id="view-zone-map" className="h-64 rounded border" />
                         </div>
                       )}
                       <div className="sm:col-span-2">
