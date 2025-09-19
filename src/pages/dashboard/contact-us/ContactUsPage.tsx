@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Search, RefreshCw } from "lucide-react"
 import { apiService } from "@/lib/api-service"
 import { useToast } from "@/hooks/use-toast"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 type ContactMessage = {
   id: number
@@ -15,36 +16,26 @@ type ContactMessage = {
   created_at?: string
 }
 
-const mockData: ContactMessage[] = [
-  {
-    id: 1,
-    full_name: "Omar Ahmed Abuelkhier",
-    reason: "blablalba",
-    description: "blablablablabalbalbalbal",
-    created_at: new Date().toISOString(),
-  },
-]
-
 export default function ContactUsPage() {
   const [messages, setMessages] = useState<ContactMessage[]>([])
   const [loading, setLoading] = useState<boolean>(false)
   const [search, setSearch] = useState<string>("")
   const { toast } = useToast()
+  const [isViewOpen, setIsViewOpen] = useState(false)
+  const [selected, setSelected] = useState<ContactMessage | null>(null)
 
   const fetchMessages = async () => {
     try {
       setLoading(true)
       const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
       if (token) apiService.setAuthToken(token)
-      // When backend is ready, replace this with the real endpoint, e.g. /contact_messages
-      // For now, fall back to mock data
-      // const res = await apiService.get('/contact_messages')
-      // const items = Array.isArray(res?.data) ? res.data : []
-      const items = mockData
-      setMessages(items)
+      const res = await apiService.get('/contact-us-messages')
+      const items = Array.isArray(res?.data) ? res.data : []
+      setMessages(items as ContactMessage[])
     } catch (e: any) {
-      toast({ title: "Using mock data", description: "Failed to fetch from API; showing mock entries." })
-      setMessages(mockData)
+      const desc = e?.message || 'Failed to fetch contact messages.'
+      toast({ title: "Error", description: desc, variant: 'destructive' })
+      setMessages([])
     } finally {
       setLoading(false)
     }
@@ -98,7 +89,7 @@ export default function ContactUsPage() {
                   <TableHead>Full Name</TableHead>
                   <TableHead>Reason</TableHead>
                   <TableHead>Description</TableHead>
-                  <TableHead>Created</TableHead>
+                  {/* <TableHead>Created</TableHead> */}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -113,10 +104,10 @@ export default function ContactUsPage() {
                 ) : (
                   filtered.map((m) => (
                     <TableRow key={m.id}>
-                      <TableCell className="font-medium">{m.full_name}</TableCell>
-                      <TableCell>{m.reason}</TableCell>
-                      <TableCell className="max-w-[480px] truncate" title={m.description}>{m.description}</TableCell>
-                      <TableCell>{m.created_at ? new Date(m.created_at).toLocaleString() : "—"}</TableCell>
+                      <TableCell className="font-medium cursor-pointer" onClick={()=>{ setSelected(m); setIsViewOpen(true); }}>{m.full_name}</TableCell>
+                      <TableCell className="cursor-pointer" onClick={()=>{ setSelected(m); setIsViewOpen(true); }}>{m.reason}</TableCell>
+                      <TableCell className="max-w-[480px] truncate cursor-pointer" title={m.description} onClick={()=>{ setSelected(m); setIsViewOpen(true); }}>{m.description}</TableCell>
+                      {/* <TableCell className="cursor-pointer" onClick={()=>{ setSelected(m); setIsViewOpen(true); }}>{m.created_at ? new Date(m.created_at).toLocaleString() : "—"}</TableCell> */}
                     </TableRow>
                   ))
                 )}
@@ -124,6 +115,32 @@ export default function ContactUsPage() {
             </Table>
           </CardContent>
         </Card>
+
+        {/* View Message Modal */}
+        <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
+          <DialogContent className="sm:max-w-[560px]">
+            <DialogHeader>
+              <DialogTitle>Contact Message</DialogTitle>
+              <DialogDescription>Details of the selected message</DialogDescription>
+            </DialogHeader>
+            {selected ? (
+              <div className="space-y-3 text-sm">
+                <div><span className="text-muted-foreground">ID:</span> {selected.id}</div>
+                <div><span className="text-muted-foreground">Full Name:</span> {selected.full_name}</div>
+                <div><span className="text-muted-foreground">Reason:</span> {selected.reason}</div>
+                <div>
+                  <span className="text-muted-foreground">Description:</span>
+                  <div className="mt-2 max-h-[420px] overflow-auto rounded border bg-muted/30 p-3 whitespace-pre-wrap break-words leading-relaxed">
+                    {selected.description}
+                  </div>
+                </div>
+                {/* <div><span className="text-muted-foreground">Created:</span> {selected.created_at ? new Date(selected.created_at).toLocaleString() : '—'}</div> */}
+              </div>
+            ) : (
+              <div className="py-4">No message selected.</div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   )
