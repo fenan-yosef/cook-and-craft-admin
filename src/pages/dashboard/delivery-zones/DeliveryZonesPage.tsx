@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Search, MoreHorizontal, MapPin, Edit, Trash2 } from "lucide-react";
+import { Search, MoreHorizontal, MapPin, Edit, Trash2, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiService } from "@/lib/api-service";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -35,6 +35,24 @@ export default function DeliveryZonesPage() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const [editForm, setEditForm] = useState({ id: "", name: "", scope: "", locationsCsv: "", fee: "", is_enabled: false, daysCsv: "" });
+
+  // View Zone modal state
+  const [isViewOpen, setIsViewOpen] = useState(false);
+  const [viewLoading, setViewLoading] = useState(false);
+  const [viewData, setViewData] = useState<any | null>(null);
+  const [viewError, setViewError] = useState<string | null>(null);
+  const [viewZoneId, setViewZoneId] = useState<number | null>(null);
+
+  // Add Delivery Day modal state
+  const [isAddDayOpen, setIsAddDayOpen] = useState(false);
+  const [addDayLoading, setAddDayLoading] = useState(false);
+  const [addDayForm, setAddDayForm] = useState<{ dayOfWeek: string }>({ dayOfWeek: "" });
+
+  // Add Time Slot modal state
+  const [isAddSlotOpen, setIsAddSlotOpen] = useState(false);
+  const [addSlotLoading, setAddSlotLoading] = useState(false);
+  const [addSlotForm, setAddSlotForm] = useState<{ startAt: string; endsAt: string; capacity: string }>({ startAt: "", endsAt: "", capacity: "" });
+  const [currentDeliveryDay, setCurrentDeliveryDay] = useState<{ id: number; dayOfWeek?: number } | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem("auth_token") || "";
@@ -99,6 +117,32 @@ export default function DeliveryZonesPage() {
       daysCsv: zone.days.join(', '),
     });
     setIsEditOpen(true);
+  };
+
+  // Open View Zone modal and fetch full details from GET endpoint
+  const openViewById = async (id: number) => {
+    try {
+      setIsViewOpen(true);
+      setViewLoading(true);
+      setViewError(null);
+      setViewData(null);
+      setViewZoneId(id);
+      const resp = await apiService.get(`/admins/delivery-zones/${id}`);
+      const data = (resp && typeof resp === 'object' && 'data' in resp) ? (resp as any).data : resp;
+      setViewData(data);
+    } catch (err: any) {
+      const msg = err?.message || 'Failed to fetch delivery zone details';
+      setViewError(msg);
+      toast({ title: 'Error', description: msg, variant: 'destructive' });
+    } finally {
+      setViewLoading(false);
+    }
+  };
+
+  const refreshView = async () => {
+    if (viewZoneId != null) {
+      await openViewById(viewZoneId);
+    }
   };
 
   return (
@@ -268,17 +312,17 @@ export default function DeliveryZonesPage() {
                 ) : (
                   filteredZones.map((zone) => (
                     <TableRow key={zone.id}>
-                      <TableCell>{zone.name}</TableCell>
-                      <TableCell>{zone.scope}</TableCell>
-                      <TableCell>
+                      <TableCell className="cursor-pointer" onClick={() => openViewById(zone.id)}>{zone.name}</TableCell>
+                      <TableCell className="cursor-pointer" onClick={() => openViewById(zone.id)}>{zone.scope}</TableCell>
+                      <TableCell className="cursor-pointer" onClick={() => openViewById(zone.id)}>
                         {zone.locations.map((loc, idx) => (
                           <div key={idx} className="text-sm">
                             {loc.latitude}, {loc.longitude}
                           </div>
                         ))}
                       </TableCell>
-                      <TableCell>${zone.fee.toFixed(2)}</TableCell>
-                      <TableCell>
+                      <TableCell className="cursor-pointer" onClick={() => openViewById(zone.id)}>${zone.fee.toFixed(2)}</TableCell>
+                      <TableCell className="cursor-pointer" onClick={() => openViewById(zone.id)}>
                         <Badge variant={zone.is_enabled ? "default" : "destructive"}>
                           {zone.is_enabled ? "Active" : "Inactive"}
                         </Badge>
@@ -292,6 +336,9 @@ export default function DeliveryZonesPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openViewById(zone.id)}>
+                              <Eye className="mr-2 h-4 w-4" /> View
+                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => openEditModal(zone)}>
                               <Edit className="mr-2 h-4 w-4" /> Edit
                             </DropdownMenuItem>
@@ -308,6 +355,218 @@ export default function DeliveryZonesPage() {
             </Table>
           </CardContent>
         </Card>
+
+        {/* View Zone Modal */}
+        <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
+          <DialogContent className="sm:max-w-[700px]">
+            <DialogHeader>
+              <DialogTitle>View Delivery Zone</DialogTitle>
+              <DialogDescription>Full details</DialogDescription>
+            </DialogHeader>
+            {viewLoading ? (
+              <div className="py-6">Loading details...</div>
+            ) : viewError ? (
+              <div className="text-red-600 py-4">{viewError}</div>
+            ) : viewData ? (
+              <div className="space-y-4">
+                {/* Quick summary when common fields exist */}
+                {(() => {
+                  const id = (viewData as any).deliveryZoneId ?? (viewData as any).id;
+                  const name = (viewData as any).deliveryZoneName ?? (viewData as any).name;
+                  const scope = (viewData as any).deliveryZoneScope ?? (viewData as any).scope;
+                  const fee = (viewData as any).deliveryZoneFee ?? (viewData as any).fee;
+                  const enabled = (viewData as any).isDeliveryZoneEnabled ?? (viewData as any).is_enabled;
+                  const deliveryDays = (viewData as any).deliveryDays ?? (viewData as any).delivery_zone_days;
+                  const locs = (viewData as any).deliveryZoneGeographicalLocation ?? (viewData as any).locations;
+                  const dayNameFromNumber = (n: any) => {
+                    const d = Number(n);
+                    const names = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+                    // Prefer ISO 1-7 (Mon-Sun). If 1..7 provided, map 1->Monday ... 7->Sunday
+                    if (d >= 1 && d <= 7) {
+                      const isoNames = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+                      return isoNames[d - 1];
+                    }
+                    // Fallback for 0..6 (Sun..Sat)
+                    if (d >= 0 && d <= 6) return names[d];
+                    return String(n);
+                  };
+                  return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                      {name !== undefined && <div><span className="text-muted-foreground">Name:</span> {String(name)}</div>}
+                      {scope !== undefined && <div><span className="text-muted-foreground">Scope:</span> {String(scope)}</div>}
+                      {fee !== undefined && <div><span className="text-muted-foreground">Fee:</span> ${Number(fee).toFixed(2)}</div>}
+                      {enabled !== undefined && (
+                        <div>
+                          <span className="text-muted-foreground">Status:</span> {enabled ? 'Active' : 'Inactive'}
+                        </div>
+                      )}
+                      {Array.isArray(locs) && (
+                        <div className="sm:col-span-2">
+                          <span className="text-muted-foreground">Locations:</span>
+                          <div className="mt-1 max-h-40 overflow-auto border rounded p-2">
+                            {locs.map((l:any, i:number) => (
+                              <div key={i} className="text-xs">{l.latitude}, {l.longitude}</div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <div className="sm:col-span-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Delivery Days</span>
+                          {viewZoneId != null && (
+                            <Button size="sm" variant="secondary" onClick={() => setIsAddDayOpen(true)}>Add Delivery Day</Button>
+                          )}
+                        </div>
+                        <div className="mt-1 space-y-2">
+                          {Array.isArray(deliveryDays) && deliveryDays.length > 0 ? (
+                            deliveryDays.map((d:any, i:number) => {
+                              const dow = d?.dayOfWeek ?? d?.day_of_week ?? d?.day;
+                              const slots = d?.deliveryTimeSlots ?? d?.delivery_time_slots ?? [];
+                              return (
+                                <div key={i} className="text-xs border rounded p-2">
+                                  <div className="flex items-center justify-between">
+                                    <div className="font-medium">{dayNameFromNumber(dow)}</div>
+                                    <Button size="sm" variant="outline" onClick={() => { setCurrentDeliveryDay({ id: d?.id, dayOfWeek: dow }); setIsAddSlotOpen(true); }}>Add Time Slot</Button>
+                                  </div>
+                                  {Array.isArray(slots) && slots.length > 0 ? (
+                                    <ul className="ml-3 list-disc">
+                                      {slots.map((t:any, j:number) => {
+                                        const start = t?.startTime ?? t?.start_time ?? t?.startAt ?? t?.start_at ?? null;
+                                        const end = t?.endTime ?? t?.end_time ?? t?.endsAt ?? t?.ends_at ?? null;
+                                        const capacity = t?.capacity;
+                                        return (
+                                          <li key={j}>
+                                            {start && end ? `${start} - ${end}` : 'All day'}
+                                            {typeof capacity !== 'undefined' ? ` • Capacity: ${capacity}` : ''}
+                                          </li>
+                                        );
+                                      })}
+                                    </ul>
+                                  ) : (
+                                    <div className="ml-3 text-muted-foreground">No time slots</div>
+                                  )}
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <div className="text-xs text-muted-foreground">No delivery days yet.</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            ) : (
+              <div className="py-6">No details available.</div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Add Delivery Day Modal */}
+        <Dialog open={isAddDayOpen} onOpenChange={(o)=>{ setIsAddDayOpen(o); if (!o) setAddDayForm({ dayOfWeek: "" }); }}>
+          <DialogContent className="sm:max-w-[420px]">
+            <DialogHeader>
+              <DialogTitle>Add Delivery Day</DialogTitle>
+              <DialogDescription>Select a day of week for this zone</DialogDescription>
+            </DialogHeader>
+            <form onSubmit={async (e)=>{
+              e.preventDefault();
+              if (viewZoneId == null) return;
+              try {
+                setAddDayLoading(true);
+                const dayNum = Number(addDayForm.dayOfWeek);
+                const payload = { day_of_week: dayNum };
+                await apiService.post(`/admins/delivery-zones/${viewZoneId}/delivery-days`, payload);
+                toast({ title: 'Success', description: 'Delivery day added.' });
+                setIsAddDayOpen(false);
+                setAddDayForm({ dayOfWeek: "" });
+                await refreshView();
+              } catch (err:any) {
+                const res = err?.response?.data || err?.response;
+                if (res?.message === 'Validation failed.' && res?.error) {
+                  const errorMessages = Object.values(res.error).flat().join(' ');
+                  toast({ title: 'Validation Error', description: errorMessages, variant: 'destructive' });
+                } else {
+                  toast({ title: 'Error', description: err?.message || 'Failed to add delivery day', variant: 'destructive' });
+                }
+              } finally { setAddDayLoading(false); }
+            }} className="space-y-4">
+              <div>
+                <Label htmlFor="dayOfWeek">Day of Week</Label>
+                <select id="dayOfWeek" className="mt-2 w-full border rounded px-3 py-2" required value={addDayForm.dayOfWeek} onChange={(e)=>setAddDayForm({ dayOfWeek: e.target.value })}>
+                  <option value="" disabled>Select day</option>
+                  <option value="1">Monday</option>
+                  <option value="2">Tuesday</option>
+                  <option value="3">Wednesday</option>
+                  <option value="4">Thursday</option>
+                  <option value="5">Friday</option>
+                  <option value="6">Saturday</option>
+                  <option value="7">Sunday</option>
+                </select>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" type="button" onClick={()=>setIsAddDayOpen(false)}>Cancel</Button>
+                <Button type="submit" disabled={addDayLoading}>{addDayLoading ? 'Adding...' : 'Add Day'}</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Add Time Slot Modal */}
+        <Dialog open={isAddSlotOpen} onOpenChange={(o)=>{ setIsAddSlotOpen(o); if (!o) { setAddSlotForm({ startAt: "", endsAt: "", capacity: "" }); setCurrentDeliveryDay(null);} }}>
+          <DialogContent className="sm:max-w-[520px]">
+            <DialogHeader>
+              <DialogTitle>Add Time Slot</DialogTitle>
+              <DialogDescription>Define time window and capacity</DialogDescription>
+            </DialogHeader>
+            <form onSubmit={async (e)=>{
+              e.preventDefault();
+              if (!currentDeliveryDay?.id) return;
+              try {
+                setAddSlotLoading(true);
+                const payload: any = {
+                  start_time: addSlotForm.startAt,
+                  end_time: addSlotForm.endsAt,
+                  capacity: addSlotForm.capacity ? Number(addSlotForm.capacity) : undefined,
+                };
+                await apiService.post(`/admins/delivery-zones/delivery-days/${currentDeliveryDay.id}/delivery-time-slots`, payload);
+                toast({ title: 'Success', description: 'Time slot added.' });
+                setIsAddSlotOpen(false);
+                setAddSlotForm({ startAt: "", endsAt: "", capacity: "" });
+                setCurrentDeliveryDay(null);
+                await refreshView();
+              } catch (err:any) {
+                const res = err?.response?.data || err?.response;
+                if (res?.message === 'Validation failed.' && res?.error) {
+                  const errorMessages = Object.values(res.error).flat().join(' ');
+                  toast({ title: 'Validation Error', description: errorMessages, variant: 'destructive' });
+                } else {
+                  toast({ title: 'Error', description: err?.message || 'Failed to add time slot', variant: 'destructive' });
+                }
+              } finally { setAddSlotLoading(false); }
+            }} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="startAt">Start Time</Label>
+                  <Input id="startAt" type="time" required value={addSlotForm.startAt} onChange={(e)=>setAddSlotForm(prev=>({ ...prev, startAt: e.target.value }))} />
+                </div>
+                <div>
+                  <Label htmlFor="endsAt">End Time</Label>
+                  <Input id="endsAt" type="time" required value={addSlotForm.endsAt} onChange={(e)=>setAddSlotForm(prev=>({ ...prev, endsAt: e.target.value }))} />
+                </div>
+                <div className="sm:col-span-2">
+                  <Label htmlFor="capacity">Capacity</Label>
+                  <Input id="capacity" type="number" min="0" value={addSlotForm.capacity} onChange={(e)=>setAddSlotForm(prev=>({ ...prev, capacity: e.target.value }))} required />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" type="button" onClick={()=>setIsAddSlotOpen(false)}>Cancel</Button>
+                <Button type="submit" disabled={addSlotLoading}>{addSlotLoading ? 'Adding...' : 'Add Slot'}</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
