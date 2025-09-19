@@ -286,9 +286,9 @@ export default function DeliveryZonesPage() {
                 <Label htmlFor="scope">Status</Label>
                 <select id="scope" className="mt-2 w-full border rounded px-3 py-2" value={addForm.scope} onChange={e=>setAddForm(prev=>({...prev,scope:e.target.value}))} required>
                   <option value="" disabled>Select status</option>
-                  <option value="shop">shop</option>
-                  <option value="subs">subs</option>
-                  <option value="both">both</option>
+                  <option value="on_demand">Market</option>
+                  <option value="subscriptions">Subscriptions</option>
+                  <option value="both">Both</option>
                 </select>
               </div>
               <div>
