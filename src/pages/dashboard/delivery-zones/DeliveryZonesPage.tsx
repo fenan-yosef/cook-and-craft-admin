@@ -1,4 +1,26 @@
 import { useState, useEffect, useRef } from "react";
+// Leaflet imports for map rendering
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+// configure default marker icon URLs so markers appear
+const markerIcon2x = new URL('leaflet/dist/images/marker-icon-2x.png', import.meta.url).toString();
+const markerIcon = new URL('leaflet/dist/images/marker-icon.png', import.meta.url).toString();
+const markerShadow = new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString();
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: markerIcon2x,
+  iconUrl: markerIcon,
+  shadowUrl: markerShadow,
+});
+// custom red marker icon
+const redIcon = new L.Icon({
+  iconRetinaUrl: 'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-2x-red.png',
+  iconUrl: 'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-red.png',
+  shadowUrl: markerShadow,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41],
+});
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,6 +88,7 @@ export default function DeliveryZonesPage() {
   // Initialize Leaflet map for Add Zone when modal opens
   useEffect(() => {
     if (!isAddOpen) {
+      // Clean up map instance when closed
       if (addMapInstance.current?.map) {
         addMapInstance.current.map.remove();
         addMapInstance.current = null;
@@ -75,23 +98,27 @@ export default function DeliveryZonesPage() {
     }
     const init = () => {
       const el = document.getElementById('add-zone-map');
-      const L: any = (window as any).L;
-      if (!el || !L) return;
+  // use imported Leaflet instance
+  if (!el || !L) return;
       if (addMapInstance.current?.map) {
         addMapInstance.current.map.remove();
         addMapInstance.current = null;
       }
-      const map = L.map(el).setView([30.0444, 31.2357], 6);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
+      const map = L.map(el).setView([24.7136, 46.6753], 11); // Riyadh
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+        subdomains: 'abcd',
+        maxZoom: 20
       }).addTo(map);
+      // ensure proper render inside dialog
+      setTimeout(() => map.invalidateSize(), 0);
       const markers: any[] = [];
-      const addMarker = (lat: number, lng: number) => {
-        const m = L.marker([lat, lng]).addTo(map);
+      const addMarker = (lat:number, lng:number) => {
+        const m = L.marker([lat, lng], { icon: redIcon }).addTo(map);
         markers.push(m);
         setAddMapPoints(prev => ([...prev, { latitude: lat, longitude: lng }]));
       };
-      map.on('click', (e: any) => addMarker(e.latlng.lat, e.latlng.lng));
+      map.on('click', (e:any) => addMarker(e.latlng.lat, e.latlng.lng));
       addMapInstance.current = { map, markers };
     };
     // Defer until dialog content is in DOM
@@ -110,31 +137,39 @@ export default function DeliveryZonesPage() {
     }
     const init = () => {
       const el = document.getElementById('view-zone-map');
-      const L: any = (window as any).L;
-      if (!el || !L || !viewData) return;
+  // use imported Leaflet instance
+  if (!el || !L || !viewData) return;
       if (viewMapInstance.current?.map) {
         viewMapInstance.current.map.remove();
         viewMapInstance.current = null;
       }
-      const map = L.map(el).setView([30.0444, 31.2357], 6);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
+      const locs = (viewData as any).deliveryZoneGeographicalLocation ?? (viewData as any).locations;
+      const map = L.map(el);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+        subdomains: 'abcd',
+        maxZoom: 20
       }).addTo(map);
       const markers: any[] = [];
-      const locs = (viewData as any).deliveryZoneGeographicalLocation ?? (viewData as any).locations;
       if (Array.isArray(locs) && locs.length > 0) {
         const bounds = L.latLngBounds([]);
-        locs.forEach((p: any) => {
-          const lat = p?.latitude;
-          const lng = p?.longitude;
-          if (typeof lat === 'number' && typeof lng === 'number') {
-            const m = L.marker([lat, lng]).addTo(map);
-            markers.push(m);
-            bounds.extend([lat, lng]);
-          }
-        });
-        map.fitBounds(bounds, { padding: [20, 20] });
+          locs.forEach((p: any) => {
+            const lat = p?.latitude; const lng = p?.longitude;
+            if (typeof lat === 'number' && typeof lng === 'number') {
+              const m = L.marker([lat, lng], { icon: redIcon }).addTo(map);
+              markers.push(m);
+              bounds.extend([lat, lng]);
+            }
+          });
+        if (bounds.isValid()) {
+          map.fitBounds(bounds, { padding: [20, 20] });
+        } else {
+          map.setView([24.7136, 46.6753], 11); // Riyadh fallback
+        }
+      } else {
+        map.setView([24.7136, 46.6753], 11); // Riyadh fallback
       }
+      setTimeout(() => map.invalidateSize(), 0);
       viewMapInstance.current = { map, markers };
     };
     const id = window.requestAnimationFrame(init);
@@ -292,8 +327,8 @@ export default function DeliveryZonesPage() {
                   <div className="flex items-center justify-between">
                     <div className="text-xs text-muted-foreground">Click the map to add pins (min 4).</div>
                     <Button type="button" variant="outline" size="sm" onClick={() => {
-                      if (addMapInstance.current?.markers) {
-                        addMapInstance.current.markers.forEach((m:any)=>m.setMap(null));
+                      if (addMapInstance.current) {
+                        addMapInstance.current.markers.forEach((m:any)=>m.remove());
                         addMapInstance.current.markers = [];
                       }
                       setAddMapPoints([]);

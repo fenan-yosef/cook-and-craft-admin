@@ -477,7 +477,7 @@ export default function RecipesPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="cal">Calories</Label>
+                  <Label htmlFor="cal">Calories (kcal)</Label>
                   <Input id="cal" type="number" value={newRecipe.Calories} onChange={(e) => setNewRecipe((s) => ({ ...s, Calories: e.target.value }))} placeholder="e.g. 450" />
                 </div>
                 <div className="grid gap-2">
@@ -512,7 +512,7 @@ export default function RecipesPage() {
                         className="col-span-3"
                       />
                       <Input
-                        placeholder="Amount"
+                        placeholder="Amount (e.g. 200 g)"
                         value={ing.amount}
                         onChange={(e) => {
                           const arr = [...(newRecipe.Ingredients || [])]
@@ -524,6 +524,7 @@ export default function RecipesPage() {
                     </div>
                   ))}
                 </div>
+                <p className="text-xs text-muted-foreground">Tip: Use common units like g (grams), kg, ml, tbsp, tsp.</p>
               </div>
 
               {/* Nutrition facts */}
@@ -553,7 +554,7 @@ export default function RecipesPage() {
                         className="col-span-3"
                       />
                       <Input
-                        placeholder="Value"
+                        placeholder="Value (e.g. 12 g protein)"
                         value={nf.value}
                         onChange={(e) => {
                           const arr = [...(newRecipe.Nutrition_facts || [])]
