@@ -52,18 +52,18 @@ interface Product {
   currency?: string
   priceFormatted?: string
   // Extended backend fields (for view/edit/add consistency)
-  nutrition_facts?: {
+  nutritionFacts?: {
     calories?: number | string
     fat?: number | string
     protein?: number | string
     [key: string]: any
   }
-  ingredients_main?: Array<{ name?: string; emoji?: string; amount?: string }>
-  ingredients_extra?: Array<{ name?: string; emoji?: string; amount?: string }>
-  ingredients_not_included?: string[]
+  ingredientsMain?: Array<{ name?: string; emoji?: string; amount?: string }>
+  ingredientsExtra?: Array<{ name?: string; emoji?: string; amount?: string }>
+  ingredientsNotIncluded?: string[]
   utensils?: string[]
-  dessert_suggestions?: Array<{ name?: string; image?: string; price?: number | string }>
-  serving_options?: Array<{ servings?: number | string; label?: string; price?: number | string }>
+  dessertSuggestions?: Array<{ name?: string; image?: string; price?: number | string }>
+  servingOptions?: Array<{ servings?: number | string; label?: string; price?: number | string }>
   productVersionNumber?: number | string
 }
 
@@ -245,13 +245,13 @@ export default function ProductsPage() {
           currency: item.currency ?? undefined,
           priceFormatted: item.priceFormatted ?? undefined,
           // Add any additional fields you need to map here
-          nutrition_facts: item.nutrition_facts ?? undefined,
-          ingredients_main: item.ingredients_main ?? undefined,
-          ingredients_extra: item.ingredients_extra ?? undefined,
-          ingredients_not_included: item.ingredients_not_included ?? undefined,
+          nutritionFacts: item.nutritionFacts ?? undefined,
+          ingredientsMain: item.ingredientsMain ?? undefined,
+          ingredientsExtra: item.ingredientsExtra ?? undefined,
+          ingredientsNotIncluded: item.ingredientsNotIncluded ?? undefined,
           utensils: item.utensils ?? undefined,
-          dessert_suggestions: item.dessert_suggestions ?? undefined,
-          serving_options: item.serving_options ?? undefined,
+          dessertSuggestions: item.dessertSuggestions ?? undefined,
+          servingOptions: item.servingOptions ?? undefined,
           productVersionNumber: item.productVersionNumber ?? undefined,
           
         }
@@ -460,27 +460,27 @@ export default function ProductsPage() {
       addForm.images.forEach((file) => formData.append("images[]", file))
 
       // Nutrition facts
-      if (addForm.nutritionFacts.calories !== "") formData.append("nutrition_facts[calories]", addForm.nutritionFacts.calories)
-      if (addForm.nutritionFacts.fat !== "") formData.append("nutrition_facts[fat]", addForm.nutritionFacts.fat)
-      if (addForm.nutritionFacts.protein !== "") formData.append("nutrition_facts[protein]", addForm.nutritionFacts.protein)
+      if (addForm.nutritionFacts.calories !== "") formData.append("nutritionFacts[calories]", addForm.nutritionFacts.calories)
+      if (addForm.nutritionFacts.fat !== "") formData.append("nutritionFacts[fat]", addForm.nutritionFacts.fat)
+      if (addForm.nutritionFacts.protein !== "") formData.append("nutritionFacts[protein]", addForm.nutritionFacts.protein)
 
       // Ingredients main
       addForm.ingredientsMain.forEach((ing, i) => {
-        if (ing.name !== "") formData.append(`ingredients_main[${i}][name]`, ing.name)
-        if (ing.emoji !== "") formData.append(`ingredients_main[${i}][emoji]`, ing.emoji)
-        if (ing.amount !== "") formData.append(`ingredients_main[${i}][amount]`, ing.amount)
+        if (ing.name !== "") formData.append(`ingredientsMain[${i}][name]`, ing.name)
+        if (ing.emoji !== "") formData.append(`ingredientsMain[${i}][emoji]`, ing.emoji)
+        if (ing.amount !== "") formData.append(`ingredientsMain[${i}][amount]`, ing.amount)
       })
 
       // Ingredients extra
       addForm.ingredientsExtra.forEach((ing, i) => {
-        if (ing.name !== "") formData.append(`ingredients_extra[${i}][name]`, ing.name)
-        if (ing.emoji !== "") formData.append(`ingredients_extra[${i}][emoji]`, ing.emoji)
-        if (ing.amount !== "") formData.append(`ingredients_extra[${i}][amount]`, ing.amount)
+        if (ing.name !== "") formData.append(`ingredientsExtra[${i}][name]`, ing.name)
+        if (ing.emoji !== "") formData.append(`ingredientsExtra[${i}][emoji]`, ing.emoji)
+        if (ing.amount !== "") formData.append(`ingredientsExtra[${i}][amount]`, ing.amount)
       })
 
       // Ingredients not included
       addForm.ingredientsNotIncluded.forEach((val, i) => {
-        if (val !== "") formData.append(`ingredients_not_included[${i}]`, val)
+        if (val !== "") formData.append(`ingredientsNotIncluded[${i}]`, val)
       })
 
       // Utensils
@@ -490,16 +490,16 @@ export default function ProductsPage() {
 
       // Dessert suggestions
       addForm.dessertSuggestions.forEach((d, i) => {
-        if (d.name !== "") formData.append(`dessert_suggestions[${i}][name]`, d.name)
-        if (d.price !== "") formData.append(`dessert_suggestions[${i}][price]`, d.price)
-        if (d.imageFile) formData.append(`dessert_suggestions[${i}][image]`, d.imageFile)
+        if (d.name !== "") formData.append(`dessertSuggestions[${i}][name]`, d.name)
+        if (d.price !== "") formData.append(`dessertSuggestions[${i}][price]`, d.price)
+        if (d.imageFile) formData.append(`dessertSuggestions[${i}][image]`, d.imageFile)
       })
 
       // Serving options
       addForm.servingOptions.forEach((s, i) => {
-        if (s.servings !== "") formData.append(`serving_options[${i}][servings]`, s.servings)
-        if (s.label !== "") formData.append(`serving_options[${i}][label]`, s.label)
-        if (s.price !== "") formData.append(`serving_options[${i}][price]`, s.price)
+        if (s.servings !== "") formData.append(`servingOptions[${i}][servings]`, s.servings)
+        if (s.label !== "") formData.append(`servingOptions[${i}][label]`, s.label)
+        if (s.price !== "") formData.append(`servingOptions[${i}][price]`, s.price)
       })
 
   // Use api service with base URL and token from localStorage
@@ -548,37 +548,37 @@ export default function ProductsPage() {
   is_on_sale: (raw?.isProductOnSale ?? (product.isOnSale ? 1 : 0)) === 1,
   currency: String(raw?.currency ?? product.currency ?? ""),
   nutritionFacts: {
-    calories: String(raw?.nutrition_facts?.calories ?? ""),
-    fat: String(raw?.nutrition_facts?.fat ?? ""),
-    protein: String(raw?.nutrition_facts?.protein ?? ""),
+    calories: String(raw?.nutritionFacts?.calories ?? ""),
+    fat: String(raw?.nutritionFacts?.fat ?? ""),
+    protein: String(raw?.nutritionFacts?.protein ?? ""),
   },
-  ingredientsMain: Array.isArray(raw?.ingredients_main)
-    ? raw.ingredients_main.map((r: any) => ({
+  ingredientsMain: Array.isArray(raw?.ingredientsMain)
+    ? raw.ingredientsMain.map((r: any) => ({
         name: String(r?.name ?? ""),
         emoji: String(r?.emoji ?? ""),
         amount: String(r?.amount ?? ""),
       }))
     : [{ name: "", emoji: "", amount: "" }],
-  ingredientsExtra: Array.isArray(raw?.ingredients_extra)
-    ? raw.ingredients_extra.map((r: any) => ({
+  ingredientsExtra: Array.isArray(raw?.ingredientsExtra)
+    ? raw.ingredientsExtra.map((r: any) => ({
         name: String(r?.name ?? ""),
         emoji: String(r?.emoji ?? ""),
         amount: String(r?.amount ?? ""),
       }))
     : [],
-  ingredientsNotIncluded: Array.isArray(raw?.ingredients_not_included)
-    ? raw.ingredients_not_included.map((s: any) => String(s))
+  ingredientsNotIncluded: Array.isArray(raw?.ingredientsNotIncluded)
+    ? raw.ingredientsNotIncluded.map((s: any) => String(s))
     : [],
   utensils: Array.isArray(raw?.utensils) ? raw.utensils.map((s: any) => String(s)) : [],
-  dessertSuggestions: Array.isArray(raw?.dessert_suggestions)
-    ? raw.dessert_suggestions.map((d: any) => ({
+  dessertSuggestions: Array.isArray(raw?.dessertSuggestions)
+    ? raw.dessertSuggestions.map((d: any) => ({
         name: String(d?.name ?? ""),
         price: String(d?.price ?? ""),
         imageFile: null,
       }))
     : [],
-  servingOptions: Array.isArray(raw?.serving_options)
-    ? raw.serving_options.map((s: any) => ({
+  servingOptions: Array.isArray(raw?.servingOptions)
+    ? raw.servingOptions.map((s: any) => ({
         servings: String(s?.servings ?? ""),
         label: String(s?.label ?? ""),
         price: String(s?.price ?? ""),
@@ -722,27 +722,27 @@ export default function ProductsPage() {
       editForm.images.forEach((f) => formData.append("images[]", f))
 
       // Nutrition facts
-      if (editForm.nutritionFacts.calories !== "") formData.append("nutrition_facts[calories]", editForm.nutritionFacts.calories)
-      if (editForm.nutritionFacts.fat !== "") formData.append("nutrition_facts[fat]", editForm.nutritionFacts.fat)
-      if (editForm.nutritionFacts.protein !== "") formData.append("nutrition_facts[protein]", editForm.nutritionFacts.protein)
+      if (editForm.nutritionFacts.calories !== "") formData.append("nutritionFacts[calories]", editForm.nutritionFacts.calories)
+      if (editForm.nutritionFacts.fat !== "") formData.append("nutritionFacts[fat]", editForm.nutritionFacts.fat)
+      if (editForm.nutritionFacts.protein !== "") formData.append("nutritionFacts[protein]", editForm.nutritionFacts.protein)
 
       // Ingredients main
       editForm.ingredientsMain.forEach((ing, i) => {
-        if (ing.name !== "") formData.append(`ingredients_main[${i}][name]`, ing.name)
-        if (ing.emoji !== "") formData.append(`ingredients_main[${i}][emoji]`, ing.emoji)
-        if (ing.amount !== "") formData.append(`ingredients_main[${i}][amount]`, ing.amount)
+        if (ing.name !== "") formData.append(`ingredientsMain[${i}][name]`, ing.name)
+        if (ing.emoji !== "") formData.append(`ingredientsMain[${i}][emoji]`, ing.emoji)
+        if (ing.amount !== "") formData.append(`ingredientsMain[${i}][amount]`, ing.amount)
       })
 
       // Ingredients extra
       editForm.ingredientsExtra.forEach((ing, i) => {
-        if (ing.name !== "") formData.append(`ingredients_extra[${i}][name]`, ing.name)
-        if (ing.emoji !== "") formData.append(`ingredients_extra[${i}][emoji]`, ing.emoji)
-        if (ing.amount !== "") formData.append(`ingredients_extra[${i}][amount]`, ing.amount)
+        if (ing.name !== "") formData.append(`ingredientsExtra[${i}][name]`, ing.name)
+        if (ing.emoji !== "") formData.append(`ingredientsExtra[${i}][emoji]`, ing.emoji)
+        if (ing.amount !== "") formData.append(`ingredientsExtra[${i}][amount]`, ing.amount)
       })
 
       // Ingredients not included
       editForm.ingredientsNotIncluded.forEach((val, i) => {
-        if (val !== "") formData.append(`ingredients_not_included[${i}]`, val)
+        if (val !== "") formData.append(`ingredientsNotIncluded[${i}]`, val)
       })
 
       // Utensils
@@ -752,16 +752,16 @@ export default function ProductsPage() {
 
       // Dessert suggestions (no image editing upload here unless new one chosen)
       editForm.dessertSuggestions.forEach((d, i) => {
-        if (d.name !== "") formData.append(`dessert_suggestions[${i}][name]`, d.name)
-        if (d.price !== "") formData.append(`dessert_suggestions[${i}][price]`, d.price)
-        if (d.imageFile) formData.append(`dessert_suggestions[${i}][image]`, d.imageFile)
+        if (d.name !== "") formData.append(`dessertSuggestions[${i}][name]`, d.name)
+        if (d.price !== "") formData.append(`dessertSuggestions[${i}][price]`, d.price)
+        if (d.imageFile) formData.append(`dessertSuggestions[${i}][image]`, d.imageFile)
       })
 
       // Serving options
       editForm.servingOptions.forEach((s, i) => {
-        if (s.servings !== "") formData.append(`serving_options[${i}][servings]`, s.servings)
-        if (s.label !== "") formData.append(`serving_options[${i}][label]`, s.label)
-        if (s.price !== "") formData.append(`serving_options[${i}][price]`, s.price)
+        if (s.servings !== "") formData.append(`servingOptions[${i}][servings]`, s.servings)
+        if (s.label !== "") formData.append(`servingOptions[${i}][label]`, s.label)
+        if (s.price !== "") formData.append(`servingOptions[${i}][price]`, s.price)
       })
 
       // If user removed any existing images, include hints for backend to remove them
@@ -1446,7 +1446,7 @@ export default function ProductsPage() {
           <DialogContent className="sm:max-w-[720px]">
             <DialogHeader>
               <DialogTitle>Product Details</DialogTitle>
-              <DialogDescription>Full product information from the API.</DialogDescription>
+              <DialogDescription>Full product information.</DialogDescription>
             </DialogHeader>
             {viewProduct ? (
               <div className="space-y-4">
@@ -1515,7 +1515,7 @@ export default function ProductsPage() {
                   <div className="text-xs text-muted-foreground">Nutrition Facts</div>
                   <div className="mt-1 text-sm">
                     {(() => {
-                      const n = viewProduct.nutrition_facts || {}
+                      const n = viewProduct.nutritionFacts || {}
                       const parts: string[] = []
                       if (n.calories != null && n.calories !== "") parts.push(`Calories: ${n.calories}`)
                       if (n.fat != null && n.fat !== "") parts.push(`Fat: ${n.fat}`)
@@ -1528,10 +1528,16 @@ export default function ProductsPage() {
                 {/* Ingredients */}
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">Ingredients (Main)</div>
-                  {Array.isArray(viewProduct.ingredients_main) && viewProduct.ingredients_main.length > 0 ? (
+                  {Array.isArray(viewProduct.ingredientsMain) && viewProduct.ingredientsMain.length > 0 ? (
                     <div className="text-sm space-y-1">
-                      {viewProduct.ingredients_main.map((r: any, i: number) => (
-                        <div key={i}>{[r?.emoji, r?.name, r?.amount].filter(Boolean).join(" ")}</div>
+                      {viewProduct.ingredientsMain.map((r: any, i: number) => (
+                        <div key={i} className="leading-tight">
+                          {r?.emoji ? <div>{r.emoji}</div> : null}
+                          {r?.name ? <div>{r.name}</div> : null}
+                          {r?.amount ? (
+                            <div className="text-muted-foreground">{r.amount}</div>
+                          ) : null}
+                        </div>
                       ))}
                     </div>
                   ) : (
@@ -1540,10 +1546,16 @@ export default function ProductsPage() {
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">Ingredients (Extra)</div>
-                  {Array.isArray(viewProduct.ingredients_extra) && viewProduct.ingredients_extra.length > 0 ? (
+                  {Array.isArray(viewProduct.ingredientsExtra) && viewProduct.ingredientsExtra.length > 0 ? (
                     <div className="text-sm space-y-1">
-                      {viewProduct.ingredients_extra.map((r: any, i: number) => (
-                        <div key={i}>{[r?.emoji, r?.name, r?.amount].filter(Boolean).join(" ")}</div>
+                      {viewProduct.ingredientsExtra.map((r: any, i: number) => (
+                        <div key={i} className="leading-tight">
+                          {r?.emoji ? <div>{r.emoji}</div> : null}
+                          {r?.name ? <div>{r.name}</div> : null}
+                          {r?.amount ? (
+                            <div className="text-muted-foreground">{r.amount}</div>
+                          ) : null}
+                        </div>
                       ))}
                     </div>
                   ) : (
@@ -1552,8 +1564,8 @@ export default function ProductsPage() {
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">Ingredients Not Included</div>
-                  {Array.isArray(viewProduct.ingredients_not_included) && viewProduct.ingredients_not_included.length > 0 ? (
-                    <div className="text-sm">{viewProduct.ingredients_not_included.join(", ")}</div>
+                  {Array.isArray(viewProduct.ingredientsNotIncluded) && viewProduct.ingredientsNotIncluded.length > 0 ? (
+                    <div className="text-sm">{viewProduct.ingredientsNotIncluded.join(", ")}</div>
                   ) : (
                     <span className="text-xs text-muted-foreground">-</span>
                   )}
@@ -1572,9 +1584,9 @@ export default function ProductsPage() {
                 {/* Dessert Suggestions */}
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">Dessert Suggestions</div>
-                  {Array.isArray(viewProduct.dessert_suggestions) && viewProduct.dessert_suggestions.length > 0 ? (
+                  {Array.isArray(viewProduct.dessertSuggestions) && viewProduct.dessertSuggestions.length > 0 ? (
                     <div className="flex flex-wrap gap-3">
-                      {viewProduct.dessert_suggestions.map((d: any, i: number) => (
+                      {viewProduct.dessertSuggestions.map((d: any, i: number) => (
                         <div key={i} className="text-sm">
                           <div className="font-medium">{d?.name ?? "-"}</div>
                           <div className="text-xs text-muted-foreground">{d?.price ?? "-"}</div>
@@ -1592,9 +1604,9 @@ export default function ProductsPage() {
                 {/* Serving Options */}
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">Serving Options</div>
-                  {Array.isArray(viewProduct.serving_options) && viewProduct.serving_options.length > 0 ? (
+                  {Array.isArray(viewProduct.servingOptions) && viewProduct.servingOptions.length > 0 ? (
                     <div className="text-sm space-y-1">
-                      {viewProduct.serving_options.map((s: any, i: number) => (
+                      {viewProduct.servingOptions.map((s: any, i: number) => (
                         <div key={i}>{[s?.servings && `${s.servings} servings`, s?.label, s?.price && `Price: ${s.price}`].filter(Boolean).join(" • ")}</div>
                       ))}
                     </div>
