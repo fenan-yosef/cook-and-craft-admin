@@ -66,7 +66,6 @@ export default function DeliveryZonesPage() {
   // Initialize Leaflet map for Add Zone when modal opens
   useEffect(() => {
     if (!isAddOpen) {
-      // Clean up map instance when closed
       if (addMapInstance.current?.map) {
         addMapInstance.current.map.remove();
         addMapInstance.current = null;
@@ -76,7 +75,7 @@ export default function DeliveryZonesPage() {
     }
     const init = () => {
       const el = document.getElementById('add-zone-map');
-      const L:any = (window as any).L;
+      const L: any = (window as any).L;
       if (!el || !L) return;
       if (addMapInstance.current?.map) {
         addMapInstance.current.map.remove();
@@ -87,12 +86,12 @@ export default function DeliveryZonesPage() {
         attribution: '&copy; OpenStreetMap contributors'
       }).addTo(map);
       const markers: any[] = [];
-      const addMarker = (lat:number, lng:number) => {
+      const addMarker = (lat: number, lng: number) => {
         const m = L.marker([lat, lng]).addTo(map);
         markers.push(m);
         setAddMapPoints(prev => ([...prev, { latitude: lat, longitude: lng }]));
       };
-      map.on('click', (e:any) => addMarker(e.latlng.lat, e.latlng.lng));
+      map.on('click', (e: any) => addMarker(e.latlng.lat, e.latlng.lng));
       addMapInstance.current = { map, markers };
     };
     // Defer until dialog content is in DOM
@@ -117,29 +116,24 @@ export default function DeliveryZonesPage() {
         viewMapInstance.current.map.remove();
         viewMapInstance.current = null;
       }
-      const locs = (viewData as any).deliveryZoneGeographicalLocation ?? (viewData as any).locations;
-      const map = L.map(el);
+      const map = L.map(el).setView([30.0444, 31.2357], 6);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap contributors'
       }).addTo(map);
       const markers: any[] = [];
+      const locs = (viewData as any).deliveryZoneGeographicalLocation ?? (viewData as any).locations;
       if (Array.isArray(locs) && locs.length > 0) {
         const bounds = L.latLngBounds([]);
         locs.forEach((p: any) => {
-          const lat = p?.latitude; const lng = p?.longitude;
+          const lat = p?.latitude;
+          const lng = p?.longitude;
           if (typeof lat === 'number' && typeof lng === 'number') {
             const m = L.marker([lat, lng]).addTo(map);
             markers.push(m);
             bounds.extend([lat, lng]);
           }
         });
-        if (bounds.isValid()) {
-          map.fitBounds(bounds, { padding: [20, 20] });
-        } else {
-          map.setView([30.0444, 31.2357], 6);
-        }
-      } else {
-        map.setView([30.0444, 31.2357], 6);
+        map.fitBounds(bounds, { padding: [20, 20] });
       }
       viewMapInstance.current = { map, markers };
     };
@@ -298,8 +292,8 @@ export default function DeliveryZonesPage() {
                   <div className="flex items-center justify-between">
                     <div className="text-xs text-muted-foreground">Click the map to add pins (min 4).</div>
                     <Button type="button" variant="outline" size="sm" onClick={() => {
-                      if (addMapInstance.current) {
-                        addMapInstance.current.markers.forEach((m:any)=>m.remove());
+                      if (addMapInstance.current?.markers) {
+                        addMapInstance.current.markers.forEach((m:any)=>m.setMap(null));
                         addMapInstance.current.markers = [];
                       }
                       setAddMapPoints([]);

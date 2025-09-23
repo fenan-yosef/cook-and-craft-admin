@@ -1531,9 +1531,9 @@ export default function ProductsPage() {
                   {Array.isArray(viewProduct.ingredientsMain) && viewProduct.ingredientsMain.length > 0 ? (
                     <div className="text-sm space-y-1">
                       {viewProduct.ingredientsMain.map((r: any, i: number) => (
-                        <div key={i} className="leading-tight">
-                          {r?.emoji ? <div>{r.emoji}</div> : null}
-                          {r?.name ? <div>{r.name}</div> : null}
+                        <div key={i} className="leading-tight space-y-0.5">
+                          {r?.emoji ? <div className="text-base">{r.emoji}</div> : null}
+                          {r?.name ? <div className="font-medium">{r.name}</div> : null}
                           {r?.amount ? (
                             <div className="text-muted-foreground">{r.amount}</div>
                           ) : null}
@@ -1549,9 +1549,9 @@ export default function ProductsPage() {
                   {Array.isArray(viewProduct.ingredientsExtra) && viewProduct.ingredientsExtra.length > 0 ? (
                     <div className="text-sm space-y-1">
                       {viewProduct.ingredientsExtra.map((r: any, i: number) => (
-                        <div key={i} className="leading-tight">
-                          {r?.emoji ? <div>{r.emoji}</div> : null}
-                          {r?.name ? <div>{r.name}</div> : null}
+                        <div key={i} className="leading-tight space-y-0.5">
+                          {r?.emoji ? <div className="text-base">{r.emoji}</div> : null}
+                          {r?.name ? <div className="font-medium">{r.name}</div> : null}
                           {r?.amount ? (
                             <div className="text-muted-foreground">{r.amount}</div>
                           ) : null}
