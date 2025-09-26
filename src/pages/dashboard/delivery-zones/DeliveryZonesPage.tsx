@@ -32,6 +32,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiService } from "@/lib/api-service";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import DeliveryZonesKmlMap from '@/components/geo/DeliveryZonesKmlMap';
 
 interface DeliveryZone {
   id: number;
@@ -491,6 +492,17 @@ export default function DeliveryZonesPage() {
                 )}
               </TableBody>
             </Table>
+          </CardContent>
+        </Card>
+
+        {/* KML Zones Map (client provided) */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Geographical Zones (KML)</CardTitle>
+            <CardDescription>Click on the map to test if a point lies inside a provided delivery zone.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DeliveryZonesKmlMap kmlUrl="/Sawani%20Zones.kml" />
           </CardContent>
         </Card>
 
