@@ -1,0 +1,215 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { MapContainer, TileLayer, GeoJSON, useMapEvents, Marker } from 'react-leaflet';
+import { Popup } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import * as toGeoJSON from 'togeojson';
+import { useToast } from '@/hooks/use-toast';
+
+type Props = {
+  kmlUrl?: string;
+  initialCenter?: [number, number];
+  initialZoom?: number;
+  onPointsChange?: (points: { latitude: number; longitude: number }[]) => void;
+  // when this numeric prop increments, the map should clear all points
+  resetCounter?: number;
+  // whether the surrounding dialog/sheet is currently visible; helps with invalidateSize
+  isVisible?: boolean;
+};
+
+// reuse ray-casting helpers (copy minimal implementations)
+function pointInRing(point: [number, number], ring: number[][]) {
+  const x = point[0], y = point[1];
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1];
+    const xj = ring[j][0], yj = ring[j][1];
+    const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi + 0.0) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+function pointInGeoJSON(pointLatLng: [number, number], geometry: any): boolean {
+  const pt: [number, number] = [pointLatLng[1], pointLatLng[0]]; // [lng, lat]
+  if (!geometry) return false;
+  const type = geometry.type;
+  const coords = geometry.coordinates;
+  if (type === 'Polygon') {
+    if (pointInRing(pt, coords[0])) {
+      for (let i = 1; i < coords.length; i++) if (pointInRing(pt, coords[i])) return false;
+      return true;
+    }
+    return false;
+  } else if (type === 'MultiPolygon') {
+    for (const poly of coords) {
+      if (pointInRing(pt, poly[0])) {
+        let inHole = false;
+        for (let i = 1; i < poly.length; i++) if (pointInRing(pt, poly[i])) { inHole = true; break; }
+        if (!inHole) return true;
+      }
+    }
+    return false;
+  }
+  return false;
+}
+
+const palette = ['#2b7bba', '#e63946', '#f4a261', '#2a9d8f', '#8a2be2', '#ff6b6b', '#4cc9f0'];
+
+export default function AddZoneMap({ kmlUrl = '/Sawani Zones.kml', initialCenter = [24.7136, 46.6753], initialZoom = 11, onPointsChange, resetCounter, isVisible }: Props) {
+  const { toast } = useToast();
+  const [geojson, setGeojson] = useState<any | null>(null);
+  const [points, setPoints] = useState<{ latitude: number; longitude: number }[]>([]);
+  const [lastAddedIndex, setLastAddedIndex] = useState<number | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const [mapReady, setMapReady] = useState(false);
+  const lastReset = useRef<number | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await fetch(kmlUrl);
+        if (!res.ok) return;
+        const text = await res.text();
+        const parser = new DOMParser();
+        const kmlDoc = parser.parseFromString(text, 'application/xml');
+        const gj = (toGeoJSON as any).kml(kmlDoc);
+        const features = (gj && gj.features) ? gj.features.filter((f: any) => {
+          const t = f?.geometry?.type;
+          return t === 'Polygon' || t === 'MultiPolygon';
+        }) : [];
+        features.forEach((f: any, i: number) => { f.properties = f.properties || {}; f.properties.__zoneIndex = i; });
+        if (!cancelled) setGeojson({ type: 'FeatureCollection', features });
+      } catch (err) {
+        console.error('Failed to load KML for AddZoneMap', err);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [kmlUrl]);
+
+  function ClickHandler() {
+    useMapEvents({ click(e) {
+      const lat = e.latlng.lat, lng = e.latlng.lng;
+      if (!geojson || !geojson.features) return;
+      const inside = geojson.features.some((f: any) => pointInGeoJSON([lat, lng], f.geometry));
+      if (!inside) {
+        // show transient toast explaining why the pin wasn't added (softer notice)
+        toast({ title: 'Outside delivery zone', description: 'Pins can only be added inside delivery zones.', variant: 'default' });
+        return;
+      }
+      const p = { latitude: lat, longitude: lng };
+      setPoints(prev => {
+        const idx = prev.length;
+        // mark which index was just added so we can open its popup
+        setLastAddedIndex(idx);
+        return [...prev, p];
+      });
+    }});
+    return null;
+  }
+
+  const styleFn = (_feature: any, idx: number) => ({ color: palette[idx % palette.length], weight: 1.5, opacity: 1, fillOpacity: 0.12 });
+
+  function MapSetter() {
+    const map = (useMapEvents({}) as unknown) as L.Map;
+    useEffect(() => {
+      if (map) {
+        mapRef.current = map;
+        setMapReady(true);
+      }
+    }, [map]);
+    return null;
+  }
+
+  // Use specified red marker image
+  const redIcon = useMemo(() => {
+    const markerShadow = new URL('leaflet/dist/images/marker-shadow.png', import.meta.url).toString();
+    return new L.Icon({
+      iconRetinaUrl: 'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-2x-red.png',
+      iconUrl: 'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-red.png',
+      shadowUrl: markerShadow,
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41],
+    });
+  }, []);
+
+  // Notify parent after points state has updated (post-render) to avoid setState-in-render
+  useEffect(() => {
+    onPointsChange?.(points);
+  }, [points, onPointsChange]);
+
+  // Respond to external reset requests: clear points when resetCounter increments
+  useEffect(() => {
+    if (typeof resetCounter === 'number') {
+      if (lastReset.current === undefined || resetCounter !== lastReset.current) {
+        lastReset.current = resetCounter;
+        setPoints([]);
+        setLastAddedIndex(null);
+      }
+    }
+  }, [resetCounter]);
+
+  // When map is ready or becomes visible (dialog opened), fix layout
+  useEffect(() => {
+    if (!mapReady) return;
+    const map = mapRef.current;
+    if (!map) return;
+    const invalidate = () => map.invalidateSize();
+    // small delay to allow dialog animation to finish
+    const id = window.setTimeout(invalidate, 120);
+    return () => window.clearTimeout(id);
+  }, [mapReady]);
+
+  useEffect(() => {
+    if (!mapReady || !isVisible) return;
+    const map = mapRef.current;
+    if (!map) return;
+    const id = window.setTimeout(() => map.invalidateSize(), 150);
+    return () => window.clearTimeout(id);
+  }, [isVisible, mapReady]);
+
+  return (
+    <div className="h-64">
+      <MapContainer center={initialCenter} zoom={initialZoom} style={{ height: '100%', width: '100%' }}>
+        <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution='&copy; OpenStreetMap contributors &copy; CARTO' />
+        <MapSetter />
+        {geojson && (
+          <GeoJSON data={geojson} style={(f:any) => {
+            const idx = f?.properties?.__zoneIndex ?? 0;
+            return styleFn(f, idx);
+          }} />
+        )}
+        <ClickHandler />
+        {points.map((p, i) => (
+          <Marker key={i} position={[p.latitude, p.longitude]} icon={redIcon} zIndexOffset={1000} riseOnHover={true} ref={(m:any) => {
+            if (m && lastAddedIndex === i) {
+              try { m.openPopup(); } catch(e) {}
+              setLastAddedIndex(null);
+            }
+          }}>
+            <Popup>
+              <div className="text-xs">
+                <div className="flex items-center justify-between">
+                  <div><strong>Point {i + 1}</strong></div>
+                  <div>
+                    <button className="text-red-600 text-xs" onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setPoints(prev => prev.filter((_, idx) => idx !== i));
+                    }}>Remove</button>
+                  </div>
+                </div>
+                <div className="mt-1">Lat: {p.latitude.toFixed(6)}</div>
+                <div>Lng: {p.longitude.toFixed(6)}</div>
+              </div>
+            </Popup>
+          </Marker>
+        ))}
+      </MapContainer>
+    </div>
+  );
+}

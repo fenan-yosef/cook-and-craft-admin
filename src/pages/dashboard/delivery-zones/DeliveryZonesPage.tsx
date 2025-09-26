@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 // Leaflet imports for map rendering
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -10,16 +10,6 @@ L.Icon.Default.mergeOptions({
   iconRetinaUrl: markerIcon2x,
   iconUrl: markerIcon,
   shadowUrl: markerShadow,
-});
-// custom red marker icon
-const redIcon = new L.Icon({
-  iconRetinaUrl: 'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-2x-red.png',
-  iconUrl: 'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-red.png',
-  shadowUrl: markerShadow,
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
 });
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,6 +23,7 @@ import { apiService } from "@/lib/api-service";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import DeliveryZonesKmlMap from '@/components/geo/DeliveryZonesKmlMap';
+import AddZoneMap from '@/components/geo/AddZoneMap';
 
 interface DeliveryZone {
   id: number;
@@ -55,8 +46,8 @@ export default function DeliveryZonesPage() {
   const [addLoading, setAddLoading] = useState(false);
   const [addForm, setAddForm] = useState({ name: "", scope: "", locationsCsv: "", fee: "", is_enabled: false, daysCsv: "" });
   const [addMapPoints, setAddMapPoints] = useState<{ latitude: number; longitude: number }[]>([]);
-  const addMapInstance = useRef<any>(null);
-  const viewMapInstance = useRef<any>(null);
+  const [addMapResetCounter, setAddMapResetCounter] = useState(0);
+  const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   // Edit Zone modal state
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
@@ -68,6 +59,9 @@ export default function DeliveryZonesPage() {
   const [viewData, setViewData] = useState<any | null>(null);
   const [viewError, setViewError] = useState<string | null>(null);
   const [viewZoneId, setViewZoneId] = useState<number | null>(null);
+  const [viewMapMessage, setViewMapMessage] = useState<string | null>(null);
+  const [selectedZoneFeature, setSelectedZoneFeature] = useState<any | null>(null);
+  const [showSelectedPanel, setShowSelectedPanel] = useState(false);
 
   // Add Delivery Day modal state
   const [isAddDayOpen, setIsAddDayOpen] = useState(false);
@@ -86,96 +80,10 @@ export default function DeliveryZonesPage() {
     fetchZones();
   }, []);
 
-  // Initialize Leaflet map for Add Zone when modal opens
-  useEffect(() => {
-    if (!isAddOpen) {
-      // Clean up map instance when closed
-      if (addMapInstance.current?.map) {
-        addMapInstance.current.map.remove();
-        addMapInstance.current = null;
-      }
-      setAddMapPoints([]);
-      return;
-    }
-    const init = () => {
-      const el = document.getElementById('add-zone-map');
-  // use imported Leaflet instance
-  if (!el || !L) return;
-      if (addMapInstance.current?.map) {
-        addMapInstance.current.map.remove();
-        addMapInstance.current = null;
-      }
-      const map = L.map(el).setView([24.7136, 46.6753], 11); // Riyadh
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-        subdomains: 'abcd',
-        maxZoom: 20
-      }).addTo(map);
-      // ensure proper render inside dialog
-      setTimeout(() => map.invalidateSize(), 0);
-      const markers: any[] = [];
-      const addMarker = (lat:number, lng:number) => {
-        const m = L.marker([lat, lng], { icon: redIcon }).addTo(map);
-        markers.push(m);
-        setAddMapPoints(prev => ([...prev, { latitude: lat, longitude: lng }]));
-      };
-      map.on('click', (e:any) => addMarker(e.latlng.lat, e.latlng.lng));
-      addMapInstance.current = { map, markers };
-    };
-    // Defer until dialog content is in DOM
-    const id = window.requestAnimationFrame(init);
-    return () => window.cancelAnimationFrame(id);
-  }, [isAddOpen]);
+  // Add modal map is now provided by AddZoneMap component (react-leaflet)
 
   // Initialize Leaflet map for View Zone when modal opens and data is available
-  useEffect(() => {
-    if (!isViewOpen) {
-      if (viewMapInstance.current?.map) {
-        viewMapInstance.current.map.remove();
-        viewMapInstance.current = null;
-      }
-      return;
-    }
-    const init = () => {
-      const el = document.getElementById('view-zone-map');
-  // use imported Leaflet instance
-  if (!el || !L || !viewData) return;
-      if (viewMapInstance.current?.map) {
-        viewMapInstance.current.map.remove();
-        viewMapInstance.current = null;
-      }
-      const locs = (viewData as any).deliveryZoneGeographicalLocation ?? (viewData as any).locations;
-      const map = L.map(el);
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-        subdomains: 'abcd',
-        maxZoom: 20
-      }).addTo(map);
-      const markers: any[] = [];
-      if (Array.isArray(locs) && locs.length > 0) {
-        const bounds = L.latLngBounds([]);
-          locs.forEach((p: any) => {
-            const lat = p?.latitude; const lng = p?.longitude;
-            if (typeof lat === 'number' && typeof lng === 'number') {
-              const m = L.marker([lat, lng], { icon: redIcon }).addTo(map);
-              markers.push(m);
-              bounds.extend([lat, lng]);
-            }
-          });
-        if (bounds.isValid()) {
-          map.fitBounds(bounds, { padding: [20, 20] });
-        } else {
-          map.setView([24.7136, 46.6753], 11); // Riyadh fallback
-        }
-      } else {
-        map.setView([24.7136, 46.6753], 11); // Riyadh fallback
-      }
-      setTimeout(() => map.invalidateSize(), 0);
-      viewMapInstance.current = { map, markers };
-    };
-    const id = window.requestAnimationFrame(init);
-    return () => window.cancelAnimationFrame(id);
-  }, [isViewOpen, viewData]);
+  // NOTE: view map is now rendered via DeliveryZonesKmlMap component below (GeoJSON from KML)
 
   const fetchZones = async () => {
     try {
@@ -324,17 +232,35 @@ export default function DeliveryZonesPage() {
               <div>
                 <Label>Locations</Label>
                 <div className="mt-2 space-y-2">
-                  <div id="add-zone-map" className="h-64 rounded border" />
-                  <div className="flex items-center justify-between">
-                    <div className="text-xs text-muted-foreground">Click the map to add pins (min 4).</div>
-                    <Button type="button" variant="outline" size="sm" onClick={() => {
-                      if (addMapInstance.current) {
-                        addMapInstance.current.markers.forEach((m:any)=>m.remove());
-                        addMapInstance.current.markers = [];
-                      }
-                      setAddMapPoints([]);
-                    }}>Clear pins</Button>
+                  <div className="h-64 rounded border overflow-hidden">
+                    <AddZoneMap
+                      resetCounter={addMapResetCounter}
+                      isVisible={isAddOpen}
+                      onPointsChange={(pts)=>setAddMapPoints(pts)}
+                    />
                   </div>
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs text-muted-foreground">Click the map to add pins (min 4).</div>
+                      <div className="flex items-center space-x-2">
+                        <Button type="button" variant="outline" size="sm" onClick={() => setIsClearConfirmOpen(true)}>Clear pins</Button>
+                      </div>
+                    </div>
+                    <Dialog open={isClearConfirmOpen} onOpenChange={setIsClearConfirmOpen}>
+                      <DialogContent className="sm:max-w-[420px]">
+                        <DialogHeader>
+                          <DialogTitle>Clear all pins?</DialogTitle>
+                          <DialogDescription>This will remove all pins you added on the map. This action cannot be undone.</DialogDescription>
+                        </DialogHeader>
+                        <div className="flex justify-end gap-2 mt-4">
+                          <Button variant="outline" onClick={() => setIsClearConfirmOpen(false)}>Cancel</Button>
+                          <Button onClick={() => {
+                            setAddMapResetCounter(c => c + 1);
+                            setAddMapPoints([]);
+                            setIsClearConfirmOpen(false);
+                          }}>Clear</Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
                   {addMapPoints.length > 0 && (
                     <div className="max-h-24 overflow-auto border rounded p-2 text-xs">
                       {addMapPoints.map((p, i) => (
@@ -495,17 +421,6 @@ export default function DeliveryZonesPage() {
           </CardContent>
         </Card>
 
-        {/* KML Zones Map (client provided) */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Geographical Zones (KML)</CardTitle>
-            <CardDescription>Click on the map to test if a point lies inside a provided delivery zone.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <DeliveryZonesKmlMap kmlUrl="/Sawani%20Zones.kml" />
-          </CardContent>
-        </Card>
-
         {/* View Zone Modal */}
         <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
           <DialogContent className="sm:max-w-[700px]">
@@ -557,7 +472,40 @@ export default function DeliveryZonesPage() {
                               <div key={i} className="text-xs">{l.latitude}, {l.longitude}</div>
                             ))}
                           </div>
-                          <div id="view-zone-map" className="h-64 rounded border" />
+                          <div className="h-64 rounded border overflow-hidden relative">
+                            <DeliveryZonesKmlMap kmlUrl={'/Sawani Zones.kml'} locations={(viewData as any)?.deliveryZoneGeographicalLocation || (viewData as any)?.locations || []} onSelect={(feat, msg) => {
+                              setViewMapMessage(msg || null);
+                              setSelectedZoneFeature(feat);
+                              if (feat) {
+                                setShowSelectedPanel(true);
+                                // auto-hide after 6s
+                                window.setTimeout(() => setShowSelectedPanel(false), 6000);
+                              } else {
+                                setShowSelectedPanel(false);
+                              }
+                            }} />
+                            {showSelectedPanel && selectedZoneFeature && (
+                              <div className="absolute right-2 top-2 w-64 bg-white shadow-lg border rounded p-3 z-50">
+                                <div className="flex items-start justify-between">
+                                  <div className="text-sm font-medium">Selected Zone</div>
+                                  <Button size="sm" variant="ghost" onClick={() => setShowSelectedPanel(false)}>Close</Button>
+                                </div>
+                                <div className="mt-2 text-xs space-y-1">
+                                  <div><span className="text-muted-foreground">Name:</span> {selectedZoneFeature.properties?.name || selectedZoneFeature.properties?.Name || '—'}</div>
+                                  <div><span className="text-muted-foreground">Type:</span> {selectedZoneFeature.geometry?.type || '—'}</div>
+                                  <div><span className="text-muted-foreground">Properties:</span></div>
+                                  <div className="max-h-28 overflow-auto mt-1 text-xs border rounded p-1">
+                                    {Object.entries(selectedZoneFeature.properties || {}).map(([k,v]) => (
+                                      <div key={k} className="truncate"><strong>{k}:</strong> {String(v)}</div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          {viewMapMessage && (
+                            <div className="text-sm mt-2">{viewMapMessage}</div>
+                          )}
                         </div>
                       )}
                       <div className="sm:col-span-2">
