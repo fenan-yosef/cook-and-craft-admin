@@ -11,6 +11,8 @@ type Props = {
   initialCenter?: [number, number];
   initialZoom?: number;
   onPointsChange?: (points: { latitude: number; longitude: number }[]) => void;
+  // incoming points from parent (e.g. after importing a KML file)
+  initialPoints?: { latitude: number; longitude: number }[];
   // when this numeric prop increments, the map should clear all points
   resetCounter?: number;
   // whether the surrounding dialog/sheet is currently visible; helps with invalidateSize
@@ -56,7 +58,7 @@ function pointInGeoJSON(pointLatLng: [number, number], geometry: any): boolean {
 
 const palette = ['#2b7bba', '#e63946', '#f4a261', '#2a9d8f', '#8a2be2', '#ff6b6b', '#4cc9f0'];
 
-export default function AddZoneMap({ kmlUrl = '/Sawani Zones.kml', initialCenter = [24.7136, 46.6753], initialZoom = 11, onPointsChange, resetCounter, isVisible }: Props) {
+export default function AddZoneMap({ kmlUrl = '/Sawani Zones.kml', initialCenter = [24.7136, 46.6753], initialZoom = 11, onPointsChange, resetCounter, isVisible, initialPoints }: Props) {
   const { toast } = useToast();
   const [geojson, setGeojson] = useState<any | null>(null);
   const [points, setPoints] = useState<{ latitude: number; longitude: number }[]>([]);
@@ -88,6 +90,42 @@ export default function AddZoneMap({ kmlUrl = '/Sawani Zones.kml', initialCenter
     load();
     return () => { cancelled = true; };
   }, [kmlUrl]);
+
+  // Apply any incoming initialPoints from parent (for example, after importing a KML file).
+  // Only accept points that fall inside a delivery zone polygon. If geojson is not loaded yet,
+  // this effect will re-run once geojson becomes available (because initialPoints is stable
+  // in the parent and this effect depends on geojson).
+  useEffect(() => {
+    if (!initialPoints || initialPoints.length === 0) return;
+    if (!geojson || !geojson.features) {
+      // wait for geojson to be available; do nothing now. This effect will run again when geojson is set.
+      return;
+    }
+    // filter to points that are inside any polygon
+    const filtered = initialPoints.filter(p => {
+      return geojson.features.some((f:any) => pointInGeoJSON([p.latitude, p.longitude], f.geometry));
+    });
+    if (filtered.length === 0) {
+      toast({ title: 'Import result', description: 'No points inside delivery zones were found in the file.', variant: 'default' });
+      return;
+    }
+    setPoints(prev => {
+      const next = [...prev, ...filtered];
+      // ensure last added will open popup for last imported one
+      setLastAddedIndex(next.length - 1);
+      return next;
+    });
+  }, [initialPoints, geojson, toast]);
+
+  // If parent provides initialPoints (for example after importing a KML), accept them
+  // but only keep points that fall inside known delivery zone polygons.
+  // If geojson hasn't loaded yet, keep them pending and apply when available.
+  useEffect(() => {
+    // read from a specially-named prop passed via arguments object (not ideal but keeps types unchanged)
+    // NOTE: Because TS won't let us access props not listed, we read via arguments[0] trick
+    // However this file declares Props above so we'll instead rely on the fact that callers
+    // pass `initialPoints` and we can access it via this function's parameters only if added above.
+  }, []);
 
   function ClickHandler() {
     useMapEvents({ click(e) {

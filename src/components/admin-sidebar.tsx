@@ -74,7 +74,11 @@ const menuItems = [
         title: "Conversion Rules",
         url: "/dashboard/conversion-rules",
         icon: Settings,
-      }
+      },
+      {
+        title: "Wallets",
+        url: "/dashboard/wallets",
+      },
     ]
   },
   {
@@ -92,10 +96,6 @@ const menuItems = [
       {
         title: "Orders",
         url: "/dashboard/orders",
-      },
-      {
-        title: "Wallets",
-        url: "/dashboard/wallets",
       },
       {
         title: "Delivery Zones",
