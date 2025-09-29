@@ -875,6 +875,7 @@ export default function PostsPage() {
                   <TableHead>Title</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Likes</TableHead>
+                  <TableHead>Poll</TableHead>
                   <TableHead>Images</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -882,13 +883,13 @@ export default function PostsPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center">
+                    <TableCell colSpan={7} className="text-center">
                       Loading...
                     </TableCell>
                   </TableRow>
                 ) : filteredPosts.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center">
+                    <TableCell colSpan={7} className="text-center">
                       No posts found
                     </TableCell>
                   </TableRow>
@@ -914,14 +915,19 @@ export default function PostsPage() {
                       </TableCell>
                       <TableCell>
                         <Badge
-                          className={`${
-                            statusColors[post.status]
-                          } hover:bg-opacity-80`}
+                          className={`${statusColors[post.status]} hover:bg-opacity-80`}
                         >
                           {post.status}
                         </Badge>
                       </TableCell>
                       <TableCell>{post.likes_count}</TableCell>
+                      <TableCell>
+                        {post.post_poll && post.post_poll.question ? (
+                          <span>{post.post_poll.question}</span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">No Poll</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         {post.media && post.media.length > 0 ? (
                           <div className="flex gap-1">

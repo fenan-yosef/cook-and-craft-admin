@@ -48,6 +48,7 @@ interface Order {
   deliveryAddress: string;
   deliveryCoordination?: { latitude: number; longitude: number };
   orderItems: OrderItem[];
+  userId: number;
 }
 
 const statusColors: Record<Order["status"], string> = {
@@ -57,6 +58,7 @@ const statusColors: Record<Order["status"], string> = {
   delivered: "bg-green-100 text-green-800",
   cancelled: "bg-red-100 text-red-800",
 };
+
 
 export default function OrdersPage() {
   const { toast } = useToast();
@@ -68,6 +70,7 @@ export default function OrdersPage() {
 
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [orderedByName, setOrderedByName] = useState<string | null>(null);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -111,9 +114,25 @@ export default function OrdersPage() {
 
   const handleViewOrder = async (orderId: number) => {
     try {
+      setOrderedByName(null);
       const result = await apiService.get(`/admins/orders/${orderId}`);
       setSelectedOrder(result.data);
       setIsViewModalOpen(true);
+      // Try to fetch user name if not present in order
+      const userId = result.data.userId;
+      if (userId && (!result.data.user || !result.data.user.name)) {
+        try {
+          const userResp = await apiService.get(`/admins/users/${userId}`);
+          const userName = userResp?.data?.name || userResp?.data?.userFirstName || userResp?.data?.userLastName
+            ? `${userResp?.data?.userFirstName || ''} ${userResp?.data?.userLastName || ''}`.trim()
+            : null;
+          setOrderedByName(userResp?.data?.name || userName || null);
+        } catch (e) {
+          setOrderedByName(null);
+        }
+      } else if (result.data.user && result.data.user.name) {
+        setOrderedByName(result.data.user.name);
+      }
     } catch (error: any) {
       const message = error?.message || 'Unknown error';
       toast({
@@ -389,9 +408,10 @@ export default function OrdersPage() {
                 <Label>Payment Status:</Label>
                 <span>{selectedOrder.paymentStatus}</span>
               </div>
+              
               <div className="grid grid-cols-2 items-center gap-4">
-                <Label>Total Items:</Label>
-                <span>{selectedOrder.orderItems.length}</span>
+                <Label>Ordered By:</Label>
+                <span>{orderedByName || selectedOrder.userId}</span>
               </div>
               <div className="grid grid-cols-2 items-center gap-4">
                 <Label>Subtotal:</Label>
