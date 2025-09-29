@@ -7,6 +7,16 @@ class ApiService {
     this.baseURL = "https://cook-craft.dhcb.io/api";
   }
 
+  // Public getter for baseURL so other modules can compose full URLs when needed
+  getBaseUrl() {
+    return this.baseURL;
+  }
+
+  // Public getter for the currently-set auth token (may be null)
+  getAuthToken() {
+    return this.authToken;
+  }
+
   setAuthToken(token: string | null) {
     this.authToken = token;
   }

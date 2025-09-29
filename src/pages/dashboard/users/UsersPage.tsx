@@ -16,7 +16,7 @@ import {
   DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Search, MoreHorizontal, UserCheck, UserX, Plus } from "lucide-react"
+import { Search, MoreHorizontal, UserCheck, UserX, Plus, Trash2 } from "lucide-react"
 import { apiService } from "@/lib/api-service"
 import { useToast } from "@/hooks/use-toast"
 import {
@@ -69,6 +69,9 @@ export default function UsersPage() {
     userId: number
     role: "Admin" | "Driver" | "Customer"
   } | null>(null)
+  // Delete confirmation state
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
+  const [pendingDeleteUserId, setPendingDeleteUserId] = useState<number | null>(null)
   // User preference answers state
   const [userAnswers, setUserAnswers] = useState<any[]>([])
   const [answersLoading, setAnswersLoading] = useState(false)
@@ -337,6 +340,24 @@ export default function UsersPage() {
     }
   }
 
+  // Delete user handler
+  const handleDeleteUser = async () => {
+    if (pendingDeleteUserId == null) return;
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
+      if (token) apiService.setAuthToken(token)
+      await apiService.delete(`/admins/users/${pendingDeleteUserId}`)
+      toast({ title: "Deleted", description: "User deleted successfully." })
+      // refresh list
+      fetchUsers(currentPage)
+    } catch (err) {
+      toast({ title: "Error", description: "Failed to delete user.", variant: 'destructive' })
+    } finally {
+      setPendingDeleteUserId(null)
+      setIsDeleteConfirmOpen(false)
+    }
+  }
+
   // Fetch all preference answers then filter for selected user
   const fetchAndFilterUserAnswers = async (userId: number) => {
   const reqId = ++answersReqRef.current
@@ -461,6 +482,7 @@ export default function UsersPage() {
                   <TableHead>Email</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Phone No</TableHead>
                   <TableHead>Created</TableHead>
                   {/* <TableHead>Last Login</TableHead> */}
                   <TableHead className="text-right">Actions</TableHead>
@@ -492,10 +514,11 @@ export default function UsersPage() {
                       <TableCell>
                         <Badge variant={user.status === "active" ? "default" : "destructive"}>{user.status}</Badge>
                       </TableCell>
+                      <TableCell>{user.userPhone || "-"}</TableCell>
                       <TableCell>{new Date(user.created_at).toLocaleDateString()}</TableCell>
-                      <TableCell>
+                      {/* <TableCell>
                         {user.last_login ? new Date(user.last_login).toLocaleDateString() : "Never"}
-                      </TableCell>
+                      </TableCell> */}
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -530,6 +553,12 @@ export default function UsersPage() {
                                 </DropdownMenuRadioGroup>
                               </DropdownMenuSubContent>
                             </DropdownMenuSub>
+                            <DropdownMenuItem className="text-red-600" onClick={() => {
+                              setPendingDeleteUserId(user.id)
+                              setIsDeleteConfirmOpen(true)
+                            }}>
+                              <Trash2 className="mr-2 h-4 w-4" /> Delete user
+                            </DropdownMenuItem>
                             {user.status === "active" ? (
                               <DropdownMenuItem onClick={() => handleBlockUser(user.id)}>
                                 <UserX className="mr-2 h-4 w-4" />
@@ -835,6 +864,20 @@ export default function UsersPage() {
               >
                 Confirm
               </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+        <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete user</AlertDialogTitle>
+              <AlertDialogDescription>
+                Deleting a user will remove their account and data access. This action cannot be undone. Are you sure you want to proceed?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setPendingDeleteUserId(null)}>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDeleteUser}>Delete</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

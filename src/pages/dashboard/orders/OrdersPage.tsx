@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, MoreHorizontal, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -95,11 +95,14 @@ export default function OrdersPage() {
       setTotal(total || result.data.length);
 
     } catch (error: any) {
-      setError(error.message || "Failed to fetch orders.");
+      const friendly = "We couldn't load orders right now. Please try again.";
+      const message = error?.message || "Unknown error";
+      setError(message);
       toast({
-        title: "Error",
-        description: error.message || "Failed to fetch orders.",
+        title: "Orders Load Failed",
+        description: friendly,
         variant: "destructive",
+        details: typeof error === 'object' ? (error?.stack || message) : String(error),
       });
     } finally {
       setLoading(false);
@@ -112,10 +115,76 @@ export default function OrdersPage() {
       setSelectedOrder(result.data);
       setIsViewModalOpen(true);
     } catch (error: any) {
+      const message = error?.message || 'Unknown error';
       toast({
-        title: "Error",
-        description: error.message || "Failed to fetch order details.",
+        title: "Order Details Error",
+        description: "Couldn't fetch order details.",
         variant: "destructive",
+        details: error?.stack || message,
+      });
+    }
+  };
+
+  const changeOrderStatus = async (orderId: number, status: 'shipped' | 'delivered' | 'cancelled') => {
+    try {
+      const base = apiService.getBaseUrl();
+      const token = apiService.getAuthToken() || (typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null);
+      const resp = await fetch(`${base}/admins/orders/${orderId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ status }),
+      });
+      if (!resp.ok) {
+        // Try to parse JSON error body first
+        const bodyText = await resp.text();
+        try {
+          const json = bodyText ? JSON.parse(bodyText) : null;
+          if (json && typeof json === 'object') {
+            // If server provides a friendly `.error` field, show it directly to the user
+            const userMsg = json.error || json.message || `HTTP ${resp.status}`;
+            toast({
+              title: 'Status Update Failed',
+              description: userMsg,
+              variant: 'destructive',
+              details: JSON.stringify(json, null, 2),
+            });
+            return;
+          }
+        } catch (e) {
+          // parsing failed, fall through to throw raw text below
+        }
+
+        // fallback: show raw text or status
+        const txt = bodyText || `HTTP ${resp.status}`;
+        throw new Error(txt);
+      }
+      // update local state
+      setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status } : o)));
+      toast({ title: 'Success', description: `Order ${orderId} set to ${status}.` });
+    } catch (err: any) {
+      // If we threw a structured object with userMsg and json, handle that
+      if (err && typeof err === 'object' && ('userMsg' in err || 'json' in err)) {
+        const userMsg = err.userMsg || 'Could not update order status.';
+        const json = err.json || err;
+        toast({
+          title: 'Status Update Failed',
+          description: userMsg,
+          variant: 'destructive',
+          details: JSON.stringify(json, null, 2),
+        });
+        return;
+      }
+
+      const msg = err?.message || 'Failed to change order status';
+      toast({
+        title: 'Status Update Failed',
+        description: 'Could not update order status.',
+        variant: 'destructive',
+        details: err?.stack || msg,
       });
     }
   };
@@ -223,6 +292,14 @@ export default function OrdersPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            <DropdownMenuSub>
+                              <DropdownMenuSubTrigger>Change Status</DropdownMenuSubTrigger>
+                              <DropdownMenuSubContent>
+                                <DropdownMenuItem onClick={() => changeOrderStatus(order.id, 'shipped')}>Shipped</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => changeOrderStatus(order.id, 'delivered')}>Delivered</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => changeOrderStatus(order.id, 'cancelled')}>Cancelled</DropdownMenuItem>
+                              </DropdownMenuSubContent>
+                            </DropdownMenuSub>
                             <DropdownMenuItem
                               onClick={() => handleViewOrder(order.id)}
                             >

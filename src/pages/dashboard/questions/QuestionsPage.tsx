@@ -204,9 +204,21 @@ export default function QuestionsPage() {
     const confirmed = window.confirm("Are you sure you want to delete this question?")
     if (!confirmed) return
     try {
-      const storedToken = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
-      if (storedToken) apiService.setAuthToken(storedToken)
-      await apiService.delete(`/preference_questions/${id}`)
+      // Use apiService base URL and auth token for this delete request as requested
+      const base = apiService.getBaseUrl()
+      const token = apiService.getAuthToken() || (typeof window !== "undefined" ? localStorage.getItem("auth_token") : null)
+      const resp = await fetch(`${base}/preference_questions/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      })
+      if (!resp.ok) {
+        const txt = await resp.text()
+        throw new Error(txt || `HTTP error ${resp.status}`)
+      }
       setQuestions((prev) => prev.filter((q) => q.id !== id))
       toast({ title: "Deleted", description: "Question removed successfully." })
     } catch (error) {

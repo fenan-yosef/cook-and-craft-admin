@@ -13,6 +13,11 @@ type ToasterToast = ToastProps & {
   title?: React.ReactNode
   description?: React.ReactNode
   action?: ToastActionElement
+  /**
+   * Optional developer-friendly details (stack trace, raw message, JSON, etc.)
+   * This will be displayed in an expandable section of the toast UI when provided.
+   */
+  details?: string | React.ReactNode
 }
 
 const actionTypes = {
