@@ -210,6 +210,14 @@ export default function ReportsPage() {
 
     return matchesSearch && matchesStatus
   })
+  // Ensure resolved reports are displayed at the bottom (keeping original order for others)
+  const orderedReports = [...filteredReports].sort((a, b) => {
+    const aResolved = a.status === 'resolved'
+    const bResolved = b.status === 'resolved'
+    if (aResolved && !bResolved) return 1
+    if (bResolved && !aResolved) return -1
+    return 0
+  })
 
   return (
     <div className="flex flex-col">
@@ -307,7 +315,7 @@ export default function ReportsPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredReports.map((report) => (
+                  orderedReports.map((report) => (
                     <TableRow key={report.id}>
                       <TableCell>
                         <div className="max-w-xs">
