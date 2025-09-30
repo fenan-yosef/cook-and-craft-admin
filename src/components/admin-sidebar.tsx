@@ -8,6 +8,9 @@ import {
   Settings,
   LogOut,
   ChevronRight,
+  Wallet,
+  CookieIcon,
+  Cookie,
 } from "lucide-react"
 import { Link, useLocation } from "react-router-dom"
 import { useAuth } from "@/contexts/auth-context"
@@ -64,21 +67,30 @@ const menuItems = [
             url: "/dashboard/user-answers",
           },
         ],
-      }, 
+      },
+      {
+        title: "Wallets",
+        icon: Wallet,
+        items: [
+          {
+            title: "All Wallets",
+            url: "/dashboard/wallets",
+          },
+          {
+            title: "Wallet Types",
+            url: "/dashboard/wallet-types",
+          },
+          {
+            title: "Conversion Rules",
+            url: "/dashboard/conversion-rules",
+          },
+        ],
+      },
       {
         title: "Contact Us Messages",
         url: "/dashboard/contact-us-messages",
         icon: Settings,
-      },
-      {
-        title: "Conversion Rules",
-        url: "/dashboard/conversion-rules",
-        icon: Settings,
-      },
-      {
-        title: "Wallets",
-        url: "/dashboard/wallets",
-      },
+      }
     ]
   },
   {
@@ -144,11 +156,23 @@ const menuItems = [
     icon: Calendar,
     items: [
       {
+        title: "Subscription Plans",
+        url: "/dashboard/subscription-intervals",
+      },
+      {
+        title: "Subscriptions",
+        url: "/dashboard/subscriptions",
+      },
+      {
+        title: "Subscription and Meal Selections",
+        url: "/dashboard/subscription-meal-selections",
+      },
+      {
         title: "UserSubscriptions",
         icon: Users,
         items: [
           {
-           title: "Subscription Intervals",
+           title: "Subscription Plans",
            url: "/dashboard/subscription-intervals",
           },
           {
@@ -161,16 +185,16 @@ const menuItems = [
           },
         ],
       },
-      
-      {
-        title: "Recipes",
-        url: "/dashboard/recipes",
-      },
       {
         title: "Meals",
         url: "/dashboard/meals",
       },
     ],
+  },
+  {
+    title: "Recipes",
+    url: "/dashboard/recipes",
+    icon: Cookie,
   },
 ]
 
