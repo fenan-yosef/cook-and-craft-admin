@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar } from "@/components/ui/calendar"
+// Calendar removed in favor of week dropdown selection
 
 interface Interval {
   id: number
@@ -57,7 +57,37 @@ export default function SubscriptionIntervalsPage() {
     status: "active" as "active" | "expired",
     price_per_serving_cents: "",
   })
-  const [editWeekRange, setEditWeekRange] = useState<{ from: Date; to: Date } | undefined>(undefined)
+  // Edit selected week key
+  const [editSelectedWeekKey, setEditSelectedWeekKey] = useState("")
+  // Precomputed selectable weeks: start from next Monday (no past or current week)
+  const generateWeeks = (countForward = 16) => {
+    const today = new Date()
+    today.setHours(0,0,0,0)
+    const day = today.getDay() // 0 Sun ... 6 Sat
+    // Determine next Monday relative to today (exclude current week even if today < Monday)
+    // If today is Monday (1), we still go to next Monday (+7). Otherwise compute days to next Monday.
+    const daysUntilNextMonday = day === 1 ? 7 : ((8 - day) % 7 || 7)
+    const firstMonday = new Date(today)
+    firstMonday.setDate(firstMonday.getDate() + daysUntilNextMonday)
+    firstMonday.setHours(0,0,0,0)
+    const weeks: { label: string; start: string; end: string; isoKey: string }[] = []
+    for (let i = 0; i < countForward; i++) {
+      const start = new Date(firstMonday)
+      start.setDate(start.getDate() + 7 * i)
+      const end = new Date(start)
+      end.setDate(end.getDate() + 6)
+      const startStr = start.toISOString().split('T')[0]
+      const endStr = end.toISOString().split('T')[0]
+      weeks.push({
+        label: `${startStr} → ${endStr}`,
+        start: startStr,
+        end: endStr,
+        isoKey: startStr
+      })
+    }
+    return weeks
+  }
+  const [weekOptions, setWeekOptions] = useState(() => generateWeeks())
 
   useEffect(() => {
     fetchIntervals()
@@ -114,28 +144,19 @@ export default function SubscriptionIntervalsPage() {
       status: "active",
       price_per_serving_cents: "",
     })
-  // reset week selection
-  setAddWeekRange(undefined)
+    setSelectedWeekKey("")
   }
 
-  const computeWeekRange = (date: Date) => {
-    // JS getDay(): 0=Sunday ... 6=Saturday. We want Monday (1) to Sunday (7)
-    const day = date.getDay() // 0-6
-    const diffToMonday = (day === 0 ? 6 : day - 1) // if Sunday (0) -> 6 days back
-    const monday = new Date(date)
-    monday.setDate(date.getDate() - diffToMonday)
-    const sunday = new Date(monday)
-    sunday.setDate(monday.getDate() + 6)
-    return { monday, sunday }
-  }
+  // computeWeekRange removed (selection via predefined week list)
 
-  const [addWeekRange, setAddWeekRange] = useState<{ from: Date; to: Date } | undefined>(undefined)
-  const onAddCalendarSelect = (d?: Date) => {
-    if (!d) return
-    const { monday, sunday } = computeWeekRange(d)
-    setAddWeekRange({ from: monday, to: sunday })
-    const fmt = (dt: Date) => dt.toISOString().split("T")[0]
-    setAddForm(prev => ({ ...prev, start_date: fmt(monday), end_date: fmt(sunday) }))
+  // Week selection via dropdown
+  const [selectedWeekKey, setSelectedWeekKey] = useState("")
+  const handleSelectWeek = (key: string) => {
+    setSelectedWeekKey(key)
+    const wk = weekOptions.find(w => w.isoKey === key)
+    if (wk) {
+      setAddForm(prev => ({ ...prev, start_date: wk.start, end_date: wk.end }))
+    }
   }
 
   // Submit Add Product
@@ -196,10 +217,17 @@ export default function SubscriptionIntervalsPage() {
       status: (interval.status as "active" | "expired") ?? "active",
       price_per_serving_cents: (interval.price_per_serving_cents / 100).toString(),
     })
-    // Initialize week range for calendar
-    const start = new Date(interval.start_date)
-    const end = new Date(interval.end_date)
-    setEditWeekRange({ from: start, to: end })
+    // Ensure existing interval week is present in options; prepend if missing
+    const exists = weekOptions.find(w => w.start === interval.start_date)
+    if (!exists) {
+      setWeekOptions(prev => [{
+        label: `${interval.start_date} → ${interval.end_date}`,
+        start: interval.start_date,
+        end: interval.end_date,
+        isoKey: interval.start_date
+      }, ...prev])
+    }
+    setEditSelectedWeekKey(interval.start_date)
     setIsEditOpen(true)
   }
 
@@ -223,7 +251,7 @@ export default function SubscriptionIntervalsPage() {
       status: "active",
       price_per_serving_cents: "",
     })
-    setEditWeekRange(undefined)
+    setEditSelectedWeekKey("")
   }
 
   // Submit Edit Product
@@ -306,24 +334,22 @@ export default function SubscriptionIntervalsPage() {
                 />
               </div>
               <div>
-                <Label>Week (Mon - Sun)</Label>
-                <div className="mt-2 border rounded-md p-3">
-                  <Calendar
-                    mode="range"
-                    selected={addWeekRange as any}
-                    onDayClick={(day) => onAddCalendarSelect(day)}
-                    numberOfMonths={1}
-                  />
-                  <div className="mt-3 text-xs text-muted-foreground flex items-center gap-2">
-                    <CalendarIcon className="h-3 w-3" />
-                    {addForm.start_date && addForm.end_date ? (
-                      <span className="text-emerald-600">
-                        Selected Week: <strong>{addForm.start_date}</strong> → <strong>{addForm.end_date}</strong>
-                      </span>
-                    ) : (
-                      <span>Select any day to auto-fill its full week (Mon-Sun)</span>
-                    )}
-                  </div>
+                <Label htmlFor="week_select">Week (Mon - Sun)</Label>
+                <Select value={selectedWeekKey} onValueChange={handleSelectWeek}>
+                  <SelectTrigger id="week_select" className="mt-1">
+                    <SelectValue placeholder="Select week" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {weekOptions.map(w => (
+                      <SelectItem key={w.isoKey} value={w.isoKey}>{w.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="mt-2 text-xs text-muted-foreground flex items-center gap-2">
+                  <CalendarIcon className="h-3 w-3" />
+                  {addForm.start_date && addForm.end_date ? (
+                    <span className="text-emerald-600">Selected: <strong>{addForm.start_date}</strong> → <strong>{addForm.end_date}</strong></span>
+                  ) : 'Choose a week to set start/end automatically'}
                 </div>
               </div>
               <div>
@@ -382,24 +408,27 @@ export default function SubscriptionIntervalsPage() {
                 />
               </div>
               <div>
-                <Label>Week (Mon - Sun)</Label>
-                <div className="mt-2 border rounded-md p-3">
-                  <Calendar
-                    mode="range"
-                    selected={editWeekRange as any}
-                    onDayClick={(day) => {
-                      const { monday, sunday } = computeWeekRange(day)
-                      setEditWeekRange({ from: monday, to: sunday })
-                      const fmt = (dt: Date) => dt.toISOString().split('T')[0]
-                      setEditForm(prev => ({ ...prev, start_date: fmt(monday), end_date: fmt(sunday) }))
-                    }}
-                    numberOfMonths={1}
-                  />
-                  <div className="mt-3 text-xs text-muted-foreground">
-                    {editForm.start_date && editForm.end_date ? (
-                      <span className="text-emerald-600">Selected Week: <strong>{editForm.start_date}</strong> → <strong>{editForm.end_date}</strong></span>
-                    ) : 'Select any day to auto-fill its full week (Mon-Sun)'}
-                  </div>
+                <Label htmlFor="edit_week_select">Week (Mon - Sun)</Label>
+                <Select value={editSelectedWeekKey} onValueChange={(key) => {
+                  setEditSelectedWeekKey(key)
+                  const wk = weekOptions.find(w => w.isoKey === key)
+                  if (wk) {
+                    setEditForm(prev => ({ ...prev, start_date: wk.start, end_date: wk.end }))
+                  }
+                }}>
+                  <SelectTrigger id="edit_week_select" className="mt-1">
+                    <SelectValue placeholder="Select week" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {weekOptions.map(w => (
+                      <SelectItem key={w.isoKey} value={w.isoKey}>{w.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="mt-2 text-xs text-muted-foreground">
+                  {editForm.start_date && editForm.end_date ? (
+                    <span className="text-emerald-600">Selected: <strong>{editForm.start_date}</strong> → <strong>{editForm.end_date}</strong></span>
+                  ) : 'Choose a week to set start/end automatically'}
                 </div>
               </div>
               <div>
