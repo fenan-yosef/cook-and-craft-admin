@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, Plus, Edit } from "lucide-react"
+import { Search, Plus, Edit, Calendar as CalendarIcon } from "lucide-react"
 import { apiService } from "@/lib/api-service"
 import { useToast } from "@/hooks/use-toast"
 import {
@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Calendar } from "@/components/ui/calendar"
 
 interface Interval {
   id: number
@@ -56,6 +57,7 @@ export default function SubscriptionIntervalsPage() {
     status: "active" as "active" | "expired",
     price_per_serving_cents: "",
   })
+  const [editWeekRange, setEditWeekRange] = useState<{ from: Date; to: Date } | undefined>(undefined)
 
   useEffect(() => {
     fetchIntervals()
@@ -112,6 +114,28 @@ export default function SubscriptionIntervalsPage() {
       status: "active",
       price_per_serving_cents: "",
     })
+  // reset week selection
+  setAddWeekRange(undefined)
+  }
+
+  const computeWeekRange = (date: Date) => {
+    // JS getDay(): 0=Sunday ... 6=Saturday. We want Monday (1) to Sunday (7)
+    const day = date.getDay() // 0-6
+    const diffToMonday = (day === 0 ? 6 : day - 1) // if Sunday (0) -> 6 days back
+    const monday = new Date(date)
+    monday.setDate(date.getDate() - diffToMonday)
+    const sunday = new Date(monday)
+    sunday.setDate(monday.getDate() + 6)
+    return { monday, sunday }
+  }
+
+  const [addWeekRange, setAddWeekRange] = useState<{ from: Date; to: Date } | undefined>(undefined)
+  const onAddCalendarSelect = (d?: Date) => {
+    if (!d) return
+    const { monday, sunday } = computeWeekRange(d)
+    setAddWeekRange({ from: monday, to: sunday })
+    const fmt = (dt: Date) => dt.toISOString().split("T")[0]
+    setAddForm(prev => ({ ...prev, start_date: fmt(monday), end_date: fmt(sunday) }))
   }
 
   // Submit Add Product
@@ -119,6 +143,20 @@ export default function SubscriptionIntervalsPage() {
     e.preventDefault()
     setAddLoading(true)
     try {
+      // Validation: ensure we have start/end and they form exactly 7-day Monday-Sunday window
+      if (!addForm.start_date || !addForm.end_date) {
+        throw new Error('Please select a week (Mon-Sun).')
+      }
+      const start = new Date(addForm.start_date)
+      const end = new Date(addForm.end_date)
+      const diffDays = Math.round((end.getTime() - start.getTime()) / (1000*60*60*24))
+      const startDay = start.getDay() // 1=Mon? In JS 1=Mon only if we adjust; raw JS: 1=Mon, 0=Sun.
+      const endDay = end.getDay()
+      const isMonday = startDay === 1
+      const isSunday = endDay === 0
+      if (diffDays !== 6 || !isMonday || !isSunday) {
+        throw new Error('Selected range must be Monday to Sunday (7 days).')
+      }
       const payload = {
         title: addForm.title,
         start_date: addForm.start_date,
@@ -158,6 +196,10 @@ export default function SubscriptionIntervalsPage() {
       status: (interval.status as "active" | "expired") ?? "active",
       price_per_serving_cents: (interval.price_per_serving_cents / 100).toString(),
     })
+    // Initialize week range for calendar
+    const start = new Date(interval.start_date)
+    const end = new Date(interval.end_date)
+    setEditWeekRange({ from: start, to: end })
     setIsEditOpen(true)
   }
 
@@ -181,6 +223,7 @@ export default function SubscriptionIntervalsPage() {
       status: "active",
       price_per_serving_cents: "",
     })
+    setEditWeekRange(undefined)
   }
 
   // Submit Edit Product
@@ -188,6 +231,17 @@ export default function SubscriptionIntervalsPage() {
     e.preventDefault()
     setEditLoading(true)
     try {
+      if (!editForm.start_date || !editForm.end_date) {
+        throw new Error('Please select a week (Mon-Sun).')
+      }
+      const start = new Date(editForm.start_date)
+      const end = new Date(editForm.end_date)
+      const diffDays = Math.round((end.getTime() - start.getTime()) / (1000*60*60*24))
+      const isMonday = start.getDay() === 1
+      const isSunday = end.getDay() === 0
+      if (diffDays !== 6 || !isMonday || !isSunday) {
+        throw new Error('Selected range must be Monday to Sunday (7 days).')
+      }
       // Build form data and POST with _method=put
       const formData = new FormData()
       formData.append("title", editForm.title)
@@ -251,28 +305,25 @@ export default function SubscriptionIntervalsPage() {
                   required
                 />
               </div>
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <Label htmlFor="start_date">Start Date</Label>
-                  <Input
-                    id="start_date"
-                    name="start_date"
-                    type="date"
-                    value={addForm.start_date}
-                    onChange={handleAddChange}
-                    required
+              <div>
+                <Label>Week (Mon - Sun)</Label>
+                <div className="mt-2 border rounded-md p-3">
+                  <Calendar
+                    mode="range"
+                    selected={addWeekRange as any}
+                    onDayClick={(day) => onAddCalendarSelect(day)}
+                    numberOfMonths={1}
                   />
-                </div>
-                <div className="flex-1">
-                  <Label htmlFor="end_date">End Date</Label>
-                  <Input
-                    id="end_date"
-                    name="end_date"
-                    type="date"
-                    value={addForm.end_date}
-                    onChange={handleAddChange}
-                    required
-                  />
+                  <div className="mt-3 text-xs text-muted-foreground flex items-center gap-2">
+                    <CalendarIcon className="h-3 w-3" />
+                    {addForm.start_date && addForm.end_date ? (
+                      <span className="text-emerald-600">
+                        Selected Week: <strong>{addForm.start_date}</strong> → <strong>{addForm.end_date}</strong>
+                      </span>
+                    ) : (
+                      <span>Select any day to auto-fill its full week (Mon-Sun)</span>
+                    )}
+                  </div>
                 </div>
               </div>
               <div>
@@ -304,7 +355,7 @@ export default function SubscriptionIntervalsPage() {
                 <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={addLoading}>
+                <Button type="submit" disabled={addLoading || !addForm.start_date || !addForm.end_date}>
                   {addLoading ? "Adding..." : "Add Interval"}
                 </Button>
               </DialogFooter>
@@ -330,28 +381,25 @@ export default function SubscriptionIntervalsPage() {
                   required
                 />
               </div>
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <Label htmlFor="edit_start_date">Start Date</Label>
-                  <Input
-                    id="edit_start_date"
-                    name="start_date"
-                    type="date"
-                    value={editForm.start_date}
-                    onChange={handleEditChange}
-                    required
+              <div>
+                <Label>Week (Mon - Sun)</Label>
+                <div className="mt-2 border rounded-md p-3">
+                  <Calendar
+                    mode="range"
+                    selected={editWeekRange as any}
+                    onDayClick={(day) => {
+                      const { monday, sunday } = computeWeekRange(day)
+                      setEditWeekRange({ from: monday, to: sunday })
+                      const fmt = (dt: Date) => dt.toISOString().split('T')[0]
+                      setEditForm(prev => ({ ...prev, start_date: fmt(monday), end_date: fmt(sunday) }))
+                    }}
+                    numberOfMonths={1}
                   />
-                </div>
-                <div className="flex-1">
-                  <Label htmlFor="edit_end_date">End Date</Label>
-                  <Input
-                    id="edit_end_date"
-                    name="end_date"
-                    type="date"
-                    value={editForm.end_date}
-                    onChange={handleEditChange}
-                    required
-                  />
+                  <div className="mt-3 text-xs text-muted-foreground">
+                    {editForm.start_date && editForm.end_date ? (
+                      <span className="text-emerald-600">Selected Week: <strong>{editForm.start_date}</strong> → <strong>{editForm.end_date}</strong></span>
+                    ) : 'Select any day to auto-fill its full week (Mon-Sun)'}
+                  </div>
                 </div>
               </div>
               <div>
