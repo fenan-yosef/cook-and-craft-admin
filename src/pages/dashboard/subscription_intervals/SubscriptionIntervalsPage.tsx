@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, Plus, Edit, Calendar as CalendarIcon } from "lucide-react"
+import { Search, Plus, Edit, Trash2, Calendar as CalendarIcon } from "lucide-react"
 import { apiService } from "@/lib/api-service"
 import { useToast } from "@/hooks/use-toast"
 import {
@@ -97,6 +97,8 @@ export default function SubscriptionIntervalsPage() {
     return weeks
   }
   const [weekOptions, setWeekOptions] = useState(() => generateWeeks())
+  // Deletion state
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
   useEffect(() => {
     fetchIntervals()
@@ -327,6 +329,26 @@ export default function SubscriptionIntervalsPage() {
     interval.title.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
+  const handleDeleteInterval = async (id: number) => {
+    if (!window.confirm('Delete this interval? This cannot be undone.')) return;
+    setDeletingId(id)
+    try {
+      await apiService.delete(`/subscription_intervals/${id}`)
+      toast({ title: 'Deleted', description: 'Interval removed.' })
+      // Optimistic removal or refetch
+      setIntervals(prev => prev.filter(i => i.id !== id))
+      // If edit modal was open for this interval close it
+      if (editForm.id && Number(editForm.id) === id) {
+        setIsEditOpen(false)
+        resetEditForm()
+      }
+    } catch (err: any) {
+      toast({ title: 'Error', description: err?.message || 'Failed to delete interval.', variant: 'destructive' })
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   return (
     <div className="flex flex-col">
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -541,6 +563,7 @@ export default function SubscriptionIntervalsPage() {
                   <TableHead>End Date</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Price per Serving</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -564,9 +587,12 @@ export default function SubscriptionIntervalsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>{`$${(interval.price_per_serving_cents/100).toFixed(2)}`}</TableCell>
-                      <TableCell>
-                        <Button size="sm" variant="outline" onClick={() => openEditModal(interval)}>
+                      <TableCell className="text-right space-x-2">
+                        <Button size="sm" variant="outline" onClick={() => openEditModal(interval)} disabled={deletingId === interval.id}>
                           <Edit className="mr-2 h-4 w-4" /> Edit
+                        </Button>
+                        <Button size="sm" variant="destructive" onClick={() => handleDeleteInterval(interval.id)} disabled={deletingId === interval.id}>
+                          {deletingId === interval.id ? 'Deleting...' : <><Trash2 className="mr-2 h-4 w-4" /> Delete</>}
                         </Button>
                       </TableCell>
                     </TableRow>
