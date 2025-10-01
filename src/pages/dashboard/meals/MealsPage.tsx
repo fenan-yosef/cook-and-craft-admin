@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { Search, MoreHorizontal, Eye, Utensils, Pen } from "lucide-react"
+import { Search, MoreHorizontal, Eye, Utensils, Pen, Trash2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { apiService } from "@/lib/api-service"
 import { useAuth } from "@/contexts/auth-context"
@@ -40,6 +40,7 @@ export default function MealsPage() {
     label: "",
     is_active: true,
   })
+  const [deletingId, setDeletingId] = useState<number | null>(null)
   const { toast } = useToast()
   const { token, isLoading: authLoading } = useAuth()
 
@@ -185,6 +186,22 @@ export default function MealsPage() {
     setIsViewDialogOpen(true)
   }
 
+  const deleteMeal = async (meal: Meal) => {
+    if (deletingId !== null) return
+    if (!window.confirm(`Delete meal "${meal.label}"? This action cannot be undone.`)) return
+    setDeletingId(meal.id)
+    try {
+      await apiService.delete(`/meals/${meal.id}`)
+      setMeals(prev => prev.filter(m => m.id !== meal.id))
+      if (selectedMeal?.id === meal.id) setIsViewDialogOpen(false)
+      toast({ title: 'Deleted', description: 'Meal removed.' })
+    } catch (error: any) {
+      toast({ title: 'Error', description: error?.message || 'Failed to delete meal', variant: 'destructive' })
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   const filteredMeals = meals.filter(
     (meal) =>
       meal.label.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -282,13 +299,20 @@ export default function MealsPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => viewMeal(meal)}>
+                            <DropdownMenuItem onClick={() => viewMeal(meal)} disabled={deletingId === meal.id}>
                               <Eye className="mr-2 h-4 w-4" />
                               View 
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openEdit(meal)}>
+                            <DropdownMenuItem onClick={() => openEdit(meal)} disabled={deletingId === meal.id}>
                               <Pen className="mr-2 h-4 w-4" />
                               Edit 
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-red-600 focus:text-red-700" disabled={deletingId === meal.id} onClick={() => deleteMeal(meal)}>
+                              {deletingId === meal.id ? (
+                                <span className="flex items-center"><Trash2 className="mr-2 h-4 w-4" /> Deleting...</span>
+                              ) : (
+                                <span className="flex items-center"><Trash2 className="mr-2 h-4 w-4" /> Delete</span>
+                              )}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
