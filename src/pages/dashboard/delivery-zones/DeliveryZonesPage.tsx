@@ -81,6 +81,40 @@ export default function DeliveryZonesPage() {
   const [addSlotLoading, setAddSlotLoading] = useState(false);
   const [addSlotForm, setAddSlotForm] = useState<{ startAt: string; endsAt: string; capacity: string }>({ startAt: "", endsAt: "", capacity: "" });
   const [currentDeliveryDay, setCurrentDeliveryDay] = useState<{ id: number; dayOfWeek?: number } | null>(null);
+  // Deletion loading trackers
+  const [deletingDayIds, setDeletingDayIds] = useState<number[]>([]);
+  const [deletingSlotIds, setDeletingSlotIds] = useState<number[]>([]);
+
+  const deleteDeliveryDay = async (dayId: number) => {
+    if (!editForm.id) return;
+    const confirmMsg = 'Delete this delivery day and all its time slots? This cannot be undone.';
+    if (!window.confirm(confirmMsg)) return;
+    setDeletingDayIds(prev => [...prev, dayId]);
+    try {
+      await apiService.delete(`/admins/delivery-zones/delivery-days/${dayId}`);
+      toast({ title: 'Deleted', description: 'Delivery day removed.' });
+      await fetchEditZoneDetails(Number(editForm.id));
+    } catch (err: any) {
+      toast({ title: 'Error', description: err?.message || 'Failed to delete delivery day', variant: 'destructive' });
+    } finally {
+      setDeletingDayIds(prev => prev.filter(id => id !== dayId));
+    }
+  };
+
+  const deleteTimeSlot = async (slotId: number) => {
+    const confirmMsg = 'Delete this time slot? This action cannot be undone.';
+    if (!window.confirm(confirmMsg)) return;
+    setDeletingSlotIds(prev => [...prev, slotId]);
+    try {
+      await apiService.delete(`/admins/delivery-zones/delivery-days/delivery-time-slots/${slotId}`);
+      toast({ title: 'Deleted', description: 'Time slot removed.' });
+      if (editForm.id) await fetchEditZoneDetails(Number(editForm.id));
+    } catch (err:any) {
+      toast({ title: 'Error', description: err?.message || 'Failed to delete time slot', variant: 'destructive' });
+    } finally {
+      setDeletingSlotIds(prev => prev.filter(id => id !== slotId));
+    }
+  };
 
   useEffect(() => {
     const token = localStorage.getItem("auth_token") || "";
@@ -519,13 +553,22 @@ export default function DeliveryZonesPage() {
                           const dow = d?.dayOfWeek ?? d?.day_of_week ?? d?.day;
                           const slots = d?.deliveryTimeSlots ?? d?.delivery_time_slots ?? [];
                           const dayName = (n: any) => { const dnum = Number(n); const iso = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']; if (dnum>=1 && dnum<=7) return iso[dnum-1]; return String(n);} ;
+                          const dayId = d?.id ?? d?.deliveryDayId ?? d?.delivery_day_id;
+                          const deleting = dayId && deletingDayIds.includes(dayId);
                           return (
                             <div key={i} className="border rounded p-2 text-xs">
                               <div className="flex items-center justify-between mb-1">
                                 <div className="font-medium">{dayName(dow)}</div>
-                                {d?.id && (
-                                  <Button size="sm" variant="outline" type="button" onClick={() => { setCurrentDeliveryDay({ id: d.id, dayOfWeek: dow }); setIsAddSlotOpen(true); }}>Add Time Slot</Button>
-                                )}
+                                <div className="flex items-center gap-2">
+                                  {d?.id && (
+                                    <Button size="sm" variant="outline" type="button" onClick={() => { setCurrentDeliveryDay({ id: d.id, dayOfWeek: dow }); setIsAddSlotOpen(true); }}>Add Time Slot</Button>
+                                  )}
+                                  {dayId && (
+                                    <Button size="sm" variant="destructive" type="button" disabled={!!deleting} onClick={() => deleteDeliveryDay(dayId)}>
+                                      {deleting ? 'Deleting...' : 'Delete'}
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
                               {Array.isArray(slots) && slots.length > 0 ? (
                                 <ul className="ml-3 list-disc space-y-0.5">
@@ -533,7 +576,25 @@ export default function DeliveryZonesPage() {
                                     const start = t?.startTime ?? t?.start_time ?? t?.startAt ?? t?.start_at ?? null;
                                     const end = t?.endTime ?? t?.end_time ?? t?.endsAt ?? t?.ends_at ?? null;
                                     const capacity = t?.capacity;
-                                    return (<li key={j}>{start && end ? `${start} - ${end}` : 'All day'}{typeof capacity !== 'undefined' ? ` • Cap: ${capacity}` : ''}</li>);
+                                    const slotId = t?.id ?? t?.deliveryTimeSlotId ?? t?.delivery_time_slot_id;
+                                    const deletingSlot = slotId && deletingSlotIds.includes(slotId);
+                                    return (
+                                      <li key={j} className="flex items-center justify-between pr-1">
+                                        <span>{start && end ? `${start} - ${end}` : 'All day'}{typeof capacity !== 'undefined' ? ` • Cap: ${capacity}` : ''}</span>
+                                        {slotId && (
+                                          <Button
+                                            size="sm"
+                                            variant="destructive"
+                                            type="button"
+                                            className="h-6 px-2 text-[10px]"
+                                            disabled={!!deletingSlot}
+                                            onClick={() => deleteTimeSlot(slotId)}
+                                          >
+                                            {deletingSlot ? '...' : 'Del'}
+                                          </Button>
+                                        )}
+                                      </li>
+                                    );
                                   })}
                                 </ul>
                               ) : (<div className="ml-1 text-muted-foreground">No time slots</div>)}
@@ -636,9 +697,9 @@ export default function DeliveryZonesPage() {
                             <DropdownMenuItem onClick={() => openEditModal(zone)}>
                               <Edit className="mr-2 h-4 w-4" /> Edit
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="text-red-600">
+                            {/* <DropdownMenuItem className="text-red-600">
                               <Trash2 className="mr-2 h-4 w-4" /> Delete
-                            </DropdownMenuItem>
+                            </DropdownMenuItem> */}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
