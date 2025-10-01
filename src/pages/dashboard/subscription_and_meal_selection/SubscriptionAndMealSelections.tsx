@@ -40,6 +40,7 @@ export default function SubscriptionAndMealSelectionsPage() {
     intervalName: "",
     selections: [{ meal_id: "", meal_name: "", qty: "" }] as Array<{ meal_id: string; meal_name: string; qty: string }>,
   })
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
   // Simple mock meal catalog for name lookup when only meal_id is present
   const mealCatalog: Record<number, string> = {
@@ -304,6 +305,26 @@ export default function SubscriptionAndMealSelectionsPage() {
     return sub.includes(q) || intval.includes(q) || selectionStr.includes(q)
   })
 
+  const handleDeleteRow = async (row: SubMealSelectionRow) => {
+    if (deletingId !== null) return
+    // If row has no persisted id just remove locally
+    if (!row.id) {
+      setRows(prev => prev.filter(r => r !== row))
+      return
+    }
+    if (!window.confirm('Delete this selection set? This cannot be undone.')) return
+    setDeletingId(row.id)
+    try {
+      await apiService.delete(`/sub-meal-selections/${row.id}`)
+      setRows(prev => prev.filter(r => r.id !== row.id))
+    } catch (err: any) {
+      // Surface error (toast hook pattern similar to other pages if desired)
+      console.error('Delete failed', err)
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   return (
     <div className="flex flex-col">
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -338,7 +359,7 @@ export default function SubscriptionAndMealSelectionsPage() {
                   <TableHead>Subscription</TableHead>
                   <TableHead>Interval</TableHead>
                   <TableHead>Selections</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -374,9 +395,12 @@ export default function SubscriptionAndMealSelectionsPage() {
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className="text-right">
-                        <Button size="sm" variant="outline" onClick={() => openEditModal(row, idx)}>
+                      <TableCell className="text-right space-x-2">
+                        <Button size="sm" variant="outline" onClick={() => openEditModal(row, idx)} disabled={deletingId === row.id}>
                           <Edit className="mr-2 h-4 w-4" /> Edit
+                        </Button>
+                        <Button size="sm" variant="destructive" onClick={() => handleDeleteRow(row)} disabled={deletingId === row.id}>
+                          {deletingId === row.id ? 'Deleting...' : (<><Trash2 className="mr-2 h-4 w-4" /> Delete</>)}
                         </Button>
                       </TableCell>
                     </TableRow>
