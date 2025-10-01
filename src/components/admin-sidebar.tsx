@@ -138,12 +138,8 @@ const menuItems = [
     icon: Settings,
     items: [
       {
-        title: "Offers",
-        url: "/dashboard/loyality-and-rewards/offers",
-      },
-      {
         title: "Rewards",
-        url: "/dashboard/loyality-and-rewards/rewards",
+        url: "/dashboard/rewards",
       },
       {
         title: "Coupons",
