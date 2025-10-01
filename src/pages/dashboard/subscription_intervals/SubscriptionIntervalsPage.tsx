@@ -27,6 +27,7 @@ interface Interval {
   status: "active"
   is_served: number
   price_per_serving_cents: number
+  cutoff_date?: string
 }
 
 export default function SubscriptionIntervalsPage() {
@@ -44,6 +45,7 @@ export default function SubscriptionIntervalsPage() {
     end_date: "",
     status: "active" as "active" | "expired",
     price_per_serving_cents: "",
+    cutoff_date: "",
   })
 
   // Edit Product Modal State
@@ -56,6 +58,7 @@ export default function SubscriptionIntervalsPage() {
     end_date: "",
     status: "active" as "active" | "expired",
     price_per_serving_cents: "",
+    cutoff_date: "",
   })
   // Edit selected week key
   const [editSelectedWeekKey, setEditSelectedWeekKey] = useState("")
@@ -64,20 +67,26 @@ export default function SubscriptionIntervalsPage() {
     const today = new Date()
     today.setHours(0,0,0,0)
     const day = today.getDay() // 0 Sun ... 6 Sat
-    // Determine next Monday relative to today (exclude current week even if today < Monday)
-    // If today is Monday (1), we still go to next Monday (+7). Otherwise compute days to next Monday.
     const daysUntilNextMonday = day === 1 ? 7 : ((8 - day) % 7 || 7)
     const firstMonday = new Date(today)
     firstMonday.setDate(firstMonday.getDate() + daysUntilNextMonday)
     firstMonday.setHours(0,0,0,0)
+    const fmt = (d: Date) => {
+      const y = d.getFullYear()
+      const m = String(d.getMonth()+1).padStart(2,'0')
+      const dd = String(d.getDate()).padStart(2,'0')
+      return `${y}-${m}-${dd}`
+    }
     const weeks: { label: string; start: string; end: string; isoKey: string }[] = []
     for (let i = 0; i < countForward; i++) {
       const start = new Date(firstMonday)
       start.setDate(start.getDate() + 7 * i)
+      start.setHours(0,0,0,0)
       const end = new Date(start)
       end.setDate(end.getDate() + 6)
-      const startStr = start.toISOString().split('T')[0]
-      const endStr = end.toISOString().split('T')[0]
+      end.setHours(23,59,59,999)
+      const startStr = fmt(start)
+      const endStr = fmt(end)
       weeks.push({
         label: `${startStr} → ${endStr}`,
         start: startStr,
@@ -104,6 +113,7 @@ export default function SubscriptionIntervalsPage() {
         end_date: item.end_date,
         status: item.status,
         price_per_serving_cents: item.price_per_serving_cents,
+        cutoff_date: item.cutoff_date || item.cutoffDate || undefined,
       }))
       setIntervals(mappedIntervals)
     } catch (error) {
@@ -143,6 +153,7 @@ export default function SubscriptionIntervalsPage() {
       end_date: "",
       status: "active",
       price_per_serving_cents: "",
+      cutoff_date: "",
     })
     setSelectedWeekKey("")
   }
@@ -168,8 +179,12 @@ export default function SubscriptionIntervalsPage() {
       if (!addForm.start_date || !addForm.end_date) {
         throw new Error('Please select a week (Mon-Sun).')
       }
-      const start = new Date(addForm.start_date)
-      const end = new Date(addForm.end_date)
+      if (!addForm.cutoff_date) {
+        throw new Error('Please provide a cutoff date.')
+      }
+  const parseLocal = (s: string) => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d) }
+  const start = parseLocal(addForm.start_date)
+  const end = parseLocal(addForm.end_date)
       const diffDays = Math.round((end.getTime() - start.getTime()) / (1000*60*60*24))
       const startDay = start.getDay() // 1=Mon? In JS 1=Mon only if we adjust; raw JS: 1=Mon, 0=Sun.
       const endDay = end.getDay()
@@ -184,6 +199,7 @@ export default function SubscriptionIntervalsPage() {
         end_date: addForm.end_date,
   status: addForm.status,
         price_per_serving_cents: Number(addForm.price_per_serving_cents) * 100,
+        cutoff_date: addForm.cutoff_date,
       }
 
       // Send POST request via apiService
@@ -216,6 +232,7 @@ export default function SubscriptionIntervalsPage() {
       end_date: interval.end_date,
       status: (interval.status as "active" | "expired") ?? "active",
       price_per_serving_cents: (interval.price_per_serving_cents / 100).toString(),
+      cutoff_date: interval.cutoff_date || "",
     })
     // Ensure existing interval week is present in options; prepend if missing
     const exists = weekOptions.find(w => w.start === interval.start_date)
@@ -250,6 +267,7 @@ export default function SubscriptionIntervalsPage() {
       end_date: "",
       status: "active",
       price_per_serving_cents: "",
+      cutoff_date: "",
     })
     setEditSelectedWeekKey("")
   }
@@ -262,8 +280,12 @@ export default function SubscriptionIntervalsPage() {
       if (!editForm.start_date || !editForm.end_date) {
         throw new Error('Please select a week (Mon-Sun).')
       }
-      const start = new Date(editForm.start_date)
-      const end = new Date(editForm.end_date)
+      if (!editForm.cutoff_date) {
+        throw new Error('Please provide a cutoff date.')
+      }
+  const parseLocal = (s: string) => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d) }
+  const start = parseLocal(editForm.start_date)
+  const end = parseLocal(editForm.end_date)
       const diffDays = Math.round((end.getTime() - start.getTime()) / (1000*60*60*24))
       const isMonday = start.getDay() === 1
       const isSunday = end.getDay() === 0
@@ -277,6 +299,7 @@ export default function SubscriptionIntervalsPage() {
       formData.append("end_date", editForm.end_date)
   formData.append("status", editForm.status)
       formData.append("price_per_serving_cents", String(Number(editForm.price_per_serving_cents) * 100))
+  formData.append("cutoff_date", editForm.cutoff_date)
 
       const response = await apiService.postMultipart(`/subscription_intervals/${editForm.id}?_method=put`, formData)
       console.log("PUT override response:", response)
@@ -365,6 +388,18 @@ export default function SubscriptionIntervalsPage() {
                 </Select>
               </div>
               <div>
+                <Label htmlFor="cutoff_date">Cutoff Date</Label>
+                <Input
+                  id="cutoff_date"
+                  name="cutoff_date"
+                  type="date"
+                  value={addForm.cutoff_date}
+                  onChange={handleAddChange}
+                  required
+                />
+                <p className="mt-1 text-xs text-muted-foreground">Last day users can make changes before interval week starts.</p>
+              </div>
+              <div>
                 <Label htmlFor="price_per_serving_cents">Price per Serving ($)</Label>
                 <Input
                   id="price_per_serving_cents"
@@ -442,6 +477,18 @@ export default function SubscriptionIntervalsPage() {
                     <SelectItem value="expired">Expired</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <div>
+                <Label htmlFor="edit_cutoff_date">Cutoff Date</Label>
+                <Input
+                  id="edit_cutoff_date"
+                  name="cutoff_date"
+                  type="date"
+                  value={editForm.cutoff_date}
+                  onChange={handleEditChange}
+                  required
+                />
+                <p className="mt-1 text-xs text-muted-foreground">Last day users can make changes before interval week starts.</p>
               </div>
               <div>
                 <Label htmlFor="edit_price_per_serving_cents">Price per Serving ($)</Label>

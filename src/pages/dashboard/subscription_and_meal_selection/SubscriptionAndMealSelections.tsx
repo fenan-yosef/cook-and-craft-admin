@@ -209,7 +209,24 @@ export default function SubscriptionAndMealSelectionsPage() {
       setOptionsLoading(prev => ({ ...prev, subs: true }))
       const res = await apiService.get("/subscriptions")
       const items = Array.isArray(res?.data?.data) ? res.data.data : Array.isArray(res?.data) ? res.data : []
-      const mapped = items.map((s: any) => ({ id: s.id ?? s.ID, name: s.name ?? s.user_name ?? s.title ?? `Subscription #${s.id}` })).filter((s: any) => s.id)
+      const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+      const mapped = items.map((s: any) => {
+        const id = s.id ?? s.ID
+        if (!id) return null
+        const dti = s.delivery_time_id || s.deliveryTime || s.delivery_time || {}
+        const dayNumRaw = dti?.day?.day_of_week ?? dti?.day_of_week ?? dti?.dayOfWeek
+        let dayName: string | undefined
+        if (typeof dayNumRaw === 'number') {
+          // API uses 1 = Monday ... 7 = Sunday
+          const idx = (dayNumRaw % 7) // 1->1 ... 7->0
+          dayName = idx === 0 ? 'Sunday' : dayNames[idx]
+        }
+        const start: string | undefined = dti?.start_time || dti?.startTime
+        const end: string | undefined = dti?.end_time || dti?.endTime
+        const timePart = start && end ? `${start.slice(0,5)}–${end.slice(0,5)}` : undefined
+        const label = `#${id}${dayName ? ' - ' + dayName : ''}${timePart ? ' ' + timePart : ''}`
+        return { id, name: label }
+      }).filter((s: any) => s && s.id)
       setSubscriptionOptions(mapped)
     } catch (e) {
       setSubscriptionOptions([])
@@ -223,7 +240,15 @@ export default function SubscriptionAndMealSelectionsPage() {
       setOptionsLoading(prev => ({ ...prev, intervals: true }))
       const res = await apiService.get("/subscription_intervals")
       const items = Array.isArray(res?.data?.data) ? res.data.data : Array.isArray(res?.data) ? res.data : []
-      const mapped = items.map((it: any) => ({ id: it.id, title: it.title ?? it.name ?? `Interval #${it.id}` })).filter((i: any) => i.id)
+      const mapped = items.map((it: any) => {
+        const id = it.id
+        if (!id) return null
+        const baseTitle = it.title ?? it.name ?? `Interval #${id}`
+        const start = it.start_date || it.startDate
+        const end = it.end_date || it.endDate
+        const fullTitle = (start && end) ? `${baseTitle} ${start} - ${end}` : baseTitle
+        return { id, title: fullTitle }
+      }).filter((i: any) => i && i.id)
       setIntervalOptions(mapped)
     } catch (e) {
       setIntervalOptions([])
