@@ -182,14 +182,17 @@ export default function SubscriptionsPage() {
       if (!response.ok) throw new Error("Failed to fetch subscriptions")
       const data = await response.json()
       // Use the provided API response structure for the data
-      setSubscriptions(data.data.map((sub: any) => ({
+      const baseSubs: Subscription[] = data.data.map((sub: any) => ({
         ...sub,
         total_cents: sub.total_cents,
         delivery_time_id: sub.delivery_time_id,
         zone_name: sub.zone_name,
         people_count: sub.people_count,
         meals_per_interval: sub.meals_per_interval,
-      })))
+      }))
+      setSubscriptions(baseSubs)
+      // After setting base subscriptions, enrich with user details.
+      enrichUserDetails(baseSubs)
     } catch (error) {
       toast({
         title: "Error",
@@ -198,6 +201,48 @@ export default function SubscriptionsPage() {
       })
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Fetch individual user details and enrich subscription list with name/email
+  const fetchUserDetails = async (userId: number): Promise<{ name?: string; email?: string } | null> => {
+    if (!token || !userId) return null
+    try {
+      const res = await fetch(`${API_BASE_URL}/admins/users/${userId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error('user fetch failed')
+      const data = await res.json()
+      const u = data.data
+      const fullName = [u.userFirstName, u.userLastName].filter(Boolean).join(' ').trim()
+      return { name: fullName || undefined, email: u.userEmail }
+    } catch (e) {
+      console.warn('Failed to fetch user details for id', userId, e)
+      return null
+    }
+  }
+
+  const enrichUserDetails = async (subs: Subscription[]) => {
+    // Collect unique user ids missing name/email
+    const targets = Array.from(new Set(subs.map(s => s.user_id).filter(Boolean))) as number[]
+    if (!targets.length) return
+    // Fetch in parallel but limit concurrency if large (simple chunking)
+    const chunkSize = 10
+    for (let i = 0; i < targets.length; i += chunkSize) {
+      const slice = targets.slice(i, i + chunkSize)
+      const results = await Promise.all(slice.map(id => fetchUserDetails(id)))
+      setSubscriptions(prev => prev.map(sub => {
+        if (!sub.user_id) return sub
+        const idx = slice.indexOf(sub.user_id)
+        if (idx === -1) return sub
+        const info = results[idx]
+        if (!info) return sub
+        return {
+          ...sub,
+          user_name: info.name ?? sub.user_name ?? `User #${sub.user_id}`,
+          user_email: info.email ?? sub.user_email,
+        }
+      }))
     }
   }
 
@@ -414,10 +459,10 @@ export default function SubscriptionsPage() {
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
         <div className="flex items-center justify-between">
           <h2 className="text-3xl font-bold tracking-tight">Subscriptions</h2>
-          <Button onClick={() => setIsCreateDialogOpen(true)}>
+          {/* <Button onClick={() => setIsCreateDialogOpen(true)}>
             <PlusCircle className="mr-2 h-4 w-4" />
             Add Subscription
-          </Button>
+          </Button> */}
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
