@@ -8,6 +8,7 @@ import { apiService } from "@/lib/api-service"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select"
 
 type MealSelection = { meal_id: number; meal_name?: string; qty: number }
 
@@ -24,6 +25,11 @@ export default function SubscriptionAndMealSelectionsPage() {
   const [rows, setRows] = useState<SubMealSelectionRow[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
+  // Option dropdown data
+  const [subscriptionOptions, setSubscriptionOptions] = useState<Array<{ id: number; name: string }>>([])
+  const [intervalOptions, setIntervalOptions] = useState<Array<{ id: number; title: string }>>([])
+  const [mealOptions, setMealOptions] = useState<Array<{ id: number; name: string }>>([])
+  const [optionsLoading, setOptionsLoading] = useState({ subs: false, intervals: false, meals: false })
   // Modal state for Add/Edit
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
@@ -48,6 +54,9 @@ export default function SubscriptionAndMealSelectionsPage() {
 
   useEffect(() => {
     fetchRows()
+    fetchSubscriptionOptions()
+    fetchIntervalOptions()
+    fetchMealOptions()
   }, [])
 
   // Modal helpers
@@ -107,20 +116,29 @@ export default function SubscriptionAndMealSelectionsPage() {
   }
 
   const handleSubmit = () => {
+    // Resolve subscription & interval names from options if blank
+    const subscriptionIdNum = Number(form.subscriptionId || 0)
+    const intervalIdNum = Number(form.intervalId || 0)
+    const subOpt = subscriptionOptions.find(o => o.id === subscriptionIdNum)
+    const intOpt = intervalOptions.find(o => o.id === intervalIdNum)
     // Build a normalized row from form values
     const selectionNorm: MealSelection[] = form.selections
-      .map((s) => ({
-        meal_id: Number(s.meal_id || 0),
-        meal_name: s.meal_name && s.meal_name.trim() !== "" ? s.meal_name : mealCatalog[Number(s.meal_id || 0)],
-        qty: Number(s.qty || 0),
-      }))
+      .map((s) => {
+        const idNum = Number(s.meal_id || 0)
+        const opt = mealOptions.find(m => m.id === idNum)
+        return {
+          meal_id: idNum,
+          meal_name: (s.meal_name && s.meal_name.trim() !== "") ? s.meal_name : (opt?.name || mealCatalog[idNum]),
+          qty: Number(s.qty || 0),
+        }
+      })
       .filter((s) => s.meal_id > 0 && s.qty >= 0)
 
     const normalized: SubMealSelectionRow = {
-      subscriptionId: Number(form.subscriptionId || 0),
-      subscriptionName: form.subscriptionName || undefined,
-      intervalId: Number(form.intervalId || 0),
-      intervalName: form.intervalName || undefined,
+      subscriptionId: subscriptionIdNum,
+      subscriptionName: subOpt?.name || form.subscriptionName || undefined,
+      intervalId: intervalIdNum,
+      intervalName: intOpt?.title || form.intervalName || undefined,
       selections: selectionNorm,
     }
 
@@ -128,9 +146,9 @@ export default function SubscriptionAndMealSelectionsPage() {
       if (editingIndex === null) {
         return [normalized, ...prev]
       }
-        const clone = [...prev]
-        clone[editingIndex] = { ...clone[editingIndex], ...normalized }
-        return clone
+      const clone = [...prev]
+      clone[editingIndex] = { ...clone[editingIndex], ...normalized }
+      return clone
     })
 
     setIsModalOpen(false)
@@ -182,6 +200,49 @@ export default function SubscriptionAndMealSelectionsPage() {
       setRows(getMockRows())
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Fetch dropdown options
+  const fetchSubscriptionOptions = async () => {
+    try {
+      setOptionsLoading(prev => ({ ...prev, subs: true }))
+      const res = await apiService.get("/subscriptions")
+      const items = Array.isArray(res?.data?.data) ? res.data.data : Array.isArray(res?.data) ? res.data : []
+      const mapped = items.map((s: any) => ({ id: s.id ?? s.ID, name: s.name ?? s.user_name ?? s.title ?? `Subscription #${s.id}` })).filter((s: any) => s.id)
+      setSubscriptionOptions(mapped)
+    } catch (e) {
+      setSubscriptionOptions([])
+    } finally {
+      setOptionsLoading(prev => ({ ...prev, subs: false }))
+    }
+  }
+
+  const fetchIntervalOptions = async () => {
+    try {
+      setOptionsLoading(prev => ({ ...prev, intervals: true }))
+      const res = await apiService.get("/subscription_intervals")
+      const items = Array.isArray(res?.data?.data) ? res.data.data : Array.isArray(res?.data) ? res.data : []
+      const mapped = items.map((it: any) => ({ id: it.id, title: it.title ?? it.name ?? `Interval #${it.id}` })).filter((i: any) => i.id)
+      setIntervalOptions(mapped)
+    } catch (e) {
+      setIntervalOptions([])
+    } finally {
+      setOptionsLoading(prev => ({ ...prev, intervals: false }))
+    }
+  }
+
+  const fetchMealOptions = async () => {
+    try {
+      setOptionsLoading(prev => ({ ...prev, meals: true }))
+      const res = await apiService.get("/meals")
+      const items = Array.isArray(res?.data?.data) ? res.data.data : Array.isArray(res?.data) ? res.data : []
+      const mapped = items.map((m: any) => ({ id: m.id ?? m.ID, name: m.name ?? m.Label ?? m.label ?? `Meal #${m.id}` })).filter((m: any) => m.id)
+      setMealOptions(mapped)
+    } catch (e) {
+      setMealOptions([])
+    } finally {
+      setOptionsLoading(prev => ({ ...prev, meals: false }))
     }
   }
 
@@ -314,21 +375,43 @@ export default function SubscriptionAndMealSelectionsPage() {
 
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="subscriptionName">Subscription Name</Label>
-                <Input id="subscriptionName" value={form.subscriptionName} onChange={(e) => setForm((p) => ({ ...p, subscriptionName: e.target.value }))} />
+              <div className="space-y-1">
+                <Label>Subscription</Label>
+                <Select
+                  value={form.subscriptionId}
+                  onValueChange={(val) => {
+                    const opt = subscriptionOptions.find(o => String(o.id) === val)
+                    setForm(p => ({ ...p, subscriptionId: val, subscriptionName: opt?.name || p.subscriptionName }))
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={optionsLoading.subs ? 'Loading...' : 'Select subscription'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {subscriptionOptions.map(o => (
+                      <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <div>
-                <Label htmlFor="subscriptionId">Subscription ID</Label>
-                <Input id="subscriptionId" type="number" value={form.subscriptionId} onChange={(e) => setForm((p) => ({ ...p, subscriptionId: e.target.value }))} />
-              </div>
-              <div>
-                <Label htmlFor="intervalName">Interval Name</Label>
-                <Input id="intervalName" value={form.intervalName} onChange={(e) => setForm((p) => ({ ...p, intervalName: e.target.value }))} />
-              </div>
-              <div>
-                <Label htmlFor="intervalId">Interval ID</Label>
-                <Input id="intervalId" type="number" value={form.intervalId} onChange={(e) => setForm((p) => ({ ...p, intervalId: e.target.value }))} />
+              <div className="space-y-1">
+                <Label>Interval</Label>
+                <Select
+                  value={form.intervalId}
+                  onValueChange={(val) => {
+                    const opt = intervalOptions.find(o => String(o.id) === val)
+                    setForm(p => ({ ...p, intervalId: val, intervalName: opt?.title || p.intervalName }))
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={optionsLoading.intervals ? 'Loading...' : 'Select interval'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {intervalOptions.map(o => (
+                      <SelectItem key={o.id} value={String(o.id)}>{o.title}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
@@ -342,19 +425,31 @@ export default function SubscriptionAndMealSelectionsPage() {
               <div className="space-y-3">
                 {form.selections.map((s, i) => (
                   <div key={i} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
-                    <div className="md:col-span-6">
-                      <Label htmlFor={`meal_name_${i}`}>Meal Name</Label>
-                      <Input id={`meal_name_${i}`} value={s.meal_name} onChange={(e) => updateSelectionField(i, "meal_name", e.target.value)} />
+                    <div className="md:col-span-7 space-y-1">
+                      <Label>Meal</Label>
+                      <Select
+                        value={s.meal_id}
+                        onValueChange={(val) => {
+                          const opt = mealOptions.find(m => String(m.id) === val)
+                          updateSelectionField(i, 'meal_id', val)
+                          if (opt) updateSelectionField(i, 'meal_name', opt.name)
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={optionsLoading.meals ? 'Loading meals...' : 'Select meal'} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {mealOptions.map(m => (
+                            <SelectItem key={m.id} value={String(m.id)}>{m.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="md:col-span-3">
-                      <Label htmlFor={`meal_id_${i}`}>Meal ID</Label>
-                      <Input id={`meal_id_${i}`} type="number" value={s.meal_id} onChange={(e) => updateSelectionField(i, "meal_id", e.target.value)} />
-                    </div>
-                    <div className="md:col-span-2">
                       <Label htmlFor={`qty_${i}`}>Qty</Label>
-                      <Input id={`qty_${i}`} type="number" min="0" value={s.qty} onChange={(e) => updateSelectionField(i, "qty", e.target.value)} />
+                      <Input id={`qty_${i}`} type="number" min="0" value={s.qty} onChange={(e) => updateSelectionField(i, 'qty', e.target.value)} />
                     </div>
-                    <div className="md:col-span-1 flex justify-end">
+                    <div className="md:col-span-2 flex justify-end">
                       <Button type="button" variant="destructive" size="icon" onClick={() => removeSelectionItem(i)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
