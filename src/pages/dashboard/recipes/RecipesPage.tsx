@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Search, MoreHorizontal, Eye, Plus, Check, X } from "lucide-react"
+import { Search, MoreHorizontal, Eye, Plus, Check, X, Trash2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { apiService } from "@/lib/api-service"
 import { useAuth } from "@/contexts/auth-context"
@@ -103,6 +103,7 @@ export default function RecipesPage() {
   })
   const [newImages, setNewImages] = useState<File[]>([])
   const [newImagePreviews, setNewImagePreviews] = useState<string[]>([])
+  const [deletingId, setDeletingId] = useState<number | null>(null)
   const { toast } = useToast()
   const { token, isLoading: authLoading } = useAuth()
 
@@ -341,6 +342,22 @@ export default function RecipesPage() {
   const viewRecipe = (recipe: ApiRecipe) => {
     setSelectedRecipe(recipe)
     setIsViewDialogOpen(true)
+  }
+
+  const deleteRecipe = async (recipe: ApiRecipe) => {
+    if (deletingId !== null) return
+    if (!window.confirm(`Delete recipe "${recipe.Name}"? This cannot be undone.`)) return
+    setDeletingId(recipe.Recipe_ID)
+    try {
+      await apiService.delete(`/recipes/${recipe.Recipe_ID}`)
+      setRecipes(prev => prev.filter(r => r.Recipe_ID !== recipe.Recipe_ID))
+      if (selectedRecipe?.Recipe_ID === recipe.Recipe_ID) setIsViewDialogOpen(false)
+      toast({ title: 'Deleted', description: 'Recipe removed.' })
+    } catch (error: any) {
+      toast({ title: 'Error', description: error?.message || 'Failed to delete recipe', variant: 'destructive' })
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   const openEdit = (recipe: ApiRecipe) => {
@@ -731,13 +748,20 @@ export default function RecipesPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => viewRecipe(recipe)}>
+                            <DropdownMenuItem onClick={() => viewRecipe(recipe)} disabled={deletingId === recipe.Recipe_ID}>
                               <Eye className="mr-2 h-4 w-4" />
                               View
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openEdit(recipe)}>
+                            <DropdownMenuItem onClick={() => openEdit(recipe)} disabled={deletingId === recipe.Recipe_ID}>
                               <Eye className="mr-2 h-4 w-4" />
                               Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-red-600 focus:text-red-700" disabled={deletingId === recipe.Recipe_ID} onClick={() => deleteRecipe(recipe)}>
+                              {deletingId === recipe.Recipe_ID ? (
+                                <span className="flex items-center"><Trash2 className="mr-2 h-4 w-4" /> Deleting...</span>
+                              ) : (
+                                <span className="flex items-center"><Trash2 className="mr-2 h-4 w-4" /> Delete</span>
+                              )}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
