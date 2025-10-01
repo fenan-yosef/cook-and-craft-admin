@@ -167,34 +167,19 @@ const menuItems = [
         title: "Subscription and Meal Selections",
         url: "/dashboard/subscription-meal-selections",
       },
-      {
-        title: "UserSubscriptions",
-        icon: Users,
-        items: [
-          {
-           title: "Subscription Plans",
-           url: "/dashboard/subscription-intervals",
-          },
-          {
-           title: "Subscriptions",
-           url: "/dashboard/subscriptions",
-          },
-          {
-            title: "Subscription and Meal Selections",
-            url: "/dashboard/subscription-meal-selections",
-          },
-        ],
-      },
-      {
-        title: "Meals",
-        url: "/dashboard/meals",
-      },
+    
+    
     ],
   },
   {
     title: "Recipes",
     url: "/dashboard/recipes",
     icon: Cookie,
+  },
+  {
+    title: "Meals",
+    url: "/dashboard/meals",
+    icon: CookieIcon,
   },
 ]
 
