@@ -31,14 +31,13 @@ export default function DashboardHomePage() {
         const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
         if (token) apiService.setAuthToken(token)
 
-        // Fetch posts
-        const postsRes = await apiService.get("/posts?withLikes=true&withPolls=true")
-        // Fetch users
-        const usersRes = await apiService.get("/admins/users")
-        // Fetch orders
-        const ordersRes = await apiService.get("/orders")
-        // Fetch subscriptions
-        const subsRes = await apiService.get("/subscriptions")
+        // Fetch all needed resources in parallel
+        const [postsRes, usersRes, ordersRes, subsRes] = await Promise.all([
+          apiService.get("/posts?withLikes=true&withPolls=true&page=1"), // added page=1
+          apiService.get("/admins/users"),
+          apiService.get("/admins/orders"),
+          apiService.get("/subscriptions"),
+        ])
 
         setStats({
           totalUsers: Array.isArray(usersRes.data) ? usersRes.data.length : 0,
