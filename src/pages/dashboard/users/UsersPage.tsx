@@ -367,7 +367,7 @@ export default function UsersPage() {
     try {
       const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
       if (token) apiService.setAuthToken(token)
-      const res = await apiService.get(`/users_preference_answers`)
+      const res = await apiService.get(`/admins/users_preference_answers/${userId}`)
       // Attempt to locate array of answers in multiple shapes
       let answers: any[] = []
       const candidates = [

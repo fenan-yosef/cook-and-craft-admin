@@ -13,8 +13,8 @@ import { Loader2, AlertCircle, Eye, EyeOff } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("admin@admin.com")
-  const [password, setPassword] = useState("Admintest1xX")
+  const [email, setEmail] = useState("admintest@example.com")
+  const [password, setPassword] = useState("password")
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -71,7 +71,7 @@ export default function LoginPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@admin.com"
+                placeholder="admintest@example.com"
                 required
                 disabled={isLoading}
               />
@@ -110,8 +110,8 @@ export default function LoginPage() {
 
           <div className="mt-4 text-sm text-gray-600">
             <p>Default credentials:</p>
-            <p>Email: admin@admin.com</p>
-            <p>Password: Admintest1xX</p>
+            <p>Email: admintest@example.com</p>
+            <p>Password: password</p>
           </div>
         </CardContent>
       </Card>
