@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Search, MoreHorizontal, MapPin, Edit, Trash2, Eye } from "lucide-react";
+import { Search, MoreHorizontal, MapPin, Edit, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiService } from "@/lib/api-service";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -53,6 +53,10 @@ export default function DeliveryZonesPage() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const [editForm, setEditForm] = useState({ id: "", name: "", scope: "", locationsCsv: "", fee: "", is_enabled: false, daysCsv: "" });
+  // Edit modal map editing state
+  const [editMapPoints, setEditMapPoints] = useState<{ latitude: number; longitude: number }[]>([]);
+  const [editMapResetCounter, setEditMapResetCounter] = useState(0);
+  const [importedPointsForEdit, setImportedPointsForEdit] = useState<{ latitude: number; longitude: number }[] | null>(null);
   // Detailed zone data for edit modal (delivery days & time slots)
   const [editZoneDetails, setEditZoneDetails] = useState<any | null>(null);
   const [editZoneLoading, setEditZoneLoading] = useState(false);
@@ -183,10 +187,20 @@ export default function DeliveryZonesPage() {
       is_enabled: zone.is_enabled,
       daysCsv: zone.days.join(', '),
     });
+    setEditMapPoints(Array.isArray(zone.locations) ? zone.locations : []);
     setViewZoneId(zone.id); // reuse zone id for add day / slot actions
     fetchEditZoneDetails(zone.id);
     setIsEditOpen(true);
   };
+
+  // Keep CSV in sync with map points in Edit modal
+  useEffect(() => {
+    if (!isEditOpen) return;
+    if (Array.isArray(editMapPoints)) {
+      const csv = editMapPoints.map(p => `${p.latitude},${p.longitude}`).join('; ');
+      setEditForm(prev => ({ ...prev, locationsCsv: csv }));
+    }
+  }, [editMapPoints, isEditOpen]);
 
   const fetchEditZoneDetails = async (id: number) => {
     try {
@@ -449,10 +463,18 @@ export default function DeliveryZonesPage() {
               e.preventDefault();
               setEditLoading(true);
               try {
-                const locations = editForm.locationsCsv.split(';').map(s => {
-                  const [lat, lng] = s.split(',').map(v => v.trim());
-                  return { latitude: parseFloat(lat), longitude: parseFloat(lng) };
-                });
+                let locations: { latitude: number; longitude: number }[] = [];
+                if (Array.isArray(editMapPoints) && editMapPoints.length > 0) {
+                  locations = editMapPoints;
+                } else {
+                  locations = editForm.locationsCsv
+                    .split(';')
+                    .map(s => {
+                      const [lat, lng] = s.split(',').map(v => v.trim());
+                      return { latitude: parseFloat(lat), longitude: parseFloat(lng) };
+                    })
+                    .filter(p => !isNaN(p.latitude) && !isNaN(p.longitude));
+                }
                 if (locations.length < 4) {
                   toast({ title: 'Error', description: 'Please enter at least 4 locations.', variant: 'destructive' });
                   setEditLoading(false);
@@ -488,49 +510,71 @@ export default function DeliveryZonesPage() {
               <div><Label htmlFor="edit_name">Name</Label><Input id="edit_name" name="name" value={editForm.name} onChange={e=>setEditForm(prev=>({...prev,name:e.target.value}))} required/></div>
               <div><Label htmlFor="edit_scope">Scope</Label><Input id="edit_scope" name="scope" value={editForm.scope} onChange={e=>setEditForm(prev=>({...prev,scope:e.target.value}))} required/></div>
               <div><Label htmlFor="edit_locationsCsv">Locations (lat,lng;...)</Label><Input id="edit_locationsCsv" name="locationsCsv" value={editForm.locationsCsv} onChange={e=>setEditForm(prev=>({...prev,locationsCsv:e.target.value}))} required/></div>
-              <div className="mt-2">
-                <label className="inline-flex items-center px-3 py-1 border rounded text-sm cursor-pointer">
-                  <input type="file" accept=".kml,application/xml" className="hidden" onChange={async (e) => {
-                    const file = e.target.files && e.target.files[0];
-                    if (!file) return;
-                    try {
-                      const text = await file.text();
-                      const parser = new DOMParser();
-                      const doc = parser.parseFromString(text, 'application/xml');
-                      // @ts-ignore
-                      const gj = (await import('togeojson')).kml(doc);
-                      const points: { latitude: number; longitude: number }[] = [];
-                      if (gj && Array.isArray(gj.features)) {
-                        for (const f of gj.features) {
-                          if (!f.geometry) continue;
-                          const t = f.geometry.type;
-                          if (t === 'Point') {
-                            const [lng, lat] = f.geometry.coordinates;
-                            points.push({ latitude: lat, longitude: lng });
-                          } else if (t === 'Polygon') {
-                            const coords = f.geometry.coordinates && f.geometry.coordinates[0];
-                            if (Array.isArray(coords)) for (const c of coords) points.push({ latitude: c[1], longitude: c[0] });
-                          } else if (t === 'MultiPolygon') {
-                            for (const poly of f.geometry.coordinates) {
-                              const outer = poly && poly[0];
-                              if (Array.isArray(outer)) for (const c of outer) points.push({ latitude: c[1], longitude: c[0] });
+              {/* Editable map for Edit modal */}
+              <div className="mt-2 space-y-2">
+                <div className="h-64 rounded border overflow-hidden">
+                  <AddZoneMap
+                    resetCounter={editMapResetCounter}
+                    isVisible={isEditOpen}
+                    onPointsChange={(pts)=>setEditMapPoints(pts)}
+                    initialPoints={importedPointsForEdit || editMapPoints}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="text-xs text-muted-foreground">Click the map to add pins (min 4). Drag to reorder if supported.</div>
+                  <div className="flex items-center space-x-2">
+                    <Button type="button" variant="outline" size="sm" onClick={() => { setEditMapResetCounter(c => c + 1); setEditMapPoints([]); }}>Clear pins</Button>
+                    {/* KML import button for Edit modal (syncs map + CSV) */}
+                    <label className="inline-flex items-center px-3 py-1 border rounded text-sm cursor-pointer">
+                      <input type="file" accept=".kml,application/xml" className="hidden" onChange={async (e) => {
+                        const file = e.target.files && e.target.files[0];
+                        if (!file) return;
+                        try {
+                          const text = await file.text();
+                          const parser = new DOMParser();
+                          const doc = parser.parseFromString(text, 'application/xml');
+                          // @ts-ignore
+                          const gj = (await import('togeojson')).kml(doc);
+                          const points: { latitude: number; longitude: number }[] = [];
+                          if (gj && Array.isArray(gj.features)) {
+                            for (const f of gj.features) {
+                              if (!f.geometry) continue;
+                              const t = f.geometry.type;
+                              if (t === 'Point') {
+                                const [lng, lat] = f.geometry.coordinates;
+                                points.push({ latitude: lat, longitude: lng });
+                              } else if (t === 'Polygon') {
+                                const coords = f.geometry.coordinates && f.geometry.coordinates[0];
+                                if (Array.isArray(coords)) for (const c of coords) points.push({ latitude: c[1], longitude: c[0] });
+                              } else if (t === 'MultiPolygon') {
+                                for (const poly of f.geometry.coordinates) {
+                                  const outer = poly && poly[0];
+                                  if (Array.isArray(outer)) for (const c of outer) points.push({ latitude: c[1], longitude: c[0] });
+                                }
+                              }
                             }
                           }
+                          setImportedPointsForEdit(points.length ? points : []);
+                          // update CSV immediately for consistency
+                          const csv = points.map(p => `${p.latitude},${p.longitude}`).join('; ');
+                          setEditForm(prev => ({ ...prev, locationsCsv: csv }));
+                          toast({ title: 'Imported', description: points.length ? `Imported ${points.length} points.` : 'No points were found in the KML.' });
+                          // clear after short delay so component receives it
+                          setTimeout(() => setImportedPointsForEdit(null), 600);
+                          (e.target as HTMLInputElement).value = '';
+                        } catch (err:any) {
+                          toast({ title: 'Import error', description: err?.message || 'Failed to parse KML file', variant: 'destructive' });
                         }
-                      }
-                      if (points.length === 0) {
-                        toast({ title: 'Import result', description: 'No points were found in the KML.', variant: 'default' });
-                      } else {
-                        // convert to CSV format expected by editForm.locationsCsv
-                        const csv = points.map(p => `${p.latitude},${p.longitude}`).join('; ');
-                        setEditForm(prev => ({ ...prev, locationsCsv: csv }));
-                        toast({ title: 'Imported', description: `Imported ${points.length} points into locations field.` });
-                      }
-                      (e.target as HTMLInputElement).value = '';
-                    } catch (err:any) {
-                      toast({ title: 'Import error', description: err?.message || 'Failed to parse KML file', variant: 'destructive' });
-                    }
-                  }} />Import KML for Edit</label>
+                      }} />Import KML</label>
+                  </div>
+                </div>
+                {editMapPoints.length > 0 && (
+                  <div className="max-h-24 overflow-auto border rounded p-2 text-xs">
+                    {editMapPoints.map((p, i) => (
+                      <div key={i}>{p.latitude.toFixed(6)}, {p.longitude.toFixed(6)}</div>
+                    ))}
+                  </div>
+                )}
               </div>
               <div><Label htmlFor="edit_fee">Fee</Label><Input id="edit_fee" name="fee" type="number" value={editForm.fee} onChange={e=>setEditForm(prev=>({...prev,fee:e.target.value}))} required/></div>
               <div className="flex items-center gap-2"><input id="edit_is_enabled" name="is_enabled" type="checkbox" checked={editForm.is_enabled} onChange={e=>setEditForm(prev=>({...prev,is_enabled:e.target.checked}))}/><Label htmlFor="edit_is_enabled">Active</Label></div>
