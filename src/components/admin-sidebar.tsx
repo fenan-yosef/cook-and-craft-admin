@@ -160,10 +160,6 @@ const menuItems = [
         title: "Subscriptions",
         url: "/dashboard/subscriptions",
       },
-      {
-        title: "Subscription and Meal Selections",
-        url: "/dashboard/subscription-meal-selections",
-      },
     
     
     ],
