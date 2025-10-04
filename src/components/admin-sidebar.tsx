@@ -78,10 +78,6 @@ const menuItems = [
             url: "/dashboard/wallets",
           },
           {
-            title: "Wallet Types",
-            url: "/dashboard/wallet-types",
-          },
-          {
             title: "Conversion Rules",
             url: "/dashboard/conversion-rules",
           },
