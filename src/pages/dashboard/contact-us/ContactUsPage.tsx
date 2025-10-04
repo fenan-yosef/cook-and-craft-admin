@@ -11,6 +11,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 type ContactMessage = {
   id: number
   full_name: string
+  email: string
+  phone: string
   reason: string
   description: string
   created_at?: string
@@ -50,6 +52,8 @@ export default function ContactUsPage() {
     const term = search.toLowerCase()
     return messages.filter((m) =>
       m.full_name.toLowerCase().includes(term) ||
+      m.email.toLowerCase().includes(term) ||
+      m.phone.toLowerCase().includes(term) ||
       m.reason.toLowerCase().includes(term) ||
       m.description.toLowerCase().includes(term)
     )
@@ -87,6 +91,8 @@ export default function ContactUsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Full Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Phone</TableHead>
                   <TableHead>Reason</TableHead>
                   <TableHead>Description</TableHead>
                   {/* <TableHead>Created</TableHead> */}
@@ -105,6 +111,8 @@ export default function ContactUsPage() {
                   filtered.map((m) => (
                     <TableRow key={m.id}>
                       <TableCell className="font-medium cursor-pointer" onClick={()=>{ setSelected(m); setIsViewOpen(true); }}>{m.full_name}</TableCell>
+                      <TableCell className="cursor-pointer" onClick={()=>{ setSelected(m); setIsViewOpen(true); }}>{m.email}</TableCell>
+                      <TableCell className="cursor-pointer" onClick={()=>{ setSelected(m); setIsViewOpen(true); }}>{m.phone}</TableCell>
                       <TableCell className="cursor-pointer" onClick={()=>{ setSelected(m); setIsViewOpen(true); }}>{m.reason}</TableCell>
                       <TableCell className="max-w-[480px] truncate cursor-pointer" title={m.description} onClick={()=>{ setSelected(m); setIsViewOpen(true); }}>{m.description}</TableCell>
                       {/* <TableCell className="cursor-pointer" onClick={()=>{ setSelected(m); setIsViewOpen(true); }}>{m.created_at ? new Date(m.created_at).toLocaleString() : "—"}</TableCell> */}
@@ -127,6 +135,8 @@ export default function ContactUsPage() {
               <div className="space-y-3 text-sm">
                 <div><span className="text-muted-foreground">ID:</span> {selected.id}</div>
                 <div><span className="text-muted-foreground">Full Name:</span> {selected.full_name}</div>
+                <div><span className="text-muted-foreground">Email:</span> {selected.email}</div>
+                <div><span className="text-muted-foreground">Phone:</span> {selected.phone}</div>
                 <div><span className="text-muted-foreground">Reason:</span> {selected.reason}</div>
                 <div>
                   <span className="text-muted-foreground">Description:</span>

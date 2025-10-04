@@ -51,23 +51,24 @@ const menuItems = [
         icon: Users,
       },
       {
-        title: "User Preferences",
-        icon: Settings,
-        items: [
-          {
-            title: "Questions",
-            url: "/dashboard/questions",
-          },
-          // {
-          //   title: "Answers",
-          //   url: "/dashboard/answers",
-          // },
-          {
-            title: "User Answers",
-            url: "/dashboard/user-answers",
-          },
-        ],
+        title: "Questions",
+        url: "/dashboard/questions",
       },
+      // {
+      //   title: "User Preferences",
+      //   icon: Settings,
+      //   items: [
+          
+      //     // {
+      //     //   title: "Answers",
+      //     //   url: "/dashboard/answers",
+      //     // },
+      //     // {
+      //     //   title: "User Answers",
+      //     //   url: "/dashboard/user-answers",
+      //     // },
+      //   ],
+      // },
       {
         title: "Wallets",
         icon: Wallet,
