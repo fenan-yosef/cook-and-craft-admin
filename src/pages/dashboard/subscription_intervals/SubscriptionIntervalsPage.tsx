@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { ChevronDown } from "lucide-react"
 // Calendar removed in favor of week dropdown selection
 
 interface Interval {
@@ -47,6 +49,10 @@ export default function SubscriptionIntervalsPage() {
     price_per_serving_cents: "",
     cutoff_date: "",
   })
+  // Meals selection state for Add modal
+  const [mealsOptions, setMealsOptions] = useState<{ id: number; name: string }[]>([])
+  const [mealsLoading, setMealsLoading] = useState(false)
+  const [selectedMealIds, setSelectedMealIds] = useState<number[]>([])
 
   // Edit Product Modal State
   const [isEditOpen, setIsEditOpen] = useState(false)
@@ -104,6 +110,36 @@ export default function SubscriptionIntervalsPage() {
     fetchIntervals()
   }, [])
 
+  // Lazy-load meals when Add modal opens
+  useEffect(() => {
+    if (isAddOpen && mealsOptions.length === 0) {
+      ;(async () => {
+        try {
+          setMealsLoading(true)
+          const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
+          if (token) apiService.setAuthToken(token)
+          const res: any = await apiService.get("/meals")
+          // Normalize to an array and map common name/title fields
+          const candidates = [res, res?.data, res?.result, res?.results, res?.items, res?.records]
+          let items: any[] = []
+          for (const c of candidates) {
+            if (Array.isArray(c)) { items = c; break }
+            if (c && Array.isArray(c.data)) { items = c.data; break }
+          }
+          const mapped = (items || []).map((m: any) => ({
+            id: Number(m.id ?? m.mealId ?? m.meal_id),
+            name: String(m.name ?? m.title ?? m.mealName ?? m.meal_title ?? `Meal #${m.id ?? m.mealId ?? m.meal_id}`),
+          })).filter((m: any) => !isNaN(m.id))
+          setMealsOptions(mapped)
+        } catch (e) {
+          // silent fail; UI shows empty list
+        } finally {
+          setMealsLoading(false)
+        }
+      })()
+    }
+  }, [isAddOpen, mealsOptions.length])
+
   const fetchIntervals = async () => {
     try {
       setLoading(true)
@@ -158,6 +194,7 @@ export default function SubscriptionIntervalsPage() {
       cutoff_date: "",
     })
     setSelectedWeekKey("")
+    setSelectedMealIds([])
   }
 
   // computeWeekRange removed (selection via predefined week list)
@@ -205,7 +242,42 @@ export default function SubscriptionIntervalsPage() {
       }
 
       // Send POST request via apiService
-      await apiService.post("/subscription_intervals", payload)
+      const createRes: any = await apiService.post("/subscription_intervals", payload)
+
+      // Attempt to extract created interval id
+      let createdIntervalId: number | null = null
+      const candidates = [createRes, createRes?.data, createRes?.result]
+      for (const c of candidates) {
+        if (c && (c.id != null || c.interval_id != null)) {
+          createdIntervalId = Number(c.id ?? c.interval_id)
+          break
+        }
+      }
+
+      // Assign meals if any selected and we have an interval id
+      if (selectedMealIds.length > 0) {
+        if (!createdIntervalId) {
+          // Fallback: try to infer id by refetching and matching
+          try {
+            await fetchIntervals()
+            const match = (prev => prev.find(i => i.title === addForm.title && i.start_date === addForm.start_date && i.end_date === addForm.end_date))(intervals)
+            if (match) createdIntervalId = match.id
+          } catch {}
+        }
+        if (createdIntervalId) {
+          try {
+            await apiService.post("/meals/assign-meals-to-interval", {
+              interval_id: createdIntervalId,
+              meal_ids: selectedMealIds,
+            })
+            toast({ title: "Meals assigned", description: `${selectedMealIds.length} meal(s) assigned to interval.` })
+          } catch (assignErr: any) {
+            toast({ title: "Interval created, but meal assignment failed", description: assignErr?.message || "Couldn't assign meals.", variant: "destructive" })
+          }
+        } else {
+          toast({ title: "Interval created, but couldn't resolve ID", description: "Meals not assigned automatically.", variant: "destructive" })
+        }
+      }
 
       toast({
         title: "Success",
@@ -420,6 +492,65 @@ export default function SubscriptionIntervalsPage() {
                   required
                 />
                 <p className="mt-1 text-xs text-muted-foreground">Last day users can make changes before interval week starts.</p>
+              </div>
+              {/* Meals selection */}
+              <div>
+                <Label>Meals to assign on this Interval</Label>
+                <div className="mt-1">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button type="button" variant="outline" className="w-full justify-between">
+                        {selectedMealIds.length > 0 ? `${selectedMealIds.length} selected` : "Select meals"}
+                        <ChevronDown className="h-4 w-4 opacity-60" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-[--radix-dropdown-menu-trigger-width] max-h-64 overflow-auto">
+                      {mealsLoading ? (
+                        <div className="px-2 py-1.5 text-sm text-muted-foreground">Loading...</div>
+                      ) : mealsOptions.length === 0 ? (
+                        <div className="px-2 py-1.5 text-sm text-muted-foreground">No meals found</div>
+                      ) : (
+                        mealsOptions.map((m) => {
+                          const checked = selectedMealIds.includes(m.id)
+                          return (
+                            <DropdownMenuCheckboxItem
+                              key={m.id}
+                              checked={checked}
+                              onCheckedChange={(isChecked) => {
+                                setSelectedMealIds((prev) => {
+                                  if (isChecked) return prev.includes(m.id) ? prev : [...prev, m.id]
+                                  return prev.filter((id) => id !== m.id)
+                                })
+                              }}
+                            >
+                              {m.name}
+                            </DropdownMenuCheckboxItem>
+                          )
+                        })
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  {selectedMealIds.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {selectedMealIds.map((id) => {
+                        const meal = mealsOptions.find((m) => m.id === id)
+                        return (
+                          <Badge key={id} variant="secondary" className="flex items-center gap-1">
+                            {meal?.name || `#${id}`}
+                            <button
+                              type="button"
+                              className="ml-1 rounded px-1 text-[10px] leading-none hover:bg-muted"
+                              onClick={() => setSelectedMealIds((prev) => prev.filter((x) => x !== id))}
+                              aria-label={`Remove ${meal?.name || id}`}
+                            >
+                              ×
+                            </button>
+                          </Badge>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
               <div>
                 <Label htmlFor="price_per_serving_cents">Price per Serving ($)</Label>

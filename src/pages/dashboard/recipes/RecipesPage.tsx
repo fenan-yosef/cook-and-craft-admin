@@ -775,7 +775,7 @@ export default function RecipesPage() {
         </Card>
 
         {/* Recipes Requests (pending approval) */}
-        <Card>
+        {/* <Card>
           <CardHeader>
             <CardTitle>Recipes Requests</CardTitle>
             <CardDescription>Submissions waiting for admin approval</CardDescription>
@@ -878,7 +878,7 @@ export default function RecipesPage() {
               </TableBody>
             </Table>
           </CardContent>
-        </Card>
+        </Card> */}
 
         {/* View Recipe Dialog */}
         <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
