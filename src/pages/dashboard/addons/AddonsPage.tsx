@@ -1,5 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { apiService } from "@/lib/api-service";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Search } from "lucide-react";
 
 /**
  * Addons page
@@ -49,6 +57,7 @@ const AddonsPage: React.FC = () => {
     const [addons, setAddons] = useState<Addon[]>([]);
     const [loading, setLoading] = useState<boolean>(false);
     const [fatalError, setFatalError] = useState<string>("");
+    const [searchTerm, setSearchTerm] = useState<string>("");
     const [page, setPage] = useState<number>(1);
     const [perPage, setPerPage] = useState<number>(15);
     const [pagination, setPagination] = useState<Pagination>({
@@ -162,140 +171,158 @@ const AddonsPage: React.FC = () => {
     const goNext = () => setPage((p) => Math.min(Number(pagination.last_page || 1), p + 1));
     const goLast = () => setPage(Number(pagination.last_page || 1));
 
+    const filteredAddons = addons.filter((a) => {
+        const q = searchTerm.trim().toLowerCase();
+        if (!q) return true;
+        const name = String(a.addonName ?? a.name ?? "").toLowerCase();
+        const desc = String(a.addonDescription ?? "").toLowerCase();
+        return name.includes(q) || desc.includes(q);
+    });
+
     return (
-        <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                <h2 style={{ margin: 0 }}>Addons</h2>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span>Per page</span>
-                        <select
-                            value={perPage}
-                            onChange={(e) => {
-                                setPage(1);
-                                setPerPage(Number(e.target.value));
-                            }}
-                        >
-                            {[10, 15, 25, 50, 100].map((n) => (
-                                <option key={n} value={n}>
-                                    {n}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-                    <button onClick={onRefresh} disabled={loading} title="Refresh">
-                        {loading ? "Loading..." : "Refresh"}
-                    </button>
+        <div className="flex flex-col">
+            <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+                <div className="flex items-center justify-between">
+                    <h2 className="text-3xl font-bold tracking-tight">Addons</h2>
+                    <div className="flex items-center gap-2">
+                        <div className="hidden sm:flex items-center gap-2">
+                            <span className="text-sm text-muted-foreground">Per page</span>
+                            <Select value={String(perPage)} onValueChange={(val) => { setPage(1); setPerPage(Number(val)); }}>
+                                <SelectTrigger className="w-[90px]">
+                                    <SelectValue placeholder={String(perPage)} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {[10, 15, 25, 50, 100].map((n) => (
+                                        <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <Button onClick={onRefresh} disabled={loading} variant="outline">
+                            {loading ? "Loading..." : "Refresh"}
+                        </Button>
+                    </div>
                 </div>
+
+                {fatalError ? (
+                    <Alert variant="destructive">
+                        <AlertTitle>Error</AlertTitle>
+                        <AlertDescription>{fatalError}</AlertDescription>
+                    </Alert>
+                ) : null}
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>All Addons</CardTitle>
+                        <CardDescription>Manage your add-on items</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex items-center space-x-2 mb-4">
+                            <div className="relative flex-1 max-w-sm">
+                                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search addons..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="pl-8"
+                                />
+                            </div>
+                            <div className="flex items-center gap-2 sm:hidden">
+                                <span className="text-sm text-muted-foreground">Per page</span>
+                                <Select value={String(perPage)} onValueChange={(val) => { setPage(1); setPerPage(Number(val)); }}>
+                                    <SelectTrigger className="w-[90px]">
+                                        <SelectValue placeholder={String(perPage)} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {[10, 15, 25, 50, 100].map((n) => (
+                                            <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Name</TableHead>
+                                    <TableHead>Description</TableHead>
+                                    <TableHead>Price</TableHead>
+                                    <TableHead>Active</TableHead>
+                                    <TableHead>Images</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {loading && addons.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={6} className="text-center">Loading...</TableCell>
+                                    </TableRow>
+                                ) : filteredAddons.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={6} className="text-center">No addons found</TableCell>
+                                    </TableRow>
+                                ) : (
+                                    filteredAddons.map((a, idx) => (
+                                        <TableRow key={a.addonId ?? a.id ?? a.addonName ?? a.name ?? idx}>
+                                            <TableCell className="font-semibold">{a.addonName ?? a.name ?? ""}</TableCell>
+                                            <TableCell className="max-w-[420px] truncate" title={String(a.addonDescription ?? "")}>
+                                                {a.addonDescription ?? ""}
+                                            </TableCell>
+                                            <TableCell className="font-mono">{formatCurrency(a.addonPrice)}</TableCell>
+                                            <TableCell>
+                                                <Badge variant={(Number(a.isAddonActive) === 1 || a.isAddonActive === true) ? "default" : "secondary"}>
+                                                    {(Number(a.isAddonActive) === 1 || a.isAddonActive === true) ? "Yes" : "No"}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell>
+                                                {Array.isArray(a.addonImages) && a.addonImages.length > 0 ? (
+                                                    <div className="flex items-center gap-1">
+                                                        {a.addonImages.slice(0, 3).map((img, i) => (
+                                                            <img
+                                                                key={String(img) + i}
+                                                                src={img}
+                                                                alt="addon"
+                                                                className="w-8 h-8 object-cover rounded border"
+                                                            />
+                                                        ))}
+                                                        {a.addonImages.length > 3 && (
+                                                            <span className="text-xs text-muted-foreground">+{a.addonImages.length - 3} more</span>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-muted-foreground">No Image</span>
+                                                )}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
+
+                        <div className="flex items-center justify-between mt-4">
+                            <div className="text-sm text-muted-foreground">
+                                Page {pagination.current_page} of {pagination.last_page} • Total {pagination.total}
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Button variant="outline" size="sm" onClick={goFirst} disabled={!canPaginate || page <= 1}>
+                                    First
+                                </Button>
+                                <Button variant="outline" size="sm" onClick={goPrev} disabled={!canPaginate || page <= 1}>
+                                    Prev
+                                </Button>
+                                <Button variant="outline" size="sm" onClick={goNext} disabled={!canPaginate || page >= Number(pagination.last_page || 1)}>
+                                    Next
+                                </Button>
+                                <Button variant="outline" size="sm" onClick={goLast} disabled={!canPaginate || page >= Number(pagination.last_page || 1)}>
+                                    Last
+                                </Button>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
             </div>
-
-            {fatalError ? (
-                <div style={{ padding: "12px", border: "1px solid #f0a", background: "#ffeef3", color: "#a00" }}>{fatalError}</div>
-            ) : null}
-
-            <div style={{ border: "1px solid #ddd", borderRadius: 6, overflow: "hidden" }}>
-                <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                        <thead style={{ background: "#f7f7f7" }}>
-                            <tr>
-                                <th style={th}>ID</th>
-                                <th style={th}>Name</th>
-                                <th style={th}>Description</th>
-                                <th style={th}>Price</th>
-                                <th style={th}>Active</th>
-                                <th style={th}>Images</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {loading && addons.length === 0 ? (
-                                <tr>
-                                    <td colSpan={6} style={tdCenter}>
-                                        Loading...
-                                    </td>
-                                </tr>
-                            ) : addons.length === 0 ? (
-                                <tr>
-                                    <td colSpan={6} style={tdCenter}>
-                                        No addons found.
-                                    </td>
-                                </tr>
-                            ) : (
-                                addons.map((a, idx) => (
-                                    <tr key={a.addonId ?? a.id ?? a.addonName ?? a.name ?? idx}>
-                                        <td style={td}>{a.addonId ?? a.id ?? idx}</td>
-                                        <td style={tdStrong}>{a.addonName ?? a.name ?? ""}</td>
-                                        <td style={td}>{a.addonDescription ?? ""}</td>
-                                        <td style={tdMono}>{formatCurrency(a.addonPrice)}</td>
-                                        <td style={td}>{Number(a.isAddonActive) === 1 || a.isAddonActive === true ? "Yes" : "No"}</td>
-                                        <td style={td}>
-                                            {Array.isArray(a.addonImages) && a.addonImages.length > 0 ? (
-                                                <div style={{ display: "flex", gap: 4 }}>
-                                                    {a.addonImages.slice(0, 3).map((img, i) => (
-                                                        <img
-                                                            key={img + i}
-                                                            src={img}
-                                                            alt="addon"
-                                                            style={{ width: 32, height: 32, objectFit: "cover", borderRadius: 4, border: "1px solid #eee" }}
-                                                        />
-                                                    ))}
-                                                    {a.addonImages.length > 3 && (
-                                                        <span style={{ fontSize: 12, color: "#888" }}>+{a.addonImages.length - 3} more</span>
-                                                    )}
-                                                </div>
-                                            ) : (
-                                                <span style={{ color: "#aaa" }}>0</span>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px" }}>
-                    <div style={{ color: "#666" }}>
-                        Page {pagination.current_page} of {pagination.last_page} • Total {pagination.total}
-                    </div>
-                    <div style={{ display: "flex", gap: 6 }}>
-                        <button onClick={goFirst} disabled={!canPaginate || page <= 1}>
-                            First
-                        </button>
-                        <button onClick={goPrev} disabled={!canPaginate || page <= 1}>
-                            Prev
-                        </button>
-                        <button onClick={goNext} disabled={!canPaginate || page >= Number(pagination.last_page || 1)}>
-                            Next
-                        </button>
-                        <button onClick={goLast} disabled={!canPaginate || page >= Number(pagination.last_page || 1)}>
-                            Last
-                        </button>
-                    </div>
-                </div>
-            </div> 
         </div>
     );
 };
-
-const th: React.CSSProperties = {
-    textAlign: "left",
-    padding: "10px 12px",
-    borderBottom: "1px solid #eaeaea",
-    fontWeight: 600,
-    fontSize: 14,
-    color: "#333",
-    whiteSpace: "nowrap",
-};
-
-const td: React.CSSProperties = {
-    padding: "10px 12px",
-    borderBottom: "1px solid #f1f1f1",
-    fontSize: 14,
-    color: "#222",
-    verticalAlign: "top",
-};
-
-const tdStrong: React.CSSProperties = { ...td, fontWeight: 600 };
-const tdMono: React.CSSProperties = { ...td, fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" };
-const tdCenter: React.CSSProperties = { ...td, textAlign: "center", color: "#666" };
 
 export default AddonsPage;
