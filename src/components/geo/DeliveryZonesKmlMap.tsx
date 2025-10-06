@@ -102,10 +102,20 @@ export default function DeliveryZonesKmlMap({ kmlUrl, kmlText, className, onSele
     const load = async () => {
       try {
         let text = kmlText;
-        if (!text && kmlUrl) {
-          const res = await fetch(encodeURI(kmlUrl), { cache: 'no-store' });
-          if (!res.ok) throw new Error('Failed to fetch KML');
-          text = await res.text();
+        if (!text) {
+          // Try provided URL first, then common variants (handles spaces/case issues on static hosting)
+          const candidates = Array.from(new Set([
+            kmlUrl,
+            '/sawani-zones.kml',
+            '/Sawani Zones.kml',
+            '/Sawani%20Zones.kml',
+          ].filter(Boolean) as string[]));
+          for (const u of candidates) {
+            try {
+              const res = await fetch(encodeURI(u as string), { cache: 'no-store' });
+              if (res.ok) { text = await res.text(); break; }
+            } catch {}
+          }
         }
         if (!text) return;
         const parser = new DOMParser();

@@ -58,7 +58,7 @@ function pointInGeoJSON(pointLatLng: [number, number], geometry: any): boolean {
 
 const palette = ['#2b7bba', '#e63946', '#f4a261', '#2a9d8f', '#8a2be2', '#ff6b6b', '#4cc9f0'];
 
-export default function AddZoneMap({ kmlUrl = '/Sawani Zones.kml', initialCenter = [24.7136, 46.6753], initialZoom = 11, onPointsChange, resetCounter, isVisible, initialPoints }: Props) {
+export default function AddZoneMap({ kmlUrl = '/sawani-zones.kml', initialCenter = [24.7136, 46.6753], initialZoom = 11, onPointsChange, resetCounter, isVisible, initialPoints }: Props) {
   const { toast } = useToast();
   const [geojson, setGeojson] = useState<any | null>(null);
   // Points passed to parent: now represent the selected zone polygon coordinates (outer ring)
@@ -76,9 +76,23 @@ export default function AddZoneMap({ kmlUrl = '/Sawani Zones.kml', initialCenter
     let cancelled = false;
     const load = async () => {
       try {
-        const res = await fetch(encodeURI(kmlUrl), { cache: 'no-store' });
-        if (!res.ok) return;
-        const text = await res.text();
+        // Try provided URL first, then common variants to tolerate case/space differences in deploys
+        const candidates = Array.from(new Set([
+          kmlUrl,
+          '/sawani-zones.kml',
+          '/Sawani Zones.kml',
+          '/Sawani%20Zones.kml',
+        ])).filter(Boolean) as string[];
+
+        let text: string | null = null;
+        for (const u of candidates) {
+          try {
+            const res = await fetch(encodeURI(u), { cache: 'no-store' });
+            if (res.ok) { text = await res.text(); break; }
+          } catch {}
+        }
+        if (!text) return;
+
         const parser = new DOMParser();
         const kmlDoc = parser.parseFromString(text, 'application/xml');
         const gj = (toGeoJSON as any).kml(kmlDoc);
