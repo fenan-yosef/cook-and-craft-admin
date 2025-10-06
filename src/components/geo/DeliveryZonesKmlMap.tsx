@@ -103,7 +103,7 @@ export default function DeliveryZonesKmlMap({ kmlUrl, kmlText, className, onSele
       try {
         let text = kmlText;
         if (!text && kmlUrl) {
-          const res = await fetch(kmlUrl);
+          const res = await fetch(encodeURI(kmlUrl), { cache: 'no-store' });
           if (!res.ok) throw new Error('Failed to fetch KML');
           text = await res.text();
         }

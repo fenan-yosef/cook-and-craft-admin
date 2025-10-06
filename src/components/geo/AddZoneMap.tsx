@@ -76,7 +76,7 @@ export default function AddZoneMap({ kmlUrl = '/Sawani Zones.kml', initialCenter
     let cancelled = false;
     const load = async () => {
       try {
-        const res = await fetch(kmlUrl);
+        const res = await fetch(encodeURI(kmlUrl), { cache: 'no-store' });
         if (!res.ok) return;
         const text = await res.text();
         const parser = new DOMParser();
