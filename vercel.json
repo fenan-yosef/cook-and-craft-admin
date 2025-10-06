@@ -1,14 +1,5 @@
 {
   "rewrites": [
-    { "source": "/((?!.*\\..*).*)", "destination": "/" }
-  ],
-  "headers": [
-    {
-      "source": "/.*\\.(kml)$",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-store" },
-        { "key": "Content-Type", "value": "application/vnd.google-earth.kml+xml; charset=utf-8" }
-      ]
-    }
+    { "source": "/(.*)", "destination": "/" }
   ]
 }

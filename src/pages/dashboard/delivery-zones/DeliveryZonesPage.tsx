@@ -813,7 +813,7 @@ export default function DeliveryZonesPage() {
                             ))}
                           </div>
                           <div className="h-64 rounded border overflow-hidden relative">
-                            <DeliveryZonesKmlMap kmlUrl={'/sawani-zones.kml'} locations={(viewData as any)?.deliveryZoneGeographicalLocation || (viewData as any)?.locations || []} onSelect={(feat, msg) => {
+                            <DeliveryZonesKmlMap kmlUrl={'/Sawani Zones.kml'} locations={(viewData as any)?.deliveryZoneGeographicalLocation || (viewData as any)?.locations || []} onSelect={(feat, msg) => {
                               setViewMapMessage(msg || null);
                               setSelectedZoneFeature(feat);
                               if (feat) {
