@@ -120,38 +120,19 @@ export default function SubscriptionIntervalsPage() {
           if (token) apiService.setAuthToken(token)
           const res: any = await apiService.get("/meals")
           // Normalize to an array and map common name/title fields
-          const candidates = [
-            res,
-            res?.data,
-            res?.data?.data,
-            res?.result,
-            res?.results,
-            res?.items,
-            res?.records,
-            res?.meals,
-            res?.data?.meals,
-            res?.payload,
-            res?.data?.payload,
-            res?.content,
-            res?.data?.content,
-          ]
+          const candidates = [res, res?.data, res?.result, res?.results, res?.items, res?.records]
           let items: any[] = []
           for (const c of candidates) {
             if (Array.isArray(c)) { items = c; break }
             if (c && Array.isArray(c.data)) { items = c.data; break }
-            if (c && Array.isArray(c.items)) { items = c.items; break }
-            if (c && Array.isArray(c.records)) { items = c.records; break }
-            if (c && Array.isArray(c.results)) { items = c.results; break }
           }
-          // Fallback: scan shallow object values for first array
-          if (!Array.isArray(items) || items.length === 0) {
-            const shallowArrays = res && typeof res === 'object' ? Object.values(res).filter(Array.isArray) as any[] : []
-            if (shallowArrays.length > 0) items = shallowArrays[0]
-          }
-          const mapped = (items || []).map((m: any) => ({
-            id: Number(m.id ?? m.mealId ?? m.meal_id),
-            name: String(m.name ?? m.title ?? m.mealName ?? m.meal_title ?? `Meal #${m.id ?? m.mealId ?? m.meal_id}`),
-          })).filter((m: any) => !isNaN(m.id))
+          const mapped = (items || []).map((m: any) => {
+            const idRaw = m.id ?? m.mealId ?? m.meal_id ?? m.ID
+            const nameRaw = m.name ?? m.title ?? m.mealName ?? m.meal_title ?? m.Label
+            const id = Number(idRaw)
+            const name = nameRaw != null ? String(nameRaw) : `Meal #${idRaw ?? ""}`
+            return { id, name }
+          }).filter((m: any) => !isNaN(m.id))
           setMealsOptions(mapped)
         } catch (e) {
           // silent fail; UI shows empty list
