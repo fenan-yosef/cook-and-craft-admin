@@ -274,7 +274,7 @@ export default function DeliveryZonesPage() {
               try {
                 const locations = addMapPoints;
                 if (!Array.isArray(locations) || locations.length < 4) {
-                  toast({ title: 'Error', description: 'Please add at least 4 pins on the map.', variant: 'destructive' });
+                  toast({ title: 'Error', description: 'Please click inside a colored zone to select it.', variant: 'destructive' });
                   return;
                 }
                 const payload: any = {
@@ -310,7 +310,13 @@ export default function DeliveryZonesPage() {
               <div><Label htmlFor="name">Name</Label><Input id="name" name="name" value={addForm.name} onChange={e=>setAddForm(prev=>({...prev,name:e.target.value}))} required/></div>
               <div>
                 <Label htmlFor="scope">Status</Label>
-                <select id="scope" className="mt-2 w-full border rounded px-3 py-2" value={addForm.scope} onChange={e=>setAddForm(prev=>({...prev,scope:e.target.value}))} required>
+                <select
+                  id="scope"
+                  className="mt-2 w-full border rounded px-3 py-2 bg-white text-slate-900 border-slate-300 focus:outline-none focus:ring-2 focus:ring-primary/20 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700"
+                  value={addForm.scope}
+                  onChange={e=>setAddForm(prev=>({...prev,scope:e.target.value}))}
+                  required
+                >
                   <option value="" disabled>Select status</option>
                   <option value="on_demand">Market</option>
                   <option value="subscriptions">Subscriptions</option>
@@ -329,9 +335,9 @@ export default function DeliveryZonesPage() {
                       />
                   </div>
                       <div className="flex items-center justify-between">
-                      <div className="text-xs text-muted-foreground">Click the map to add pins (min 4).</div>
+                      <div className="text-xs text-muted-foreground">Click inside a colored zone to select it.</div>
                       <div className="flex items-center space-x-2">
-                          <Button type="button" variant="outline" size="sm" onClick={() => setIsClearConfirmOpen(true)}>Clear pins</Button>
+                          <Button type="button" variant="outline" size="sm" onClick={() => setIsClearConfirmOpen(true)}>Clear selection</Button>
                           {/* KML import button for Add modal */}
                           <label className="inline-flex items-center px-3 py-1 border rounded text-sm cursor-pointer">
                             <input type="file" accept=".kml,application/xml" className="hidden" onChange={async (e) => {

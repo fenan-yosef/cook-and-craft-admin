@@ -61,8 +61,13 @@ const palette = ['#2b7bba', '#e63946', '#f4a261', '#2a9d8f', '#8a2be2', '#ff6b6b
 export default function AddZoneMap({ kmlUrl = '/Sawani Zones.kml', initialCenter = [24.7136, 46.6753], initialZoom = 11, onPointsChange, resetCounter, isVisible, initialPoints }: Props) {
   const { toast } = useToast();
   const [geojson, setGeojson] = useState<any | null>(null);
+  // Points passed to parent: now represent the selected zone polygon coordinates (outer ring)
   const [points, setPoints] = useState<{ latitude: number; longitude: number }[]>([]);
-  const [lastAddedIndex, setLastAddedIndex] = useState<number | null>(null);
+  // Selected feature index (from properties.__zoneIndex) when user selects a zone
+  const [selectedZoneIndex, setSelectedZoneIndex] = useState<number | null>(null);
+  // Single marker at the click location to indicate the selected zone
+  const [selectedClick, setSelectedClick] = useState<{ lat: number; lng: number } | null>(null);
+  // no per-pin popup tracking in selection mode
   const mapRef = useRef<L.Map | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const lastReset = useRef<number | undefined>(undefined);
@@ -109,12 +114,8 @@ export default function AddZoneMap({ kmlUrl = '/Sawani Zones.kml', initialCenter
       toast({ title: 'Import result', description: 'No points inside delivery zones were found in the file.', variant: 'default' });
       return;
     }
-    setPoints(prev => {
-      const next = [...prev, ...filtered];
-      // ensure last added will open popup for last imported one
-      setLastAddedIndex(next.length - 1);
-      return next;
-    });
+    // In the new flow, initialPoints aren't typical, but if provided, set them as-is
+    setPoints(filtered);
   }, [initialPoints, geojson, toast]);
 
   // If parent provides initialPoints (for example after importing a KML), accept them
@@ -127,28 +128,87 @@ export default function AddZoneMap({ kmlUrl = '/Sawani Zones.kml', initialCenter
     // pass `initialPoints` and we can access it via this function's parameters only if added above.
   }, []);
 
+  // Helper: find the outer ring of the polygon (or sub-polygon) that contains the given point
+  function findContainingRing(lat: number, lng: number): { ring: number[][] | null; zoneIndex: number | null } {
+    if (!geojson || !geojson.features) return { ring: null, zoneIndex: null };
+    const ptLngLat: [number, number] = [lng, lat];
+    for (const f of geojson.features) {
+      const zIdx = f?.properties?.__zoneIndex ?? null;
+      const g = f?.geometry;
+      if (!g || !g.type || !g.coordinates) continue;
+      if (g.type === 'Polygon') {
+        const rings: number[][][] = g.coordinates;
+        const outer = rings?.[0];
+        if (outer && pointInRing(ptLngLat, outer)) {
+          // Exclude holes
+          let inHole = false;
+          for (let i = 1; i < rings.length; i++) { if (pointInRing(ptLngLat, rings[i])) { inHole = true; break; } }
+          if (!inHole) return { ring: outer, zoneIndex: zIdx };
+        }
+      } else if (g.type === 'MultiPolygon') {
+        const polys: number[][][][] = g.coordinates;
+        for (const poly of polys) {
+          const outer = poly?.[0];
+          if (outer && pointInRing(ptLngLat, outer)) {
+            let inHole = false;
+            for (let i = 1; i < poly.length; i++) { if (pointInRing(ptLngLat, poly[i])) { inHole = true; break; } }
+            if (!inHole) return { ring: outer, zoneIndex: zIdx };
+          }
+        }
+      }
+    }
+    return { ring: null, zoneIndex: null };
+  }
+
   function ClickHandler() {
     useMapEvents({ click(e) {
       const lat = e.latlng.lat, lng = e.latlng.lng;
       if (!geojson || !geojson.features) return;
-      const inside = geojson.features.some((f: any) => pointInGeoJSON([lat, lng], f.geometry));
-      if (!inside) {
-        // show transient toast explaining why the pin wasn't added (softer notice)
-        toast({ title: 'Outside delivery zone', description: 'Pins can only be added inside delivery zones.', variant: 'default' });
+      const { ring, zoneIndex } = findContainingRing(lat, lng);
+      if (!ring || zoneIndex == null) {
+        toast({ title: 'Select a delivery zone', description: 'Click inside a colored zone to select it.', variant: 'default' });
         return;
       }
-      const p = { latitude: lat, longitude: lng };
-      setPoints(prev => {
-        const idx = prev.length;
-        // mark which index was just added so we can open its popup
-        setLastAddedIndex(idx);
-        return [...prev, p];
-      });
+      // Convert ring [ [lng,lat], ... ] to list of { latitude, longitude }
+      const polyPoints = ring.map(([lngPt, latPt]) => ({ latitude: latPt, longitude: lngPt }));
+      setSelectedZoneIndex(zoneIndex);
+      setSelectedClick({ lat, lng });
+      setPoints(polyPoints);
+      
     }});
     return null;
   }
 
-  const styleFn = (_feature: any, idx: number) => ({ color: palette[idx % palette.length], weight: 1.5, opacity: 1, fillOpacity: 0.12 });
+  const styleFn = (feature: any, idx: number) => {
+    const zIdx = feature?.properties?.__zoneIndex ?? idx;
+    const isSelected = selectedZoneIndex != null && zIdx === selectedZoneIndex;
+    return { color: palette[idx % palette.length], weight: isSelected ? 2.5 : 1.5, opacity: 1, fillOpacity: isSelected ? 0.22 : 0.12 } as L.PathOptions;
+  };
+
+  const getZoneName = (feature: any) => {
+    const props = feature?.properties || {};
+    return (
+      props.name || props.Name || props.zone_name || props.title || props.Title || `Zone #${(props.__zoneIndex ?? 0) + 1}`
+    );
+  };
+
+  const onEachFeature = (feature: any, layer: L.Layer) => {
+    const name = getZoneName(feature);
+    if ((layer as any).bindTooltip) {
+      (layer as any).bindTooltip(String(name), { sticky: true });
+    }
+    if ((layer as any).on) {
+      (layer as any).on('mouseover', () => {
+        // Subtle hover highlight
+        (layer as any).setStyle?.({ weight: 2.5, fillOpacity: 0.22 });
+      });
+      (layer as any).on('mouseout', () => {
+        const idx = feature?.properties?.__zoneIndex ?? 0;
+        const s = styleFn(feature, idx) as any;
+        (layer as any).setStyle?.(s);
+      });
+    }
+  };
 
   function MapSetter() {
     const map = (useMapEvents({}) as unknown) as L.Map;
@@ -185,8 +245,9 @@ export default function AddZoneMap({ kmlUrl = '/Sawani Zones.kml', initialCenter
     if (typeof resetCounter === 'number') {
       if (lastReset.current === undefined || resetCounter !== lastReset.current) {
         lastReset.current = resetCounter;
-        setPoints([]);
-        setLastAddedIndex(null);
+  setPoints([]);
+  setSelectedZoneIndex(null);
+  setSelectedClick(null);
       }
     }
   }, [resetCounter]);
@@ -216,37 +277,40 @@ export default function AddZoneMap({ kmlUrl = '/Sawani Zones.kml', initialCenter
         <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution='&copy; OpenStreetMap contributors &copy; CARTO' />
         <MapSetter />
         {geojson && (
-          <GeoJSON data={geojson} style={(f:any) => {
-            const idx = f?.properties?.__zoneIndex ?? 0;
-            return styleFn(f, idx);
-          }} />
+          <GeoJSON
+            data={geojson}
+            style={(f:any) => {
+              const idx = f?.properties?.__zoneIndex ?? 0;
+              return styleFn(f, idx);
+            }}
+            onEachFeature={onEachFeature as any}
+          />
         )}
         <ClickHandler />
-        {points.map((p, i) => (
-          <Marker key={i} position={[p.latitude, p.longitude]} icon={redIcon} zIndexOffset={1000} riseOnHover={true} ref={(m:any) => {
-            if (m && lastAddedIndex === i) {
-              try { m.openPopup(); } catch(e) {}
-              setLastAddedIndex(null);
-            }
-          }}>
+        {selectedClick && (
+          <Marker position={[selectedClick.lat, selectedClick.lng]} icon={redIcon} zIndexOffset={1000} riseOnHover={true}>
             <Popup>
               <div className="text-xs">
-                <div className="flex items-center justify-between">
-                  <div><strong>Point {i + 1}</strong></div>
-                  <div>
-                    <button className="text-red-600 text-xs" onClick={(event) => {
+                <div className="font-semibold">Zone selected</div>
+                <div className="mt-1">Vertices: {points.length}</div>
+                <div className="mt-2">
+                  <button
+                    className="text-red-600 text-xs"
+                    onClick={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
-                      setPoints(prev => prev.filter((_, idx) => idx !== i));
-                    }}>Remove</button>
-                  </div>
+                      setSelectedZoneIndex(null);
+                      setSelectedClick(null);
+                      setPoints([]);
+                    }}
+                  >
+                    Clear selection
+                  </button>
                 </div>
-                <div className="mt-1">Lat: {p.latitude.toFixed(6)}</div>
-                <div>Lng: {p.longitude.toFixed(6)}</div>
               </div>
             </Popup>
           </Marker>
-        ))}
+        )}
       </MapContainer>
     </div>
   );

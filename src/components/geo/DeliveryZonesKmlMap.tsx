@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { MapContainer, TileLayer, GeoJSON, useMapEvents, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, GeoJSON, useMapEvents, Marker, Popup, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 // togeojson is small and converts KML DOM -> GeoJSON
@@ -84,6 +84,18 @@ export default function DeliveryZonesKmlMap({ kmlUrl, kmlText, className, onSele
     popupAnchor: [1, -34],
     shadowSize: [41, 41],
   });
+
+  // When locations (zone coordinates) are provided, fit the map to their bounds for better visibility
+  useEffect(() => {
+    if (!mapRef.current) return;
+    if (!Array.isArray(locations) || locations.length === 0) return;
+    try {
+      const bounds = L.latLngBounds(locations.map(p => L.latLng(p.latitude, p.longitude)));
+      if (bounds.isValid()) {
+        mapRef.current.fitBounds(bounds, { padding: [16, 16] });
+      }
+    } catch {}
+  }, [locations]);
 
   useEffect(() => {
     let cancelled = false;
@@ -263,7 +275,10 @@ export default function DeliveryZonesKmlMap({ kmlUrl, kmlText, className, onSele
         )}
         {/* render provided location pins */}
         {Array.isArray(locations) && locations.map((loc, i) => (
-          <Marker key={i} position={[loc.latitude, loc.longitude]} icon={redIcon as any}>
+          <Marker key={i} position={[loc.latitude, loc.longitude]} icon={redIcon as any} zIndexOffset={1000}>
+            <Tooltip direction="top" offset={[0, -6]} opacity={0.9} permanent={false}>
+              Vertex {i + 1}
+            </Tooltip>
             <Popup className="text-xs">{`Lat: ${loc.latitude}, Lng: ${loc.longitude}`}</Popup>
           </Marker>
         ))}
