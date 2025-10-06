@@ -88,15 +88,21 @@ export default function SubscriptionIntervalsPage() {
       const start = new Date(firstMonday)
       start.setDate(start.getDate() + 7 * i)
       start.setHours(0,0,0,0)
-      const end = new Date(start)
-      end.setDate(end.getDate() + 6)
-      end.setHours(23,59,59,999)
+      // API expects end as next Monday (exclusive) to make exactly 7 days
+      const endApi = new Date(start)
+      endApi.setDate(endApi.getDate() + 7)
+      endApi.setHours(0,0,0,0)
+      // For label, also show Sunday for clarity
+      const endDisplay = new Date(start)
+      endDisplay.setDate(endDisplay.getDate() + 6)
+      endDisplay.setHours(0,0,0,0)
       const startStr = fmt(start)
-      const endStr = fmt(end)
+      const endApiStr = fmt(endApi)
+      const endDisplayStr = fmt(endDisplay)
       weeks.push({
-        label: `${startStr} → ${endStr}`,
+        label: `${startStr} → ${endDisplayStr}`,
         start: startStr,
-        end: endStr,
+        end: endApiStr,
         isoKey: startStr
       })
     }
@@ -147,7 +153,7 @@ export default function SubscriptionIntervalsPage() {
     try {
       setLoading(true)
       const response = await apiService.get("/subscription_intervals")
-  const mappedIntervals: Interval[] = (response.data || []).map((item: any) => ({
+      const mappedIntervals: Interval[] = (response.data || []).map((item: any) => ({
         id: item.id,
         title: item.title,
         start_date: item.start_date,
@@ -179,7 +185,7 @@ export default function SubscriptionIntervalsPage() {
   // Handle Add Product Form Changes
   const handleAddChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const target = e.target as HTMLInputElement
-  const { name, value } = target
+    const { name, value } = target
     setAddForm((prev) => ({
       ...prev,
       [name]: value,
@@ -212,34 +218,43 @@ export default function SubscriptionIntervalsPage() {
     }
   }
 
+  // Auto-select first week when opening Add modal
+  useEffect(() => {
+    if (isAddOpen && weekOptions.length > 0 && !selectedWeekKey) {
+      const wk = weekOptions[0]
+      setSelectedWeekKey(wk.isoKey)
+      setAddForm(prev => ({ ...prev, start_date: wk.start, end_date: wk.end }))
+    }
+  }, [isAddOpen, weekOptions, selectedWeekKey])
+
   // Submit Add Product
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault()
     setAddLoading(true)
     try {
-      // Validation: ensure we have start/end and they form exactly 7-day Monday-Sunday window
+      // Validation: ensure we have start/end and they form exactly 7-day Monday-next Monday window
       if (!addForm.start_date || !addForm.end_date) {
         throw new Error('Please select a week (Mon-Sun).')
       }
       if (!addForm.cutoff_date) {
         throw new Error('Please provide a cutoff date.')
       }
-  const parseLocal = (s: string) => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d) }
-  const start = parseLocal(addForm.start_date)
-  const end = parseLocal(addForm.end_date)
+      const parseLocal = (s: string) => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d) }
+      const start = parseLocal(addForm.start_date)
+      const end = parseLocal(addForm.end_date)
       const diffDays = Math.round((end.getTime() - start.getTime()) / (1000*60*60*24))
-      const startDay = start.getDay() // 1=Mon? In JS 1=Mon only if we adjust; raw JS: 1=Mon, 0=Sun.
+      const startDay = start.getDay()
       const endDay = end.getDay()
       const isMonday = startDay === 1
-      const isSunday = endDay === 0
-      if (diffDays !== 6 || !isMonday || !isSunday) {
-        throw new Error('Selected range must be Monday to Sunday (7 days).')
+      const isNextMonday = endDay === 1
+      if (diffDays !== 7 || !isMonday || !isNextMonday) {
+        throw new Error('Selected range must be Monday to next Monday (7 days).')
       }
       const payload = {
         title: addForm.title,
         start_date: addForm.start_date,
         end_date: addForm.end_date,
-  status: addForm.status,
+        status: addForm.status,
         price_per_serving_cents: Number(addForm.price_per_serving_cents) * 100,
         cutoff_date: addForm.cutoff_date,
       }
@@ -314,8 +329,13 @@ export default function SubscriptionIntervalsPage() {
     // Ensure existing interval week is present in options; prepend if missing
     const exists = weekOptions.find(w => w.start === interval.start_date)
     if (!exists) {
+      // Build a Mon->Sun label from stored Mon->next Mon dates
+      const [y,m,d] = interval.end_date.split('-').map(Number)
+      const endDate = new Date(y, (m ?? 1) - 1, d)
+      endDate.setDate(endDate.getDate() - 1) // display Sunday
+      const ymd = `${endDate.getFullYear()}-${String(endDate.getMonth()+1).padStart(2,'0')}-${String(endDate.getDate()).padStart(2,'0')}`
       setWeekOptions(prev => [{
-        label: `${interval.start_date} → ${interval.end_date}`,
+        label: `${interval.start_date} → ${ymd}`,
         start: interval.start_date,
         end: interval.end_date,
         isoKey: interval.start_date
@@ -328,7 +348,7 @@ export default function SubscriptionIntervalsPage() {
   // Handle Edit Product Form Changes
   const handleEditChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const target = e.target as HTMLInputElement
-  const { name, value } = target
+    const { name, value } = target
     setEditForm((prev) => ({
       ...prev,
       [name]: value,
@@ -360,23 +380,23 @@ export default function SubscriptionIntervalsPage() {
       if (!editForm.cutoff_date) {
         throw new Error('Please provide a cutoff date.')
       }
-  const parseLocal = (s: string) => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d) }
-  const start = parseLocal(editForm.start_date)
-  const end = parseLocal(editForm.end_date)
+      const parseLocal = (s: string) => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d) }
+      const start = parseLocal(editForm.start_date)
+      const end = parseLocal(editForm.end_date)
       const diffDays = Math.round((end.getTime() - start.getTime()) / (1000*60*60*24))
       const isMonday = start.getDay() === 1
-      const isSunday = end.getDay() === 0
-      if (diffDays !== 6 || !isMonday || !isSunday) {
-        throw new Error('Selected range must be Monday to Sunday (7 days).')
+      const isNextMonday = end.getDay() === 1
+      if (diffDays !== 7 || !isMonday || !isNextMonday) {
+        throw new Error('Selected range must be Monday to next Monday (7 days).')
       }
       // Build form data and POST with _method=put
       const formData = new FormData()
       formData.append("title", editForm.title)
       formData.append("start_date", editForm.start_date)
       formData.append("end_date", editForm.end_date)
-  formData.append("status", editForm.status)
+      formData.append("status", editForm.status)
       formData.append("price_per_serving_cents", String(Number(editForm.price_per_serving_cents) * 100))
-  formData.append("cutoff_date", editForm.cutoff_date)
+      formData.append("cutoff_date", editForm.cutoff_date)
 
       const response = await apiService.postMultipart(`/subscription_intervals/${editForm.id}?_method=put`, formData)
       console.log("PUT override response:", response)
@@ -468,7 +488,14 @@ export default function SubscriptionIntervalsPage() {
                 <div className="mt-2 text-xs text-muted-foreground flex items-center gap-2">
                   <CalendarIcon className="h-3 w-3" />
                   {addForm.start_date && addForm.end_date ? (
-                    <span className="text-emerald-600">Selected: <strong>{addForm.start_date}</strong> → <strong>{addForm.end_date}</strong></span>
+                    (() => {
+                      const s = new Date(addForm.start_date)
+                      const e = new Date(addForm.end_date)
+                      e.setDate(e.getDate() - 1) // display Sunday
+                      return (
+                        <span className="text-emerald-600">Selected: <strong>{s.toLocaleDateString()}</strong> → <strong>{e.toLocaleDateString()}</strong></span>
+                      )
+                    })()
                   ) : 'Choose a week to set start/end automatically'}
                 </div>
               </div>
@@ -618,7 +645,14 @@ export default function SubscriptionIntervalsPage() {
                 </Select>
                 <div className="mt-2 text-xs text-muted-foreground">
                   {editForm.start_date && editForm.end_date ? (
-                    <span className="text-emerald-600">Selected: <strong>{editForm.start_date}</strong> → <strong>{editForm.end_date}</strong></span>
+                    (() => {
+                      const s = new Date(editForm.start_date)
+                      const e = new Date(editForm.end_date)
+                      e.setDate(e.getDate() - 1)
+                      return (
+                        <span className="text-emerald-600">Selected: <strong>{s.toLocaleDateString()}</strong> → <strong>{e.toLocaleDateString()}</strong></span>
+                      )
+                    })()
                   ) : 'Choose a week to set start/end automatically'}
                 </div>
               </div>
@@ -714,7 +748,7 @@ export default function SubscriptionIntervalsPage() {
                     <TableRow key={interval.id}>
                       <TableCell>{interval.title}</TableCell>
                       <TableCell>{new Date(interval.start_date).toLocaleDateString()}</TableCell>
-                      <TableCell>{new Date(interval.end_date).toLocaleDateString()}</TableCell>
+                      <TableCell>{(() => { const d = new Date(interval.end_date); d.setDate(d.getDate()-1); return d.toLocaleDateString() })()}</TableCell>
                       <TableCell>
                         <Badge variant={interval.status === "active" ? "default" : "secondary"}>
                           {interval.status}
