@@ -18,6 +18,15 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Search, MoreHorizontal, MapPin, Edit, Eye } from "lucide-react";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination";
 import { useToast } from "@/hooks/use-toast";
 import { apiService } from "@/lib/api-service";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -91,6 +100,13 @@ export default function DeliveryZonesPage() {
   const [deletingDayIds, setDeletingDayIds] = useState<number[]>([]);
   const [deletingSlotIds, setDeletingSlotIds] = useState<number[]>([]);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [lastPage, setLastPage] = useState<number>(1);
+  const [perPage, setPerPage] = useState<number>(15);
+  const [total, setTotal] = useState<number>(0);
+  const [nextPageUrl, setNextPageUrl] = useState<string | null>(null);
+
   const deleteDeliveryDay = async (dayId: number) => {
     if (!editForm.id) return;
     const confirmMsg = 'Delete this delivery day and all its time slots? This cannot be undone.';
@@ -125,7 +141,7 @@ export default function DeliveryZonesPage() {
   useEffect(() => {
     const token = localStorage.getItem("auth_token") || "";
     apiService.setAuthToken(token);
-    fetchZones();
+    fetchZones(1);
   }, []);
 
   // Add modal map is now provided by AddZoneMap component (react-leaflet)
@@ -133,12 +149,40 @@ export default function DeliveryZonesPage() {
   // Initialize Leaflet map for View Zone when modal opens and data is available
   // NOTE: view map is now rendered via DeliveryZonesKmlMap component below (GeoJSON from KML)
 
-  const fetchZones = async () => {
+  const normalizeEndpoint = (urlOrPath: string): string => {
+    // Convert absolute API URL to relative endpoint for apiService.get
+    try {
+      const base = apiService.getBaseUrl();
+      if (urlOrPath.startsWith("http://") || urlOrPath.startsWith("https://")) {
+        if (urlOrPath.startsWith(base)) {
+          const relative = urlOrPath.slice(base.length);
+          return relative.startsWith("/") ? relative : `/${relative}`;
+        }
+        // Fallback: if absolute but different base, use as-is via fetch (not supported here); default to original zones endpoint
+        return "/admins/delivery-zones";
+      }
+      return urlOrPath.startsWith("/") ? urlOrPath : `/${urlOrPath}`;
+    } catch {
+      return "/admins/delivery-zones";
+    }
+  };
+
+  const fetchZonesByUrl = async (url: string) => {
+    const endpoint = normalizeEndpoint(url);
+    return fetchZones(undefined, endpoint);
+  };
+
+  const fetchZones = async (page?: number, endpointOverride?: string) => {
     try {
       setLoading(true);
-      const response = await apiService.get("/admins/delivery-zones");
-      if (Array.isArray(response.data)) {
-        const mapped = response.data.map((item: any) => ({
+      const endpoint = endpointOverride
+        ? endpointOverride
+        : `/admins/delivery-zones${typeof page === 'number' ? `?page=${page}` : currentPage ? `?page=${currentPage}` : ''}`;
+      const response = await apiService.get(endpoint);
+      // response payload structure includes pagination meta
+      const dataArr = Array.isArray(response?.data) ? response.data : [];
+      if (Array.isArray(dataArr)) {
+        const mapped = dataArr.map((item: any) => ({
           id: item.deliveryZoneId,
           name: item.deliveryZoneName,
           scope: item.deliveryZoneScope,
@@ -148,6 +192,16 @@ export default function DeliveryZonesPage() {
           days: item.deliveryZoneDays || [],
         }));
         setZones(mapped);
+        // Update pagination state
+        const cp = Number(response.current_page ?? response.page ?? 1);
+        const lp = Number(response.last_page ?? 1);
+        const pp = Number(response.per_page ?? mapped.length ?? 0);
+        const tot = Number(response.total ?? mapped.length ?? 0);
+        setCurrentPage(Number.isFinite(cp) ? cp : 1);
+        setLastPage(Number.isFinite(lp) && lp > 0 ? lp : 1);
+        setPerPage(Number.isFinite(pp) && pp > 0 ? pp : 15);
+        setTotal(Number.isFinite(tot) ? tot : mapped.length);
+        setNextPageUrl(typeof response.nextPage === 'string' ? response.nextPage : null);
       } else {
         throw new Error(response.message || "Failed to fetch zones");
       }
@@ -156,6 +210,20 @@ export default function DeliveryZonesPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const goToPage = async (page: number) => {
+    if (page < 1 || page > lastPage || page === currentPage) return;
+    await fetchZones(page);
+  };
+
+  const visiblePages = () => {
+    const pages: number[] = [];
+    const maxButtons = 5; // current +-2 plus edges
+    const start = Math.max(1, currentPage - 2);
+    const end = Math.min(lastPage, currentPage + 2);
+    for (let p = start; p <= end; p++) pages.push(p);
+    return pages;
   };
 
   const filteredZones = (() => {
@@ -354,9 +422,9 @@ export default function DeliveryZonesPage() {
             <Button variant="outline" disabled={importingKml} onClick={() => importInputRef.current?.click()}>
               {importingKml ? 'Importing…' : 'Import KML'}
             </Button>
-            <a href="/delivery-zone-template.kml" download className="inline-flex items-center h-9 px-4 rounded-md border text-sm hover:bg-accent">
+            {/* <a href="/delivery-zone-template.kml" download className="inline-flex items-center h-9 px-4 rounded-md border text-sm hover:bg-accent">
               Download Template
-            </a>
+            </a> */}
             <Button onClick={() => setIsAddOpen(true)}>
               <MapPin className="mr-2 h-4 w-4" /> Add Zone
             </Button>
@@ -773,6 +841,80 @@ export default function DeliveryZonesPage() {
                 )}
               </TableBody>
             </Table>
+
+            {/* Pagination footer */}
+            <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="text-sm text-muted-foreground">
+                {total > 0 ? (
+                  (() => {
+                    const start = (currentPage - 1) * perPage + 1;
+                    const end = Math.min(currentPage * perPage, total);
+                    return <span>Showing {start}-{end} of {total}</span>;
+                  })()
+                ) : (
+                  <span>—</span>
+                )}
+              </div>
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      href="#"
+                      onClick={(e) => { e.preventDefault(); goToPage(currentPage - 1); }}
+                      className={currentPage <= 1 ? "pointer-events-none opacity-50" : ""}
+                    />
+                  </PaginationItem>
+
+                  {/* First page if not in range */}
+                  {visiblePages()[0] > 1 && (
+                    <>
+                      <PaginationItem>
+                        <PaginationLink href="#" onClick={(e) => { e.preventDefault(); goToPage(1); }}>
+                          1
+                        </PaginationLink>
+                      </PaginationItem>
+                      {visiblePages()[0] > 2 && (
+                        <PaginationItem>
+                          <PaginationEllipsis />
+                        </PaginationItem>
+                      )}
+                    </>
+                  )}
+
+                  {visiblePages().map((p) => (
+                    <PaginationItem key={p}>
+                      <PaginationLink href="#" isActive={p === currentPage} onClick={(e) => { e.preventDefault(); goToPage(p); }}>
+                        {p}
+                      </PaginationLink>
+                    </PaginationItem>
+                  ))}
+
+                  {/* Last page if not in range */}
+                  {visiblePages()[visiblePages().length - 1] < lastPage && (
+                    <>
+                      {visiblePages()[visiblePages().length - 1] < lastPage - 1 && (
+                        <PaginationItem>
+                          <PaginationEllipsis />
+                        </PaginationItem>
+                      )}
+                      <PaginationItem>
+                        <PaginationLink href="#" onClick={(e) => { e.preventDefault(); goToPage(lastPage); }}>
+                          {lastPage}
+                        </PaginationLink>
+                      </PaginationItem>
+                    </>
+                  )}
+
+                  <PaginationItem>
+                    <PaginationNext
+                      href="#"
+                      onClick={(e) => { e.preventDefault(); goToPage(currentPage + 1); }}
+                      className={currentPage >= lastPage ? "pointer-events-none opacity-50" : ""}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
           </CardContent>
         </Card>
 
