@@ -27,6 +27,7 @@ import ContactUsPage from "./pages/dashboard/contact-us/ContactUsPage"
 import ConversionRulesPage from "./pages/dashboard/conversion-rules/ConversionRulesPage"
 import RewardsPage from "./pages/dashboard/rewards/RewardsPage"
 import CategoriesPage from "./pages/dashboard/categories/CategoriesPage"
+import NotificationsPage from "./pages/dashboard/notifications/NotificationsPage"
 
 function App() {
   return (
@@ -60,6 +61,7 @@ function App() {
             <Route path="subscription-meal-selections" element={<SubscriptionAndMealSelections />} />
             <Route path="conversion-rules" element={<ConversionRulesPage />} />
             <Route path="rewards" element={<RewardsPage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
           </Route>
         </Routes>
         <Toaster />

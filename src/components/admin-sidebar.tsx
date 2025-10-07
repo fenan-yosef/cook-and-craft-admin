@@ -174,6 +174,11 @@ const menuItems = [
     url: "/dashboard/meals",
     icon: CookieIcon,
   },
+  {
+    title: "Send Notifications",
+    url: "/dashboard/notifications",
+    icon: MessageSquare,
+  }
 ]
 
 export function AdminSidebar() {
