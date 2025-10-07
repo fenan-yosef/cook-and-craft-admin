@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 // Leaflet imports for map rendering
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -40,6 +40,8 @@ export default function DeliveryZonesPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
+  const importInputRef = useRef<HTMLInputElement | null>(null);
+  const [importingKml, setImportingKml] = useState(false);
 
   // Add Zone modal state
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -47,7 +49,7 @@ export default function DeliveryZonesPage() {
   const [addForm, setAddForm] = useState({ name: "", scope: "", locationsCsv: "", fee: "", is_enabled: false, daysCsv: "" });
   const [addMapPoints, setAddMapPoints] = useState<{ latitude: number; longitude: number }[]>([]);
   const [addMapResetCounter, setAddMapResetCounter] = useState(0);
-  const [importedPointsForAdd, setImportedPointsForAdd] = useState<{ latitude: number; longitude: number }[] | null>(null);
+  // removed: inline KML import into Add modal
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   // Edit Zone modal state
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -56,7 +58,7 @@ export default function DeliveryZonesPage() {
   // Edit modal map editing state
   const [editMapPoints, setEditMapPoints] = useState<{ latitude: number; longitude: number }[]>([]);
   const [editMapResetCounter, setEditMapResetCounter] = useState(0);
-  const [importedPointsForEdit, setImportedPointsForEdit] = useState<{ latitude: number; longitude: number }[] | null>(null);
+  // removed: inline KML import into Edit modal
   // Detailed zone data for edit modal (delivery days & time slots)
   const [editZoneDetails, setEditZoneDetails] = useState<any | null>(null);
   const [editZoneLoading, setEditZoneLoading] = useState(false);
@@ -257,9 +259,108 @@ export default function DeliveryZonesPage() {
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
         <div className="flex items-center justify-between">
           <h2 className="text-3xl font-bold tracking-tight">Delivery Zones</h2>
-          <Button onClick={() => setIsAddOpen(true)}>
-            <MapPin className="mr-2 h-4 w-4" /> Add Zone
-          </Button>
+          <div className="flex items-center gap-2">
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".kml,application/vnd.google-earth.kml+xml,application/xml"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files && e.target.files[0];
+                if (!file) return;
+                try {
+                  setImportingKml(true);
+                  const text = await file.text();
+                  const parser = new DOMParser();
+                  const doc = parser.parseFromString(text, 'application/xml');
+                  // dynamic import to avoid bundling issues
+                  const { kml } = await import('togeojson');
+                  const gj: any = kml(doc as any);
+                  if (!gj || !Array.isArray(gj.features) || gj.features.length === 0) {
+                    toast({ title: 'Import KML', description: 'No features found in the file.', variant: 'destructive' });
+                    (e.target as HTMLInputElement).value = '';
+                    setImportingKml(false);
+                    return;
+                  }
+
+                  // Build zones from polygons; flatten MultiPolygons into individual polygons
+                  const zonesToCreate: Array<{ name: string; points: { latitude: number; longitude: number }[] }> = [];
+                  let counter = 1;
+                  for (const f of gj.features) {
+                    const props = f?.properties || {};
+                    const baseName = props.name || props.Name || props.title || props.Title || `Imported Zone ${counter}`;
+                    const geom = f?.geometry;
+                    if (!geom) continue;
+                    if (geom.type === 'Polygon') {
+                      const outer = Array.isArray(geom.coordinates) ? geom.coordinates[0] : null;
+                      if (Array.isArray(outer) && outer.length >= 4) {
+                        const pts = outer.map((c: number[]) => ({ latitude: c[1], longitude: c[0] }));
+                        zonesToCreate.push({ name: String(baseName), points: pts });
+                        counter++;
+                      }
+                    } else if (geom.type === 'MultiPolygon') {
+                      const polys: any[] = geom.coordinates || [];
+                      polys.forEach((poly: any[], idx: number) => {
+                        const outer = poly?.[0];
+                        if (Array.isArray(outer) && outer.length >= 4) {
+                          const pts = outer.map((c: number[]) => ({ latitude: c[1], longitude: c[0] }));
+                          const nm = polys.length > 1 ? `${baseName} (part ${idx + 1})` : baseName;
+                          zonesToCreate.push({ name: String(nm), points: pts });
+                        }
+                      });
+                    }
+                  }
+
+                  if (zonesToCreate.length === 0) {
+                    toast({ title: 'Import KML', description: 'No polygon zones were found in the file.', variant: 'destructive' });
+                    (e.target as HTMLInputElement).value = '';
+                    setImportingKml(false);
+                    return;
+                  }
+
+                  // Optional: Confirm on large imports
+                  if (zonesToCreate.length > 10) {
+                    const ok = window.confirm(`This will create ${zonesToCreate.length} zones. Continue?`);
+                    if (!ok) { (e.target as HTMLInputElement).value = ''; setImportingKml(false); return; }
+                  }
+
+                  let success = 0, fail = 0;
+                  for (const z of zonesToCreate) {
+                    try {
+                      const payload: any = {
+                        name: z.name,
+                        scope: 'both',
+                        geographical_location: z.points,
+                        fee: 0,
+                        is_enabled: true,
+                      };
+                      await apiService.post('/admins/delivery-zones', payload);
+                      success++;
+                    } catch (err: any) {
+                      fail++;
+                    }
+                  }
+                  toast({ title: 'KML Import Finished', description: `Created ${success} zone(s). ${fail ? fail + ' failed.' : ''}` });
+                  fetchZones();
+                } catch (err: any) {
+                  toast({ title: 'Import error', description: err?.message || 'Failed to import KML', variant: 'destructive' });
+                } finally {
+                  setImportingKml(false);
+                  // allow re-selecting the same file
+                  if (importInputRef.current) importInputRef.current.value = '';
+                }
+              }}
+            />
+            <Button variant="outline" disabled={importingKml} onClick={() => importInputRef.current?.click()}>
+              {importingKml ? 'Importing…' : 'Import KML'}
+            </Button>
+            <a href="/delivery-zone-template.kml" download className="inline-flex items-center h-9 px-4 rounded-md border text-sm hover:bg-accent">
+              Download Template
+            </a>
+            <Button onClick={() => setIsAddOpen(true)}>
+              <MapPin className="mr-2 h-4 w-4" /> Add Zone
+            </Button>
+          </div>
         </div>
         {/* Add Zone Modal */}
         <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
@@ -331,56 +432,12 @@ export default function DeliveryZonesPage() {
                         resetCounter={addMapResetCounter}
                         isVisible={isAddOpen}
                         onPointsChange={(pts)=>setAddMapPoints(pts)}
-                        initialPoints={importedPointsForAdd || undefined}
                       />
                   </div>
                       <div className="flex items-center justify-between">
                       <div className="text-xs text-muted-foreground">Click inside a colored zone to select it.</div>
                       <div className="flex items-center space-x-2">
                           <Button type="button" variant="outline" size="sm" onClick={() => setIsClearConfirmOpen(true)}>Clear selection</Button>
-                          {/* KML import button for Add modal */}
-                          <label className="inline-flex items-center px-3 py-1 border rounded text-sm cursor-pointer">
-                            <input type="file" accept=".kml,application/xml" className="hidden" onChange={async (e) => {
-                              const file = e.target.files && e.target.files[0];
-                              if (!file) return;
-                              try {
-                                const text = await file.text();
-                                const parser = new DOMParser();
-                                const doc = parser.parseFromString(text, 'application/xml');
-                                // use togeojson available globally in components; import dynamic to avoid bundler complaints
-                                // @ts-ignore
-                                const gj = (await import('togeojson')).kml(doc);
-                                const points: { latitude: number; longitude: number }[] = [];
-                                if (gj && Array.isArray(gj.features)) {
-                                  for (const f of gj.features) {
-                                    if (!f.geometry) continue;
-                                    const t = f.geometry.type;
-                                    if (t === 'Point') {
-                                      const [lng, lat] = f.geometry.coordinates;
-                                      points.push({ latitude: lat, longitude: lng });
-                                    } else if (t === 'Polygon') {
-                                      // take polygon outer ring coords as candidate points
-                                      const coords = f.geometry.coordinates && f.geometry.coordinates[0];
-                                      if (Array.isArray(coords)) {
-                                        for (const c of coords) points.push({ latitude: c[1], longitude: c[0] });
-                                      }
-                                    } else if (t === 'MultiPolygon') {
-                                      for (const poly of f.geometry.coordinates) {
-                                        const outer = poly && poly[0];
-                                        if (Array.isArray(outer)) for (const c of outer) points.push({ latitude: c[1], longitude: c[0] });
-                                      }
-                                    }
-                                  }
-                                }
-                                setImportedPointsForAdd(points.length ? points : []);                              
-                                // clear importedPointsForAdd after a short delay so AddZoneMap receives it and we don't keep reusing the same reference
-                                setTimeout(() => setImportedPointsForAdd(null), 600);
-                                // reset input value so same file can be selected again if needed
-                                (e.target as HTMLInputElement).value = '';
-                              } catch (err:any) {
-                                toast({ title: 'Import error', description: err?.message || 'Failed to parse KML file', variant: 'destructive' });
-                              }
-                            }} />Import KML</label>
                       </div>
                     </div>
                     <Dialog open={isClearConfirmOpen} onOpenChange={setIsClearConfirmOpen}>
@@ -482,7 +539,7 @@ export default function DeliveryZonesPage() {
                     .filter(p => !isNaN(p.latitude) && !isNaN(p.longitude));
                 }
                 if (locations.length < 4) {
-                  toast({ title: 'Error', description: 'Please enter at least 4 locations.', variant: 'destructive' });
+                  toast({ title: 'Error', description: 'Please click inside a colored zone to select it.', variant: 'destructive' });
                   setEditLoading(false);
                   return;
                 }
@@ -523,55 +580,13 @@ export default function DeliveryZonesPage() {
                     resetCounter={editMapResetCounter}
                     isVisible={isEditOpen}
                     onPointsChange={(pts)=>setEditMapPoints(pts)}
-                    initialPoints={importedPointsForEdit || editMapPoints}
+                    initialPoints={editMapPoints}
                   />
                 </div>
                 <div className="flex items-center justify-between">
-                  <div className="text-xs text-muted-foreground">Click the map to add pins (min 4). Drag to reorder if supported.</div>
+                  <div className="text-xs text-muted-foreground">Click inside a colored zone to select it.</div>
                   <div className="flex items-center space-x-2">
-                    <Button type="button" variant="outline" size="sm" onClick={() => { setEditMapResetCounter(c => c + 1); setEditMapPoints([]); }}>Clear pins</Button>
-                    {/* KML import button for Edit modal (syncs map + CSV) */}
-                    <label className="inline-flex items-center px-3 py-1 border rounded text-sm cursor-pointer">
-                      <input type="file" accept=".kml,application/xml" className="hidden" onChange={async (e) => {
-                        const file = e.target.files && e.target.files[0];
-                        if (!file) return;
-                        try {
-                          const text = await file.text();
-                          const parser = new DOMParser();
-                          const doc = parser.parseFromString(text, 'application/xml');
-                          // @ts-ignore
-                          const gj = (await import('togeojson')).kml(doc);
-                          const points: { latitude: number; longitude: number }[] = [];
-                          if (gj && Array.isArray(gj.features)) {
-                            for (const f of gj.features) {
-                              if (!f.geometry) continue;
-                              const t = f.geometry.type;
-                              if (t === 'Point') {
-                                const [lng, lat] = f.geometry.coordinates;
-                                points.push({ latitude: lat, longitude: lng });
-                              } else if (t === 'Polygon') {
-                                const coords = f.geometry.coordinates && f.geometry.coordinates[0];
-                                if (Array.isArray(coords)) for (const c of coords) points.push({ latitude: c[1], longitude: c[0] });
-                              } else if (t === 'MultiPolygon') {
-                                for (const poly of f.geometry.coordinates) {
-                                  const outer = poly && poly[0];
-                                  if (Array.isArray(outer)) for (const c of outer) points.push({ latitude: c[1], longitude: c[0] });
-                                }
-                              }
-                            }
-                          }
-                          setImportedPointsForEdit(points.length ? points : []);
-                          // update CSV immediately for consistency
-                          const csv = points.map(p => `${p.latitude},${p.longitude}`).join('; ');
-                          setEditForm(prev => ({ ...prev, locationsCsv: csv }));
-                          toast({ title: 'Imported', description: points.length ? `Imported ${points.length} points.` : 'No points were found in the KML.' });
-                          // clear after short delay so component receives it
-                          setTimeout(() => setImportedPointsForEdit(null), 600);
-                          (e.target as HTMLInputElement).value = '';
-                        } catch (err:any) {
-                          toast({ title: 'Import error', description: err?.message || 'Failed to parse KML file', variant: 'destructive' });
-                        }
-                      }} />Import KML</label>
+                    <Button type="button" variant="outline" size="sm" onClick={() => { setEditMapResetCounter(c => c + 1); setEditMapPoints([]); }}>Clear selection</Button>
                   </div>
                 </div>
                 {editMapPoints.length > 0 && (

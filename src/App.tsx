@@ -26,6 +26,7 @@ import UserAnswersPage from "./pages/dashboard/users_answers/UserAnswersPage"
 import ContactUsPage from "./pages/dashboard/contact-us/ContactUsPage"
 import ConversionRulesPage from "./pages/dashboard/conversion-rules/ConversionRulesPage"
 import RewardsPage from "./pages/dashboard/rewards/RewardsPage"
+import CategoriesPage from "./pages/dashboard/categories/CategoriesPage"
 
 function App() {
   return (
@@ -38,6 +39,7 @@ function App() {
             <Route index element={<DashboardHomePage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="products" element={<ProductsPage />} />
+            <Route path="categories" element={<CategoriesPage />} />
             <Route path="orders" element={<OrdersPage />} />
             <Route path="coupons" element={<CouponsPage />} />
             <Route path="delivery-zones" element={<DeliveryZonesPage />} />

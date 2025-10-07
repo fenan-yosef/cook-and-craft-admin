@@ -340,18 +340,31 @@ export default function UsersPage() {
     }
   }
 
-  // Delete user handler
+  // Deactivate user handler (replaces hard delete)
   const handleDeleteUser = async () => {
-    if (pendingDeleteUserId == null) return;
+    if (pendingDeleteUserId == null) return
     try {
       const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
       if (token) apiService.setAuthToken(token)
-      await apiService.delete(`/admins/users/${pendingDeleteUserId}`)
-      toast({ title: "Deleted", description: "User deleted successfully." })
+
+      // Try JSON first with multiple id keys to satisfy various backends
+      const id = pendingDeleteUserId
+      const payload = { user_id: id, userId: id, id }
+      try {
+        await apiService.post(`/users/deactivate`, payload)
+      } catch (jsonErr) {
+        // Fallback to form-encoded body if JSON is not accepted
+        await apiService.postFormData(`/users/deactivate`, { user_id: String(id) })
+      }
+
+      toast({ title: "Deactivated", description: "User deactivated successfully." })
       // refresh list
       fetchUsers(currentPage)
     } catch (err) {
-      toast({ title: "Error", description: "Failed to delete user.", variant: 'destructive' })
+      // Surface backend error message if available
+      let message = "Failed to deactivate user."
+      if (err && typeof (err as any).message === 'string') message = (err as any).message
+      toast({ title: "Error", description: message, variant: 'destructive' })
     } finally {
       setPendingDeleteUserId(null)
       setIsDeleteConfirmOpen(false)
@@ -557,7 +570,7 @@ export default function UsersPage() {
                               setPendingDeleteUserId(user.id)
                               setIsDeleteConfirmOpen(true)
                             }}>
-                              <Trash2 className="mr-2 h-4 w-4" /> Delete user
+                              <Trash2 className="mr-2 h-4 w-4" /> Deactivate user
                             </DropdownMenuItem>
                             {user.status === "active" ? (
                               <DropdownMenuItem onClick={() => handleBlockUser(user.id)}>
@@ -870,14 +883,14 @@ export default function UsersPage() {
         <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Delete user</AlertDialogTitle>
+              <AlertDialogTitle>Deactivate user</AlertDialogTitle>
               <AlertDialogDescription>
-                Deleting a user will remove their account and data access. This action cannot be undone. Are you sure you want to proceed?
+                Deactivating a user disables their access without permanently deleting their data. You can re-activate them later. Proceed?
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel onClick={() => setPendingDeleteUserId(null)}>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDeleteUser}>Delete</AlertDialogAction>
+              <AlertDialogAction onClick={handleDeleteUser}>Deactivate</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

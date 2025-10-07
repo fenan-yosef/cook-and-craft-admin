@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Delivery Zone Template</name>
+    <open>1</open>
+    <description>
+      Sample KML file for importing delivery zones.
+      - Each Placemark represents a zone.
+      - Use Polygon geometries; only the outer ring is imported.
+      - Name of the Placemark is used as the zone name.
+    </description>
+
+    <Style id="zoneStyle">
+      <LineStyle><color>ff3366ff</color><width>2</width></LineStyle>
+      <PolyStyle><color>663366ff</color></PolyStyle>
+    </Style>
+
+    <Placemark>
+      <name>Zone A</name>
+      <styleUrl>#zoneStyle</styleUrl>
+      <Polygon>
+        <outerBoundaryIs>
+          <LinearRing>
+            <coordinates>
+              46.675300,24.713600,0
+              46.685300,24.713600,0
+              46.685300,24.723600,0
+              46.675300,24.723600,0
+              46.675300,24.713600,0
+            </coordinates>
+          </LinearRing>
+        </outerBoundaryIs>
+      </Polygon>
+    </Placemark>
+
+    <Placemark>
+      <name>Zone B</name>
+      <styleUrl>#zoneStyle</styleUrl>
+      <Polygon>
+        <outerBoundaryIs>
+          <LinearRing>
+            <coordinates>
+              46.695300,24.713600,0
+              46.705300,24.713600,0
+              46.705300,24.723600,0
+              46.695300,24.723600,0
+              46.695300,24.713600,0
+            </coordinates>
+          </LinearRing>
+        </outerBoundaryIs>
+      </Polygon>
+    </Placemark>
+
+  </Document>
+</kml>

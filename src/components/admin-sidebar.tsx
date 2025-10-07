@@ -99,6 +99,10 @@ const menuItems = [
         url: "/dashboard/products",
       },
       {
+        title:"Product Categories",
+        url: "/dashboard/categories"
+      },
+      {
         title: "Addons",
         url: "/dashboard/addons",
       },
