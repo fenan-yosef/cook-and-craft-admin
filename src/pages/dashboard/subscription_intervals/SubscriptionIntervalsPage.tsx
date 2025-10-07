@@ -53,6 +53,9 @@ export default function SubscriptionIntervalsPage() {
   const [mealsOptions, setMealsOptions] = useState<{ id: number; name: string }[]>([])
   const [mealsLoading, setMealsLoading] = useState(false)
   const [selectedMealIds, setSelectedMealIds] = useState<number[]>([])
+  const [selectedMealIdsEdit, setSelectedMealIdsEdit] = useState<number[]>([])
+  const [mealsSearchAdd, setMealsSearchAdd] = useState("")
+  const [mealsSearchEdit, setMealsSearchEdit] = useState("")
 
   // Edit Product Modal State
   const [isEditOpen, setIsEditOpen] = useState(false)
@@ -116,9 +119,9 @@ export default function SubscriptionIntervalsPage() {
     fetchIntervals()
   }, [])
 
-  // Lazy-load meals when Add modal opens
+  // Lazy-load meals when Add or Edit modal opens
   useEffect(() => {
-    if (isAddOpen && mealsOptions.length === 0) {
+    if ((isAddOpen || isEditOpen) && mealsOptions.length === 0) {
       ;(async () => {
         try {
           setMealsLoading(true)
@@ -147,7 +150,7 @@ export default function SubscriptionIntervalsPage() {
         }
       })()
     }
-  }, [isAddOpen, mealsOptions.length])
+  }, [isAddOpen, isEditOpen, mealsOptions.length])
 
   const fetchIntervals = async () => {
     try {
@@ -367,6 +370,7 @@ export default function SubscriptionIntervalsPage() {
       cutoff_date: "",
     })
     setEditSelectedWeekKey("")
+    setSelectedMealIdsEdit([])
   }
 
   // Submit Edit Product
@@ -400,6 +404,19 @@ export default function SubscriptionIntervalsPage() {
 
       const response = await apiService.postMultipart(`/subscription_intervals/${editForm.id}?_method=put`, formData)
       console.log("PUT override response:", response)
+
+      // Assign meals for this interval if any were selected in edit modal
+      if (selectedMealIdsEdit.length > 0) {
+        try {
+          await apiService.post("/meals/assign-meals-to-interval", {
+            interval_id: Number(editForm.id),
+            meal_ids: selectedMealIdsEdit,
+          })
+          toast({ title: "Meals assigned", description: `${selectedMealIdsEdit.length} meal(s) assigned to interval.` })
+        } catch (assignErr: any) {
+          toast({ title: "Interval updated, but meal assignment failed", description: assignErr?.message || "Couldn't assign meals.", variant: "destructive" })
+        }
+      }
 
       toast({
         title: "Success",
@@ -535,12 +552,26 @@ export default function SubscriptionIntervalsPage() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start" className="w-[--radix-dropdown-menu-trigger-width] max-h-64 overflow-auto">
+                      <div className="p-2 border-b">
+                        <Input
+                          placeholder="Search meals..."
+                          value={mealsSearchAdd}
+                          onChange={(e) => setMealsSearchAdd(e.target.value)}
+                          className="h-8"
+                        />
+                      </div>
                       {mealsLoading ? (
                         <div className="px-2 py-1.5 text-sm text-muted-foreground">Loading...</div>
                       ) : mealsOptions.length === 0 ? (
                         <div className="px-2 py-1.5 text-sm text-muted-foreground">No meals found</div>
                       ) : (
-                        mealsOptions.map((m) => {
+                          (() => {
+                            const term = mealsSearchAdd.trim().toLowerCase()
+                            const list = term ? mealsOptions.filter(m => m.name.toLowerCase().includes(term)) : mealsOptions
+                            if (list.length === 0) {
+                              return <div className="px-2 py-1.5 text-sm text-muted-foreground">No matches</div>
+                            }
+                            return list.map((m) => {
                           const checked = selectedMealIds.includes(m.id)
                           return (
                             <DropdownMenuCheckboxItem
@@ -555,8 +586,9 @@ export default function SubscriptionIntervalsPage() {
                             >
                               {m.name}
                             </DropdownMenuCheckboxItem>
-                          )
-                        })
+                            )
+                            })
+                          })()
                       )}
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -679,6 +711,80 @@ export default function SubscriptionIntervalsPage() {
                   required
                 />
                 <p className="mt-1 text-xs text-muted-foreground">Last day users can make changes before interval week starts.</p>
+              </div>
+              {/* Meals selection (Edit) */}
+              <div>
+                <Label>Meals to assign on this Interval</Label>
+                <div className="mt-1">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button type="button" variant="outline" className="w-full justify-between">
+                        {selectedMealIdsEdit.length > 0 ? `${selectedMealIdsEdit.length} selected` : "Select meals"}
+                        <ChevronDown className="h-4 w-4 opacity-60" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-[--radix-dropdown-menu-trigger-width] max-h-64 overflow-auto">
+                      <div className="p-2 border-b">
+                        <Input
+                          placeholder="Search meals..."
+                          value={mealsSearchEdit}
+                          onChange={(e) => setMealsSearchEdit(e.target.value)}
+                          className="h-8"
+                        />
+                      </div>
+                      {mealsLoading ? (
+                        <div className="px-2 py-1.5 text-sm text-muted-foreground">Loading...</div>
+                      ) : mealsOptions.length === 0 ? (
+                        <div className="px-2 py-1.5 text-sm text-muted-foreground">No meals found</div>
+                      ) : (
+                        (() => {
+                          const term = mealsSearchEdit.trim().toLowerCase()
+                          const list = term ? mealsOptions.filter(m => m.name.toLowerCase().includes(term)) : mealsOptions
+                          if (list.length === 0) {
+                            return <div className="px-2 py-1.5 text-sm text-muted-foreground">No matches</div>
+                          }
+                          return list.map((m) => {
+                          const checked = selectedMealIdsEdit.includes(m.id)
+                          return (
+                            <DropdownMenuCheckboxItem
+                              key={m.id}
+                              checked={checked}
+                              onCheckedChange={(isChecked) => {
+                                setSelectedMealIdsEdit((prev) => {
+                                  if (isChecked) return prev.includes(m.id) ? prev : [...prev, m.id]
+                                  return prev.filter((id) => id !== m.id)
+                                })
+                              }}
+                            >
+                              {m.name}
+                            </DropdownMenuCheckboxItem>
+                          )
+                          })
+                        })()
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  {selectedMealIdsEdit.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {selectedMealIdsEdit.map((id) => {
+                        const meal = mealsOptions.find((m) => m.id === id)
+                        return (
+                          <Badge key={id} variant="secondary" className="flex items-center gap-1">
+                            {meal?.name || `#${id}`}
+                            <button
+                              type="button"
+                              className="ml-1 rounded px-1 text-[10px] leading-none hover:bg-muted"
+                              onClick={() => setSelectedMealIdsEdit((prev) => prev.filter((x) => x !== id))}
+                              aria-label={`Remove ${meal?.name || id}`}
+                            >
+                              ×
+                            </button>
+                          </Badge>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
               <div>
                 <Label htmlFor="edit_price_per_serving_cents">Price per Serving ($)</Label>
