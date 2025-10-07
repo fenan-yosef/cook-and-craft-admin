@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import { Link } from "react-router-dom"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -62,6 +63,8 @@ export default function ReportsPage() {
   const [resolutionNote, setResolutionNote] = useState("")
   const { toast } = useToast()
   const { token } = useAuth();
+  const [userNameMap, setUserNameMap] = useState<Record<number, string>>({})
+  const [userEmailMap, setUserEmailMap] = useState<Record<number, string>>({})
 
   useEffect(() => {
     fetchReports()
@@ -80,14 +83,14 @@ export default function ReportsPage() {
         throw new Error("Failed to fetch reports")
       }
       const result = await response.json();
-      setReports(
+      const mapped: PostReport[] =
         result.data.map((item: any) => ({
           id: item.id,
           post_id: item.post_id,
           post_title: `Post #${item.post_id}`,
           post_content: "",
           user_id: item.user_id,
-          reporter_name: `User #${item.user_id}`,
+          reporter_name: `User Not found`,
           reporter_email: "",
           reason: item.reason,
           status: item.status === "reviewed" ? "resolved" : item.status as "pending" | "resolved" | "dismissed",
@@ -95,7 +98,10 @@ export default function ReportsPage() {
           resolved_at: item.reviewed_at,
           resolved_by: item.reviewed_by,
         }))
-      );
+      setReports(mapped)
+
+      // hydrate reporter names for the list
+      try { await hydrateReporterNames(mapped) } catch { /* ignore */ }
 
     } catch (error) {
       console.error("Fetch reports error:", error)
@@ -107,6 +113,42 @@ export default function ReportsPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  function extractNameAndEmail(u: any): { name?: string, email?: string } {
+    if (!u || typeof u !== 'object') return {}
+    const name = u.name || [u.userFirstName || u.first_name || u.firstName, u.userLastName || u.last_name || u.lastName].filter(Boolean).join(' ').trim() || undefined
+    const email = u.email || u.userEmail || u.user_email || undefined
+    return { name, email }
+  }
+
+  async function hydrateReporterNames(list: PostReport[]) {
+    const ids = Array.from(new Set(list.map(r => r.user_id).filter((v): v is number => typeof v === 'number' && !isNaN(v))))
+    const missing = ids.filter(id => !(id in userNameMap))
+    if (missing.length === 0) return
+    const results = await Promise.allSettled(missing.map(async (id) => {
+      const resp = await fetch(`${API_BASE_URL}/admins/users/${id}`, {
+        headers: {
+          "Authorization": token ? `Bearer ${token}` : "",
+          "Accept": "application/json",
+        },
+      })
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+      const data = await resp.json()
+      const user = data?.data || data?.user || data
+      const { name, email } = extractNameAndEmail(user)
+      return { id, name: name ?? String(id), email: email ?? "" }
+    }))
+    const nextNames: Record<number, string> = { ...userNameMap }
+    const nextEmails: Record<number, string> = { ...userEmailMap }
+    for (const r of results) {
+      if (r.status === 'fulfilled') {
+        nextNames[r.value.id] = r.value.name
+        if (r.value.email) nextEmails[r.value.id] = r.value.email
+      }
+    }
+    setUserNameMap(nextNames)
+    setUserEmailMap(nextEmails)
   }
 
   const resolveReport = async (reportId: number, resolution: "resolved" | "dismissed") => {
@@ -178,8 +220,8 @@ export default function ReportsPage() {
       post_title: `Post #${item.post_id}`,
       post_content: "", // You can ask backend for post content if available
       user_id: item.user_id,
-      reporter_name: `User #${item.user_id}`,
-      reporter_email: "",
+      reporter_name: userNameMap[item.user_id] || `User Not Found`,
+      reporter_email: userEmailMap[item.user_id] || "",
       reason: item.reason,
       status: item.status === "reviewed" ? "resolved" : item.status,
       created_at: item.created_at,
@@ -190,6 +232,25 @@ export default function ReportsPage() {
 
     setSelectedReport(detailedReport)
     setIsViewDialogOpen(true)
+
+    // Ensure we have up-to-date reporter name/email for the modal
+    if (!userNameMap[item.user_id]) {
+      try {
+        const resp = await fetch(`${API_BASE_URL}/admins/users/${item.user_id}`, {
+          headers: {
+            "Authorization": token ? `Bearer ${token}` : "",
+            "Accept": "application/json",
+          },
+        })
+        if (resp.ok) {
+          const data = await resp.json()
+          const user = data?.data || data?.user || data
+          const { name, email } = extractNameAndEmail(user)
+          setUserNameMap(prev => ({ ...prev, [item.user_id]: name || String(item.user_id) }))
+          if (email) setUserEmailMap(prev => ({ ...prev, [item.user_id]: email }))
+        }
+      } catch {}
+    }
   } catch (error) {
     console.error("View report error:", error)
     toast({
@@ -316,17 +377,29 @@ export default function ReportsPage() {
                   </TableRow>
                 ) : (
                   orderedReports.map((report) => (
-                    <TableRow key={report.id}>
+                    <TableRow
+                      key={report.id}
+                      className="cursor-pointer hover:bg-muted/40"
+                      onClick={() => viewReport(report)}
+                    >
                       <TableCell>
                         <div className="max-w-xs">
-                          <div className="font-medium truncate">{report.post_title}</div>
+                          <div className="font-medium truncate">
+                            <Link
+                              to={`/dashboard/posts?viewPostId=${report.post_id}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="underline hover:no-underline"
+                            >
+                              {report.post_title}
+                            </Link>
+                          </div>
                           <div className="text-sm text-muted-foreground truncate">{report.post_content}</div>
                         </div>
                       </TableCell>
                       <TableCell>
                         <div>
-                          <div className="font-medium">{report.reporter_name}</div>
-                          <div className="text-sm text-muted-foreground">{report.reporter_email}</div>
+                          <div className="font-medium">{userNameMap[report.user_id] || report.reporter_name}</div>
+                          <div className="text-sm text-muted-foreground">{userEmailMap[report.user_id] || report.reporter_email}</div>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -348,11 +421,15 @@ export default function ReportsPage() {
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
+                            <Button
+                              variant="ghost"
+                              className="h-8 w-8 p-0"
+                              onClick={(e) => e.stopPropagation()}
+                            >
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
+                          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
                             <DropdownMenuItem onClick={() => viewReport(report)}>
                               <Eye className="mr-2 h-4 w-4" />
                               View Details
@@ -403,7 +480,14 @@ export default function ReportsPage() {
                 <div>
                   <Label className="text-sm font-medium">Reported Post</Label>
                   <div className="mt-1 p-3 bg-gray-50 rounded-md">
-                    <p className="font-medium text-sm">{selectedReport.post_title}</p>
+                    <p className="font-medium text-sm">
+                      <Link
+                        to={`/dashboard/posts?viewPostId=${selectedReport.post_id}`}
+                        className="underline hover:no-underline"
+                      >
+                        {selectedReport.post_title}
+                      </Link>
+                    </p>
                     <p className="text-sm text-muted-foreground mt-1">{selectedReport.post_content}</p>
                   </div>
                 </div>
@@ -440,13 +524,20 @@ export default function ReportsPage() {
                     <Label className="text-sm font-medium">Reported On</Label>
                     <p className="text-sm mt-1">{new Date(selectedReport.created_at).toLocaleString()}</p>
                   </div>
-                  {selectedReport.resolved_at && (
-                    <div>
-                      <Label className="text-sm font-medium">Resolved On</Label>
-                      <p className="text-sm mt-1">{new Date(selectedReport.resolved_at).toLocaleString()}</p>
-                    </div>
-                  )}
+                  <div>
+                    <Label className="text-sm font-medium">Resolved On</Label>
+                    <p className="text-sm mt-1">{selectedReport.resolved_at ? new Date(selectedReport.resolved_at).toLocaleString() : "-"}</p>
+                  </div>
                 </div>
+
+                {(selectedReport.resolved_by || selectedReport.resolved_at) && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium">Resolved By</Label>
+                      <p className="text-sm mt-1">{selectedReport.resolved_by || "-"}</p>
+                    </div>
+                  </div>
+                )}
 
                 {selectedReport.status === "pending" && (
                   <div>

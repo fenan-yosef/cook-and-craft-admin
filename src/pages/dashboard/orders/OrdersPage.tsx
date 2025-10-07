@@ -49,6 +49,17 @@ interface Order {
   deliveryCoordination?: { latitude: number; longitude: number };
   orderItems: OrderItem[];
   userId: number;
+  // Optionally present depending on API shape
+  user?: {
+    id?: number;
+    name?: string;
+    userFirstName?: string;
+    userLastName?: string;
+    first_name?: string;
+    last_name?: string;
+  };
+  userFirstName?: string;
+  userLastName?: string;
 }
 
 const statusColors: Record<Order["status"], string> = {
@@ -63,6 +74,7 @@ const statusColors: Record<Order["status"], string> = {
 export default function OrdersPage() {
   const { toast } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
+  const [userNameMap, setUserNameMap] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -91,6 +103,13 @@ export default function OrdersPage() {
       const result = await apiService.get(`/admins/orders?page=${page}`);
       setOrders(result.data);
 
+      // Hydrate user names for the listed orders
+      try {
+        await hydrateUserNames(result.data);
+      } catch (_) {
+        // ignore name hydration errors to avoid noisy UI; list still renders
+      }
+
       const { current_page, last_page, per_page, total } = result.meta || {};
       setCurrentPage(current_page || page);
       setLastPage(last_page || 1);
@@ -111,6 +130,51 @@ export default function OrdersPage() {
       setLoading(false);
     }
   };
+
+  // Derive a display name from a user object
+  function extractUserDisplayName(user: any): string | null {
+    if (!user || typeof user !== 'object') return null;
+    const name = user.name || null;
+    const first = user.userFirstName || user.first_name || user.firstName || null;
+    const last = user.userLastName || user.last_name || user.lastName || null;
+    const combined = [first, last].filter(Boolean).join(' ').trim();
+    return (name || combined || user.email || user.userEmail || null) || null;
+  }
+
+  // Fetch and cache user names for orders on the current page
+  async function hydrateUserNames(list: Order[]) {
+    const ids = Array.from(new Set(list.map(o => o.userId).filter((v): v is number => typeof v === 'number' && !isNaN(v))));
+    const missing = ids.filter(id => !(id in userNameMap));
+    if (missing.length === 0) return;
+
+    const base = apiService.getBaseUrl();
+    const token = apiService.getAuthToken() || (typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null);
+
+    // Fetch in parallel
+    const results = await Promise.allSettled(missing.map(async (id) => {
+      const resp = await fetch(`${base}/admins/users/${id}`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      // Try multiple shapes
+      const u = data?.data || data?.user || data || {};
+      const name = extractUserDisplayName(u);
+      return { id, name: name || String(id) };
+    }));
+
+    const nextMap: Record<number, string> = { ...userNameMap };
+    for (const r of results) {
+      if (r.status === 'fulfilled') {
+        nextMap[r.value.id] = r.value.name;
+      }
+    }
+    setUserNameMap(nextMap);
+  }
 
   const handleViewOrder = async (orderId: number) => {
     try {
@@ -260,7 +324,7 @@ export default function OrdersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Order ID</TableHead>
+                  <TableHead>Ordered By</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Payment</TableHead>
                   <TableHead>Items</TableHead>
@@ -292,7 +356,17 @@ export default function OrdersPage() {
                 ) : (
                   filteredOrders.map((order) => (
                     <TableRow key={order.id}>
-                      <TableCell>{order.id}</TableCell>
+                      <TableCell>
+                        {userNameMap[order.userId] ?? (() => {
+                          const anyOrder: any = order as any;
+                          const nameFromUser = anyOrder.user?.name as string | undefined;
+                          const first = anyOrder.user?.userFirstName || anyOrder.userFirstName || anyOrder.user?.first_name || anyOrder.first_name;
+                          const last = anyOrder.user?.userLastName || anyOrder.userLastName || anyOrder.user?.last_name || anyOrder.last_name;
+                          const combined = [first, last].filter(Boolean).join(" ").trim();
+                          const display = nameFromUser || combined || (anyOrder.userEmail || anyOrder.user_email);
+                          return display || String(order.userId);
+                        })()}
+                      </TableCell>
                       <TableCell>
                         <Badge className={statusColors[order.status]}>
                           {order.status}

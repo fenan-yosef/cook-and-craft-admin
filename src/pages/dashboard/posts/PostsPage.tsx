@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useLocation } from "react-router-dom";
 import {
   Card,
   CardContent,
@@ -90,6 +91,7 @@ const statusColors: Record<Post["status"], string> = {
 };
 
 export default function PostsPage() {
+  const location = useLocation();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -105,6 +107,7 @@ export default function PostsPage() {
   const [isCreatingPost, setIsCreatingPost] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [pollDateError, setPollDateError] = useState<string | null>(null);
+  const [handledViewId, setHandledViewId] = useState<number | null>(null);
 
   const [newPost, setNewPost] = useState({
     description: "",
@@ -150,50 +153,7 @@ export default function PostsPage() {
           ? pageObj.data
           : pageObj?.data ?? [];
 
-        const transformed = postsArray.map((post: any) => {
-          const sortedVersions = [...(post?.post_versions ?? [])].sort(
-            (a, b) =>
-              new Date(b.created_at || b.updated_at || 0).getTime() -
-              new Date(a.created_at || a.updated_at || 0).getTime()
-          );
-          const latestVersion = sortedVersions[0];
-          const latestDesc: string | undefined = latestVersion?.description;
-          const titleBase = latestDesc?.slice(0, 30) ?? "";
-          const safeTitle =
-            titleBase.length > 0
-              ? `${titleBase}${latestDesc!.length > 30 ? "..." : ""}`
-              : `Post #${post.id}`;
-
-          return {
-            ...post,
-            title: safeTitle,
-            content: latestDesc ?? "No Content",
-            created_at: post.created_at,
-            likes_count: Array.isArray(post?.post_likes)
-              ? post.post_likes.length
-              : post?.likes_count ?? 0,
-            is_pinned: Boolean(
-              post?.post_pin || post?.is_pinned || post?.post_type === "pinned"
-            ),
-            is_highlighted:
-              !!post.highlight_caption || post.post_type === "highlighted",
-            status: post?.is_deleted
-              ? "deleted"
-              : post?.is_hidden
-              ? "hidden"
-              : latestVersion?.status ?? "draft",
-            media:
-              latestVersion?.images?.map(
-                (img: any) =>
-                  img.image ||
-                  img.imageUrl ||
-                  img.url ||
-                  img.path ||
-                  img.storage_path ||
-                  img
-              ) || [],
-          } as Post;
-        });
+        const transformed = postsArray.map(transformPost);
 
         // Sort the transformed posts by creation date in descending order
         const sortedPosts = transformed.sort((a, b) => {
@@ -223,6 +183,92 @@ export default function PostsPage() {
       fetchPosts(currentPage);
     }
   }, [isLoading, fetchPosts, currentPage, showDeleted, user]);
+
+  function transformPost(post: any): Post {
+    const sortedVersions = [...(post?.post_versions ?? [])].sort(
+      (a, b) =>
+        new Date(b.created_at || b.updated_at || 0).getTime() -
+        new Date(a.created_at || a.updated_at || 0).getTime()
+    );
+    const latestVersion = sortedVersions[0];
+    const latestDesc: string | undefined = latestVersion?.description;
+    const titleBase = latestDesc?.slice(0, 30) ?? "";
+    const safeTitle =
+      titleBase.length > 0
+        ? `${titleBase}${latestDesc && latestDesc.length > 30 ? "..." : ""}`
+        : `Post #${post.id}`;
+
+    return {
+      ...post,
+      title: safeTitle,
+      content: latestDesc ?? "No Content",
+      created_at: post.created_at,
+      likes_count: Array.isArray(post?.post_likes)
+        ? post.post_likes.length
+        : post?.likes_count ?? 0,
+      is_pinned: Boolean(
+        post?.post_pin || post?.is_pinned || post?.post_type === "pinned"
+      ),
+      is_highlighted:
+        !!post.highlight_caption || post.post_type === "highlighted",
+      status: post?.is_deleted
+        ? "deleted"
+        : post?.is_hidden
+        ? "hidden"
+        : latestVersion?.status ?? "draft",
+      media:
+        latestVersion?.images?.map(
+          (img: any) =>
+            img.image ||
+            img.imageUrl ||
+            img.url ||
+            img.path ||
+            img.storage_path ||
+            img
+        ) || [],
+    } as Post;
+  }
+
+  async function fetchPostById(id: number): Promise<Post | null> {
+    try {
+      if (token) apiService.setAuthToken(token);
+      const res = await apiService.get(`/posts/${id}?withLikes=true&withPolls=true&withVersions=true`);
+      const raw = res?.data ?? res;
+      // some APIs wrap under .data; if raw has .id it's directly the post
+      const rawPost = raw?.id ? raw : raw?.post ?? raw;
+      if (!rawPost?.id) return null;
+      return transformPost(rawPost);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Robust deep-link handler: open by ID from query, fetch single post if not in the list
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const viewIdStr = params.get("viewPostId");
+    const targetId = viewIdStr ? Number(viewIdStr) : NaN;
+    if (!viewIdStr || !targetId || Number.isNaN(targetId)) return;
+    if (handledViewId === targetId) return; // already handled this ID
+    if (isViewPostDialogOpen) return; // don't reopen over an open dialog
+    if (isLoading || !user) return; // wait until auth and initial load ready
+
+    const found = posts.find(p => p.id === targetId);
+    if (found) {
+      handleViewPost(found);
+      setHandledViewId(targetId);
+      return;
+    }
+
+    // Fallback: fetch single post by ID, then open
+    (async () => {
+      const single = await fetchPostById(targetId);
+      if (single) {
+        handleViewPost(single);
+        setHandledViewId(targetId);
+      }
+    })();
+  }, [location.search, posts, isViewPostDialogOpen, isLoading, user, token, handledViewId]);
 
   const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault();

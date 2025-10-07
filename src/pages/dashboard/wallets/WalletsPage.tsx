@@ -142,7 +142,7 @@ const WalletsPage: React.FC = () => {
 						<div className="flex flex-wrap items-center gap-3 mb-4">
 							<div className="relative w-full max-w-xs">
 								<Input
-									placeholder="Search by type, code, or ID..."
+									placeholder="Search by type, code, or User..."
 									value={search}
 									onChange={(e) => setSearch(e.target.value)}
 								/>
@@ -169,10 +169,11 @@ const WalletsPage: React.FC = () => {
 							<Table>
 								<TableHeader>
 									<TableRow>
-										<TableHead>ID</TableHead>
-										<TableHead>Type</TableHead>
+										{/* <TableHead>Type</TableHead> */}
 										<TableHead>Code</TableHead>
-										<TableHead className="text-right">Balance</TableHead>
+										<TableHead >User</TableHead>
+										<TableHead className="text-right">Points Balance</TableHead>
+										<TableHead className="text-left">Cash Balance</TableHead>
 										<TableHead>Expires</TableHead>
 										<TableHead>Description</TableHead>
 										<TableHead className="text-right">Logos</TableHead>
@@ -191,7 +192,6 @@ const WalletsPage: React.FC = () => {
 									)}
 									{pageItems.map(w => (
 										<TableRow key={w.id}>
-											<TableCell>{w.id}</TableCell>
 											<TableCell className="font-medium">{w.wallet_type?.name || "-"}</TableCell>
 											<TableCell>{w.wallet_type?.code || "-"}</TableCell>
 											<TableCell className="text-right font-mono">{Number.isFinite(w.balance) ? w.balance.toLocaleString() : "0"}</TableCell>
