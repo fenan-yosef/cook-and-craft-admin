@@ -56,6 +56,7 @@ interface User {
   isPhoneVerified?: number
   isPasswordSet?: number
   userLoginCount?: number
+  userWallets?: any[]
 }
 
 export default function UsersPage() {
@@ -197,6 +198,7 @@ export default function UsersPage() {
         isPhoneVerified: u.isPhoneVerified,
         isPasswordSet: u.isPasswordSet,
         userLoginCount: u.userLoginCount,
+        userWallets: Array.isArray(u.userWallets) ? u.userWallets : [],
       }))
       setUsers(mappedUsers)
 
@@ -761,6 +763,36 @@ export default function UsersPage() {
                         </li>
                       ))}
                     </ul>
+                  )}
+                </div>
+
+                {/* Wallets Section */}
+                <div className="mt-4 border-t pt-3">
+                  <h4 className="text-sm font-semibold mb-2">Wallets</h4>
+                  {Array.isArray(selectedUser.userWallets) && selectedUser.userWallets.length > 0 ? (
+                    <ul className="space-y-2 max-h-60 overflow-auto pr-1">
+                      {selectedUser.userWallets.map((w: any, idx: number) => (
+                        <li key={w.id ?? w.walletId ?? idx} className="rounded-md border p-2 text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">{w.type ?? w.walletType ?? 'Wallet'}</span>
+                            {typeof w.balance !== 'undefined' || typeof w.amount !== 'undefined' ? (
+                              <span className="text-muted-foreground">{w.balance ?? w.amount}</span>
+                            ) : null}
+                          </div>
+                          <div className="mt-1 text-muted-foreground break-words">
+                            {w.currency ? `Currency: ${w.currency}` : ''}
+                            {w.status ? ` • Status: ${w.status}` : ''}
+                          </div>
+                          {w.created_at || w.createdAt ? (
+                            <div className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                              {new Date(w.created_at ?? w.createdAt).toLocaleString()}
+                            </div>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="text-xs text-muted-foreground">No wallet found.</div>
                   )}
                 </div>
               </div>
