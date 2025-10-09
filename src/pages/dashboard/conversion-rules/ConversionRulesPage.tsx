@@ -22,6 +22,12 @@ type WalletConversionRule = {
   to_type_name?: string
 }
 
+type WalletTypeLite = {
+  id: number
+  name: string
+  code?: string
+}
+
 export default function ConversionRulesPage() {
   const { toast } = useToast()
 
@@ -29,6 +35,8 @@ export default function ConversionRulesPage() {
   const [rules, setRules] = useState<WalletConversionRule[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>("")
+  const [walletTypes, setWalletTypes] = useState<WalletTypeLite[]>([])
+  const [typesMap, setTypesMap] = useState<Record<number, WalletTypeLite>>({})
 
   // Add/Edit dialog state
   const [addOpen, setAddOpen] = useState(false)
@@ -81,8 +89,30 @@ export default function ConversionRulesPage() {
     }
   }
 
+  const loadWalletTypes = async () => {
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
+      if (token) apiService.setAuthToken(token)
+      const res = await apiService.get("/admins/wallet-types")
+      const top: any = res ?? {}
+      const arr: any[] = Array.isArray(top?.data) ? top.data : Array.isArray(top) ? top : []
+      const list: WalletTypeLite[] = arr.map((it: any) => ({
+        id: toNumber(it.id),
+        name: String(it.name ?? it.title ?? it.code ?? `Type ${it.id}`),
+        code: it.code ? String(it.code) : undefined,
+      }))
+      setWalletTypes(list)
+      const map: Record<number, WalletTypeLite> = {}
+      list.forEach(t => { map[t.id] = t })
+      setTypesMap(map)
+    } catch (e) {
+      // keep silent; UI will fallback to showing IDs
+    }
+  }
+
   useEffect(() => {
     loadRules()
+    loadWalletTypes()
   }, [])
 
   // Handlers
@@ -104,6 +134,10 @@ export default function ConversionRulesPage() {
 
   const submitAdd = async () => {
     try {
+      if (!form.from_type_id || !form.to_type_id) {
+        toast({ title: "Missing types", description: "Please choose both From and To wallet types.", variant: "destructive" })
+        return
+      }
       const payload = {
         from_type_id: String(form.from_type_id || ""),
         to_type_id: String(form.to_type_id || ""),
@@ -123,6 +157,10 @@ export default function ConversionRulesPage() {
   const submitEdit = async () => {
     if (!editingRule) return
     try {
+      if (!form.from_type_id || !form.to_type_id) {
+        toast({ title: "Missing types", description: "Please choose both From and To wallet types.", variant: "destructive" })
+        return
+      }
       const payload = {
         from_type_id: String(form.from_type_id || ""),
         to_type_id: String(form.to_type_id || ""),
@@ -200,18 +238,16 @@ export default function ConversionRulesPage() {
                 {rules.map((r) => (
                   <TableRow key={r.id}>
                     <TableCell>
-                      {r.from_type_name ? (
-                        <span>{r.from_type_name} <span className="text-xs text-muted-foreground">(#{r.from_type_id})</span></span>
-                      ) : (
-                        <span>Type #{r.from_type_id}</span>
-                      )}
+                      <span>
+                        {r.from_type_name || typesMap[r.from_type_id]?.name || `ID ${r.from_type_id}`}
+                        <span className="ml-1 text-xs text-muted-foreground">(#{r.from_type_id})</span>
+                      </span>
                     </TableCell>
                     <TableCell>
-                      {r.to_type_name ? (
-                        <span>{r.to_type_name} <span className="text-xs text-muted-foreground">(#{r.to_type_id})</span></span>
-                      ) : (
-                        <span>Type #{r.to_type_id}</span>
-                      )}
+                      <span>
+                        {r.to_type_name || typesMap[r.to_type_id]?.name || `ID ${r.to_type_id}`}
+                        <span className="ml-1 text-xs text-muted-foreground">(#{r.to_type_id})</span>
+                      </span>
                     </TableCell>
                     <TableCell>
                       <span className="font-mono">{r.rate_numerator} : {r.rate_denominator}</span>
@@ -250,7 +286,7 @@ export default function ConversionRulesPage() {
               <option value="">Select rule…</option>
               {rules.map(r => (
                 <option key={r.id} value={r.id}>
-                  {r.from_type_name || `Type #${r.from_type_id}`} → {r.to_type_name || `Type #${r.to_type_id}`} @ {r.rate_numerator}:{r.rate_denominator} {r.is_active ? "" : "(inactive)"}
+                  {(r.from_type_name || typesMap[r.from_type_id]?.name || `ID ${r.from_type_id}`)} → {(r.to_type_name || typesMap[r.to_type_id]?.name || `ID ${r.to_type_id}`)} @ {r.rate_numerator}:{r.rate_denominator} {r.is_active ? "" : "(inactive)"}
                 </option>
               ))}
             </select>
@@ -289,12 +325,30 @@ export default function ConversionRulesPage() {
           <div className="grid gap-3 py-2">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>From Type ID</Label>
-                <Input value={form.from_type_id} onChange={(e) => setForm(f => ({ ...f, from_type_id: e.target.value }))} placeholder="e.g. 2 (Points)" />
+                <Label>From Wallet Type</Label>
+                <select
+                  className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                  value={form.from_type_id}
+                  onChange={(e) => setForm(f => ({ ...f, from_type_id: e.target.value }))}
+                >
+                  <option value="">Select type…</option>
+                  {walletTypes.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}{t.code ? ` (${t.code})` : ""}</option>
+                  ))}
+                </select>
               </div>
               <div className="space-y-1.5">
-                <Label>To Type ID</Label>
-                <Input value={form.to_type_id} onChange={(e) => setForm(f => ({ ...f, to_type_id: e.target.value }))} placeholder="e.g. 1 (Cash)" />
+                <Label>To Wallet Type</Label>
+                <select
+                  className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                  value={form.to_type_id}
+                  onChange={(e) => setForm(f => ({ ...f, to_type_id: e.target.value }))}
+                >
+                  <option value="">Select type…</option>
+                  {walletTypes.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}{t.code ? ` (${t.code})` : ""}</option>
+                  ))}
+                </select>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -332,12 +386,30 @@ export default function ConversionRulesPage() {
           <div className="grid gap-3 py-2">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>From Type ID</Label>
-                <Input value={form.from_type_id} onChange={(e) => setForm(f => ({ ...f, from_type_id: e.target.value }))} />
+                <Label>From Wallet Type</Label>
+                <select
+                  className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                  value={form.from_type_id}
+                  onChange={(e) => setForm(f => ({ ...f, from_type_id: e.target.value }))}
+                >
+                  <option value="">Select type…</option>
+                  {walletTypes.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}{t.code ? ` (${t.code})` : ""}</option>
+                  ))}
+                </select>
               </div>
               <div className="space-y-1.5">
-                <Label>To Type ID</Label>
-                <Input value={form.to_type_id} onChange={(e) => setForm(f => ({ ...f, to_type_id: e.target.value }))} />
+                <Label>To Wallet Type</Label>
+                <select
+                  className="h-9 w-full rounded-md border bg-background px-2 text-sm"
+                  value={form.to_type_id}
+                  onChange={(e) => setForm(f => ({ ...f, to_type_id: e.target.value }))}
+                >
+                  <option value="">Select type…</option>
+                  {walletTypes.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}{t.code ? ` (${t.code})` : ""}</option>
+                  ))}
+                </select>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
