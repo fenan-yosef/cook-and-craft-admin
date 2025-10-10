@@ -14,8 +14,22 @@ import { useToast } from "@/hooks/use-toast"
 import { apiService } from "@/lib/api-service"
 import { useAuth } from "@/contexts/auth-context"
 
-type ApiMeal = { ID: number; Label: string; Recipe: string; Available: number }
-type Meal = { id: number; label: string; recipe: string; available: boolean }
+type ApiRecipe = {
+  ID: number
+  Name: string
+  Description?: string
+  CaloriesKCal?: number
+  PrepMinutes?: number
+  Ingredients?: Array<{ name: string; amount?: string }>
+  NutritionFacts?: Array<{ label: string; value: string }>
+  Utensils?: string[]
+  Steps?: string[]
+  IsActive?: number
+  Images?: Array<{ ID: number; URL: string; IsThumbnail?: boolean }>
+}
+
+type ApiMeal = { ID: number; Label: string; Recipe: any; Available: number }
+type Meal = { id: number; label: string; recipe: any; available: boolean }
 
 export default function MealsPage() {
   const [meals, setMeals] = useState<Meal[]>([])
@@ -65,7 +79,7 @@ export default function MealsPage() {
       setLoading(true)
       const res = await apiService.get("/meals")
       const items: ApiMeal[] = Array.isArray(res?.data) ? res.data : []
-      const mapped: Meal[] = items.map((m) => ({ id: m.ID, label: m.Label, recipe: m.Recipe || "", available: m.Available === 1 }))
+      const mapped: Meal[] = items.map((m) => ({ id: m.ID, label: m.Label, recipe: m.Recipe ?? "", available: m.Available === 1 }))
       setMeals(mapped)
     } catch (error) {
       toast({
@@ -138,10 +152,49 @@ export default function MealsPage() {
   }
 
   const openEdit = (meal: Meal) => {
-    const match = recipesOptions.find((r) => r.name === meal.recipe)
-    setEditMeal({ id: meal.id, recipe_id: match ? match.id : null, label: meal.label, is_active: meal.available })
+    const getIdFromValue = (val: any): number | null => {
+      if (val && typeof val === "object") {
+        const raw = (val as any).ID ?? (val as any).id
+        const n = typeof raw === "number" ? raw : Number(raw)
+        return Number.isFinite(n) && n > 0 ? n : null
+      }
+      const n = typeof val === "number" ? val : Number(val)
+      return Number.isFinite(n) && n > 0 ? n : null
+    }
+    let recipeId: number | null = getIdFromValue(meal.recipe)
+    if (!recipeId) {
+      const name = getRecipeName(meal.recipe)
+      const match = recipesOptions.find((r) => r.name === name)
+      recipeId = match ? match.id : null
+    }
+    setEditMeal({ id: meal.id, recipe_id: recipeId, label: meal.label, is_active: meal.available })
+    setSelectedMeal(meal)
     setIsEditDialogOpen(true)
   }
+
+  // Ensure the edit dropdown selects the current recipe once options are available
+  useEffect(() => {
+    if (!isEditDialogOpen || !selectedMeal) return
+    if (editMeal.recipe_id) return
+    const idFromObj = (() => {
+      const rv = selectedMeal.recipe
+      if (rv && typeof rv === "object") {
+        const raw = (rv as any).ID ?? (rv as any).id
+        const n = typeof raw === "number" ? raw : Number(raw)
+        return Number.isFinite(n) && n > 0 ? n : null
+      }
+      const n = typeof rv === "number" ? rv : Number(rv)
+      return Number.isFinite(n) && n > 0 ? n : null
+    })()
+    let rid: number | null = idFromObj
+    if (!rid) {
+      const name = getRecipeName(selectedMeal.recipe)
+      const match = recipesOptions.find((r) => r.name === name)
+      rid = match ? match.id : null
+    }
+    if (rid) setEditMeal((s) => ({ ...s, recipe_id: rid }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipesOptions, isEditDialogOpen])
 
   const submitEdit = async () => {
     try {
@@ -202,16 +255,15 @@ export default function MealsPage() {
     }
   }
 
-  const filteredMeals = meals.filter(
-    (meal) =>
-      meal.label.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      meal.recipe.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (meal.available ? "available" : "unavailable").includes(searchTerm.toLowerCase()),
-  )
+  // filtering moved below after helpers
 
-  // Derive recipe display name (maps numeric IDs to recipe names when possible)
+  // Helpers to read recipe data (supports object or legacy string/id)
   const getRecipeName = (recipeValue: any): string => {
     if (recipeValue === null || recipeValue === undefined) return ""
+    if (typeof recipeValue === "object") {
+      // API now returns a recipe object
+      return recipeValue.Name || recipeValue.name || ""
+    }
     const asNumber = typeof recipeValue === "number" ? recipeValue : Number(recipeValue)
     if (!Number.isNaN(asNumber) && asNumber > 0) {
       const match = recipesOptions.find((r) => r.id === asNumber)
@@ -219,6 +271,22 @@ export default function MealsPage() {
     }
     return String(recipeValue)
   }
+
+  const getRecipeObject = (recipeValue: any): ApiRecipe | null => {
+    if (recipeValue && typeof recipeValue === "object" && (recipeValue.Name || recipeValue.ID)) return recipeValue as ApiRecipe
+    return null
+  }
+
+  // Filter using recipe name safely (supports object/id/string)
+  const filteredMeals = meals.filter((meal) => {
+    const q = searchTerm.toLowerCase()
+    const recipeName = getRecipeName(meal.recipe).toLowerCase()
+    return (
+      meal.label.toLowerCase().includes(q) ||
+      recipeName.includes(q) ||
+      (meal.available ? "available" : "unavailable").includes(q)
+    )
+  })
 
   return (
     <div className="flex flex-col">
@@ -272,7 +340,11 @@ export default function MealsPage() {
                   </TableRow>
                 ) : (
                   filteredMeals.map((meal) => (
-                    <TableRow key={meal.id}>
+                    <TableRow
+                      key={meal.id}
+                      onClick={() => viewMeal(meal)}
+                      className="cursor-pointer hover:bg-muted/30"
+                    >
                       <TableCell>
                         <div className="max-w-xs">
                           <div className="font-medium flex items-center">
@@ -291,7 +363,7 @@ export default function MealsPage() {
                           </Badge>
                         </div>
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" className="h-8 w-8 p-0">
@@ -428,8 +500,75 @@ export default function MealsPage() {
             {selectedMeal && (
               <div className="space-y-6">
                 <div>
-                  <h4 className="font-semibold mb-2">Description</h4>
-                  <div className="text-sm text-muted-foreground">{selectedMeal.recipe || "No description"}</div>
+                  <h4 className="font-semibold mb-2">Recipe</h4>
+                  {(() => {
+                    const rec = getRecipeObject(selectedMeal.recipe)
+                    const name = getRecipeName(selectedMeal.recipe)
+                    if (!rec && !name) return <div className="text-sm text-muted-foreground">No recipe info</div>
+                    return (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-sm font-medium">{name}</div>
+                          {rec?.Images && rec.Images.length > 0 && (
+                            <img src={rec.Images.find(i => i.IsThumbnail)?.URL || rec.Images[0].URL} alt={name} className="h-14 w-14 object-cover rounded" />
+                          )}
+                        </div>
+                        {rec?.Description && (
+                          <div>
+                            <div className="text-xs uppercase text-muted-foreground mb-1">Description</div>
+                            <div className="text-sm text-muted-foreground whitespace-pre-wrap">{rec.Description}</div>
+                          </div>
+                        )}
+                        {(rec?.CaloriesKCal || rec?.PrepMinutes) && (
+                          <div className="flex flex-wrap gap-4 text-sm">
+                            {rec?.CaloriesKCal ? <div><span className="text-muted-foreground">Calories: </span>{rec.CaloriesKCal} kcal</div> : null}
+                            {rec?.PrepMinutes ? <div><span className="text-muted-foreground">Prep: </span>{rec.PrepMinutes} min</div> : null}
+                          </div>
+                        )}
+                        {Array.isArray(rec?.Ingredients) && rec!.Ingredients!.length > 0 && (
+                          <div>
+                            <div className="text-xs uppercase text-muted-foreground mb-1">Ingredients</div>
+                            <ul className="list-disc pl-5 text-sm">
+                              {rec!.Ingredients!.map((ing, idx) => (
+                                <li key={idx}>{ing.name}{ing.amount ? ` - ${ing.amount}` : ""}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {Array.isArray(rec?.NutritionFacts) && rec!.NutritionFacts!.length > 0 && (
+                          <div>
+                            <div className="text-xs uppercase text-muted-foreground mb-1">Nutrition Facts</div>
+                            <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                              {rec!.NutritionFacts!.map((nf, idx) => (
+                                <div key={idx} className="flex items-center justify-between">
+                                  <span className="text-muted-foreground">{nf.label}</span>
+                                  <span>{nf.value}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {rec?.Utensils && rec.Utensils.length > 0 && (
+                          <div>
+                            <div className="text-xs uppercase text-muted-foreground mb-1">Utensils</div>
+                            <ul className="list-disc pl-5 text-sm">
+                              {rec.Utensils.flatMap(u => String(u).split(",")).map((u, idx) => (<li key={idx}>{u.trim()}</li>))}
+                            </ul>
+                          </div>
+                        )}
+                        {rec?.Steps && rec.Steps.length > 0 && (
+                          <div>
+                            <div className="text-xs uppercase text-muted-foreground mb-1">Steps</div>
+                            <ol className="list-decimal pl-5 space-y-1 text-sm">
+                              {rec.Steps.map((s, idx) => (
+                                <li key={idx}>{s}</li>
+                              ))}
+                            </ol>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })()}
                 </div>
 
                 <div>

@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Search, MoreHorizontal, Eye, Plus, Check, X, Trash2 } from "lucide-react"
+import { Search, MoreHorizontal, Eye, Plus, Trash2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { apiService } from "@/lib/api-service"
 import { useAuth } from "@/contexts/auth-context"
@@ -68,8 +68,8 @@ export default function RecipesPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   // Mock: pending recipe requests
-  const [pending, setPending] = useState<PendingRecipe[]>([])
-  const [pendingLoading, setPendingLoading] = useState(false)
+  // Pending requests kept in localStorage (UI section is currently commented out)
+  // const [pending, setPending] = useState<PendingRecipe[]>([])
   const [selectedRecipe, setSelectedRecipe] = useState<ApiRecipe | null>(null)
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
@@ -125,13 +125,12 @@ export default function RecipesPage() {
 
   // Mock loaders for pending requests
   const loadPending = () => {
-    setPendingLoading(true)
     try {
       const raw = localStorage.getItem(PENDING_STORAGE_KEY)
       if (raw) {
         const list = JSON.parse(raw)
         if (Array.isArray(list)) {
-          setPending(list)
+          // setPending(list) // pending UI currently disabled
           return
         }
       }
@@ -177,43 +176,14 @@ export default function RecipesPage() {
           Requested_At: new Date(Date.now() - 86400000).toISOString(),
         },
       ]
-      setPending(seed)
       localStorage.setItem(PENDING_STORAGE_KEY, JSON.stringify(seed))
     } catch {
       // ignore
     } finally {
-      setPendingLoading(false)
+      // no-op
     }
   }
 
-  const persistPending = (list: PendingRecipe[]) => {
-    setPending(list)
-    try { localStorage.setItem(PENDING_STORAGE_KEY, JSON.stringify(list)) } catch {}
-  }
-
-  const approveRequest = (req: PendingRecipe) => {
-    // Move to recipes list (mock) and remove from pending
-    const newRecipe: ApiRecipe = {
-      Recipe_ID: req.Recipe_ID,
-      Name: req.Name,
-      Description: req.Description,
-      Calories: req.Calories,
-      Prep_minutes: req.Prep_minutes,
-      Is_active: 1,
-      Images: req.Images || [],
-      Ingredients: req.Ingredients,
-      Nutrition_facts: req.Nutrition_facts,
-      Utensils: req.Utensils,
-    }
-    setRecipes((prev) => [newRecipe, ...prev])
-    persistPending(pending.filter((p) => p.Recipe_ID !== req.Recipe_ID))
-    toast({ title: "Approved", description: `${req.Name} moved to recipes.` })
-  }
-
-  const rejectRequest = (req: PendingRecipe) => {
-    persistPending(pending.filter((p) => p.Recipe_ID !== req.Recipe_ID))
-    toast({ title: "Rejected", description: `${req.Name} request removed.` })
-  }
 
   // Generate object URLs for new image previews
   useEffect(() => {
@@ -701,7 +671,11 @@ export default function RecipesPage() {
                   </TableRow>
                 ) : (
                   filteredRecipes.map((recipe) => (
-                    <TableRow key={recipe.Recipe_ID}>
+                    <TableRow
+                      key={recipe.Recipe_ID}
+                      onClick={() => viewRecipe(recipe)}
+                      className="cursor-pointer hover:bg-muted/30"
+                    >
                       <TableCell>
                         <div className="max-w-xs">
                           <div className="font-medium flex items-center">{recipe.Name}</div>
@@ -740,7 +714,7 @@ export default function RecipesPage() {
                           <span className="text-sm text-muted-foreground">—</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" className="h-8 w-8 p-0">

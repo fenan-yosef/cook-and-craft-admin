@@ -41,6 +41,9 @@ export default function CouponsPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const { toast } = useToast()
+  // View modal state
+  const [selectedCoupon, setSelectedCoupon] = useState<Coupon | null>(null)
+  const [isViewOpen, setIsViewOpen] = useState(false)
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
@@ -354,7 +357,11 @@ const handleAddCoupon = async (e: React.FormEvent) => {
                   </TableRow>
                 ) : (
                   filteredCoupons.map((coupon, idx) => (
-                    <TableRow key={coupon.code + idx}>
+                    <TableRow
+                      key={coupon.code + idx}
+                      onClick={() => { setSelectedCoupon(coupon); setIsViewOpen(true) }}
+                      className="cursor-pointer hover:bg-muted/30"
+                    >
                       <TableCell>{coupon.name}</TableCell>
                       <TableCell>{coupon.discountValue}</TableCell>
                       <TableCell>{coupon.maxDiscountValue}</TableCell>
@@ -368,7 +375,7 @@ const handleAddCoupon = async (e: React.FormEvent) => {
                       <TableCell>{coupon.perUserLimit}</TableCell>
                       <TableCell>{coupon.startsAt}</TableCell>
                       <TableCell>{coupon.endsAt}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" className="h-8 w-8 p-0">
@@ -444,6 +451,87 @@ const handleAddCoupon = async (e: React.FormEvent) => {
             </div>
           </CardContent>
         </Card>
+
+        {/* View Coupon Modal */}
+        <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
+          <DialogContent className="sm:max-w-[520px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center justify-between">
+                {selectedCoupon ? (
+                  <div className="w-full">
+                    <div className="text-xs text-muted-foreground mb-1">Coupon code</div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-2xl font-extrabold tracking-wide break-all">{selectedCoupon.code}</div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(selectedCoupon.code)
+                            toast({ title: "Copied", description: "Coupon code copied to clipboard" })
+                          } catch {
+                            toast({ title: "Copy failed", description: "Couldn't copy code. Select and copy manually.", variant: "destructive" })
+                          }
+                        }}
+                      >
+                        Copy
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  "Coupon"
+                )}
+              </DialogTitle>
+              <DialogDescription>
+                {selectedCoupon?.name}
+              </DialogDescription>
+            </DialogHeader>
+            {selectedCoupon && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <div className="text-muted-foreground">Discount</div>
+                    <div className="font-medium">{selectedCoupon.discountType === 'percent' ? `${selectedCoupon.discountValue}%` : selectedCoupon.discountValue}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Max Discount</div>
+                    <div className="font-medium">{selectedCoupon.maxDiscountValue ?? '—'}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Scope</div>
+                    <div className="font-medium capitalize">{selectedCoupon.scope}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Apply</div>
+                    <div className="font-medium">{selectedCoupon.isAutoApply ? 'Auto-apply' : 'Manual'}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Max Redemptions</div>
+                    <div className="font-medium">{selectedCoupon.maxRedemptions}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Per User Limit</div>
+                    <div className="font-medium">{selectedCoupon.perUserLimit}</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <div className="text-muted-foreground">Starts At</div>
+                    <div className="font-medium">{selectedCoupon.startsAt || '—'}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Ends At</div>
+                    <div className="font-medium">{selectedCoupon.endsAt || '—'}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+            <DialogFooter className="mt-4">
+              <Button variant="outline" onClick={() => setIsViewOpen(false)}>Close</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Add Coupon Modal */}
         <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
