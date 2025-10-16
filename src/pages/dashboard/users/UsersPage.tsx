@@ -60,6 +60,17 @@ interface User {
 }
 
 export default function UsersPage() {
+  // Safely convert any value into a human-friendly string for rendering
+  const toLabel = (v: any): string => {
+    if (v == null) return ""
+    const t = typeof v
+    if (t === "string" || t === "number" || t === "boolean") return String(v)
+    if (t === "object") {
+      const candidate = (v.name ?? v.code ?? v.title ?? v.label ?? v.id ?? v.value)
+      return candidate != null ? String(candidate) : JSON.stringify(v)
+    }
+    return String(v)
+  }
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
@@ -375,78 +386,40 @@ export default function UsersPage() {
 
   // Fetch all preference answers then filter for selected user
   const fetchAndFilterUserAnswers = async (userId: number) => {
-  const reqId = ++answersReqRef.current
-  setAnswersLoading(true)
-  setAnswersError(null)
-  setUserAnswers([])
-    try {
-      const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
-      if (token) apiService.setAuthToken(token)
-      const res = await apiService.get(`/admins/users_preference_answers/${userId}`)
-      // Attempt to locate array of answers in multiple shapes
-      let answers: any[] = []
-      const candidates = [
-        res,
-        res?.data,
-        res?.result,
-        res?.results,
-        res?.items,
-        res?.records,
-        res?.answers,
-        res?.user_preference_answers,
-        res?.data?.answers,
-        res?.data?.results,
-      ]
-      for (const c of candidates) {
-        if (Array.isArray(c)) { answers = c; break }
-        if (c && Array.isArray(c.data)) { answers = c.data; break }
-      }
-
-      if (!Array.isArray(answers)) answers = []
-
-      const normalized = answers.map((a: any) => {
-        const nestedUser = a.user || a.profile || a.account || {}
-        const extractedUserId = Number(
-          a.userId ?? a.user_id ?? a.user_id_fk ?? a.userID ??
-          nestedUser.id ?? nestedUser.userId ?? nestedUser.user_id ?? nestedUser.userID
-        )
-        return {
-          id: a.id ?? a.answerId ?? a.userPreferenceAnswerId ?? a.user_preference_answer_id,
-          userId: extractedUserId,
-          questionId: a.preferenceQuestionId ?? a.questionId ?? a.preference_question_id ?? a.prefQuestionId,
-          question: a.question?.text ?? a.question?.title ?? a.question ?? a.preferenceQuestion ?? a.preference_question_text ?? a.questionText ?? a.preference_question ?? a.prefQuestionText,
-          answer: a.answer?.text ?? a.answer?.value ?? a.answer ?? a.value ?? a.answerValue ?? a.response ?? a.answer_text,
-          createdAt: a.created_at ?? a.createdAt ?? a.timestamp ?? a.createdOn,
-          _raw: a,
-        }
-      })
-
-      let filtered = normalized.filter(a => a.userId === userId && !isNaN(a.userId))
-
-      // Fallback: if nothing matched but we DO have answers whose userId is missing/NaN, try loose match
-      if (filtered.length === 0 && normalized.length > 0) {
-        const loose = normalized.filter(a => String(a._raw?.userId ?? a._raw?.user_id ?? a._raw?.user_id_fk ?? a._raw?.userID ?? a._raw?.user?.id ?? '') === String(userId))
-        if (loose.length > 0) {
-          filtered = loose
-        }
-      }
-
-      // Final fallback: if still none, show all (to help diagnose) but tag them
-      if (filtered.length === 0 && normalized.length > 0) {
-        console.warn('[UsersPage] No direct userId match for answers. Showing all answers for debugging.')
-        filtered = normalized.map(a => ({ ...a, question: a.question || '(Unknown Question)', answer: a.answer }))
-      }
-
-  // If a newer request started, ignore this result
-  if (reqId !== answersReqRef.current) return
-  lastAnswersUserIdRef.current = userId
-  setUserAnswers(filtered)
-    } catch (err: any) {
-  if (reqId !== answersReqRef.current) return
-  setAnswersError(err?.message || 'Failed to load answers')
-    } finally {
-  if (reqId === answersReqRef.current) setAnswersLoading(false)
+  const reqId = ++answersReqRef.current;
+  setAnswersLoading(true);
+  setAnswersError(null);
+  setUserAnswers([]);
+  try {
+    const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+    if (token) apiService.setAuthToken(token);
+    const res = await apiService.get(`/admins/users_preference_answers/${userId}`);
+    // New API shape: { data: [ { id, user_id, question, answer, answered_at } ], ... }
+    const answers = Array.isArray(res?.data) ? res.data : [];
+    const normalized = answers.map((a: any) => ({
+      id: a.id,
+      userId: Number(a.user_id),
+      question: a.question,
+      answer: a.answer,
+      createdAt: a.answered_at,
+      _raw: a,
+    }));
+    // Filter for current user
+  let filtered = normalized.filter((a: { userId: number }) => a.userId === userId && !isNaN(a.userId));
+    // Fallback: if none, show all for debugging
+    if (filtered.length === 0 && normalized.length > 0) {
+      filtered = normalized;
     }
+    // If a newer request started, ignore this result
+    if (reqId !== answersReqRef.current) return;
+    lastAnswersUserIdRef.current = userId;
+    setUserAnswers(filtered);
+  } catch (err: any) {
+    if (reqId !== answersReqRef.current) return;
+    setAnswersError(err?.message || 'Failed to load answers');
+  } finally {
+    if (reqId === answersReqRef.current) setAnswersLoading(false);
+  }
   }
 
   const filteredUsers = users.filter(
@@ -774,14 +747,14 @@ export default function UsersPage() {
                       {selectedUser.userWallets.map((w: any, idx: number) => (
                         <li key={w.id ?? w.walletId ?? idx} className="rounded-md border p-2 text-xs">
                           <div className="flex items-center justify-between">
-                            <span className="font-medium">{w.type ?? w.walletType ?? 'Wallet'}</span>
+                            <span className="font-medium">{toLabel(w.type ?? w.walletType) || 'Wallet'}</span>
                             {typeof w.balance !== 'undefined' || typeof w.amount !== 'undefined' ? (
                               <span className="text-muted-foreground">{w.balance ?? w.amount}</span>
                             ) : null}
                           </div>
                           <div className="mt-1 text-muted-foreground break-words">
-                            {w.currency ? `Currency: ${w.currency}` : ''}
-                            {w.status ? ` • Status: ${w.status}` : ''}
+                            {w.currency ? `Currency: ${toLabel(w.currency)}` : ''}
+                            {w.status ? ` • Status: ${toLabel(w.status)}` : ''}
                           </div>
                           {w.created_at || w.createdAt ? (
                             <div className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
