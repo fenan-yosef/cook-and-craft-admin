@@ -37,6 +37,11 @@ export default function SubscriptionIntervalsPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const { toast } = useToast()
+  // View modal state
+  const [isViewOpen, setIsViewOpen] = useState(false)
+  const [selectedInterval, setSelectedInterval] = useState<Interval | null>(null)
+  const [selLoading, setSelLoading] = useState(false)
+  const [selections, setSelections] = useState<any[]>([])
 
   // Add Product Modal State
   const [isAddOpen, setIsAddOpen] = useState(false)
@@ -440,6 +445,35 @@ export default function SubscriptionIntervalsPage() {
   const filteredIntervals = intervals.filter(interval =>
     interval.title.toLowerCase().includes(searchTerm.toLowerCase())
   )
+
+  // Open view modal and load meal selections for the interval
+  const openViewModal = async (interval: Interval) => {
+    setSelectedInterval(interval)
+    setIsViewOpen(true)
+    setSelLoading(true)
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
+      if (token) apiService.setAuthToken(token)
+      const res: any = await apiService.get(`/sub-meal-selections/subscription/${interval.id}`)
+      // Normalize results from various possible shapes
+      let items: any[] = []
+      if (Array.isArray(res)) items = res
+      else if (Array.isArray(res?.data)) items = res.data
+      else if (Array.isArray(res?.results)) items = res.results
+      else if (Array.isArray(res?.selections)) items = res.selections
+      else if (res && typeof res === 'object') {
+        const maybe = [res.items, res.records, res.result]
+        const firstArr = maybe.find((x: any) => Array.isArray(x))
+        if (firstArr) items = firstArr
+      }
+      setSelections(Array.isArray(items) ? items : [])
+    } catch (err: any) {
+      setSelections([])
+      toast({ title: 'Error', description: err?.message || 'Failed to load meal selections', variant: 'destructive' })
+    } finally {
+      setSelLoading(false)
+    }
+  }
 
   const handleDeleteInterval = async (id: number) => {
     if (!window.confirm('Delete this interval? This cannot be undone.')) return;
@@ -851,7 +885,11 @@ export default function SubscriptionIntervalsPage() {
                   </TableRow>
                 ) : (
                   filteredIntervals.map(interval => (
-                    <TableRow key={interval.id}>
+                    <TableRow
+                      key={interval.id}
+                      onClick={() => openViewModal(interval)}
+                      className="cursor-pointer hover:bg-muted/30"
+                    >
                       <TableCell>{interval.title}</TableCell>
                       <TableCell>{new Date(interval.start_date).toLocaleDateString()}</TableCell>
                       <TableCell>{(() => { const d = new Date(interval.end_date); d.setDate(d.getDate()-1); return d.toLocaleDateString() })()}</TableCell>
@@ -861,7 +899,7 @@ export default function SubscriptionIntervalsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>{`$${(interval.price_per_serving_cents/100).toFixed(2)}`}</TableCell>
-                      <TableCell className="text-right space-x-2">
+                      <TableCell className="text-right space-x-2" onClick={(e) => e.stopPropagation()}>
                         <Button size="sm" variant="outline" onClick={() => openEditModal(interval)} disabled={deletingId === interval.id}>
                           <Edit className="mr-2 h-4 w-4" /> Edit
                         </Button>
@@ -876,6 +914,70 @@ export default function SubscriptionIntervalsPage() {
             </Table>
           </CardContent>
         </Card>
+
+        {/* View Interval Modal */}
+        <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
+          <DialogContent className="sm:max-w-[560px] max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center justify-between">
+                <span>{selectedInterval?.title || 'Interval'}</span>
+                {selectedInterval ? (
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(selectedInterval.start_date).toLocaleDateString()} → {(() => { const d = new Date(selectedInterval.end_date); d.setDate(d.getDate()-1); return d.toLocaleDateString() })()}
+                  </span>
+                ) : null}
+              </DialogTitle>
+              <DialogDescription>Meal selections for this interval</DialogDescription>
+            </DialogHeader>
+            {selLoading ? (
+              <div className="py-6 text-center text-sm text-muted-foreground">Loading selections...</div>
+            ) : selections.length === 0 ? (
+              <div className="py-4 text-sm text-muted-foreground">No meal selections found for this interval.</div>
+            ) : (
+              (() => {
+                // Build a summary by meal name
+                const idToName = new Map<number, string>()
+                mealsOptions.forEach(m => idToName.set(m.id, m.name))
+                const getName = (item: any): string => {
+                  const m = item.meal ?? item.Meal ?? item.recipe ?? item.Recipe
+                  if (m && typeof m === 'object') return m.Name ?? m.name ?? m.Label ?? m.label ?? `Meal #${m.ID ?? m.id ?? ''}`
+                  const fromFields = item.meal_name ?? item.name ?? item.MealName ?? item.Label
+                  if (fromFields) return String(fromFields)
+                  const id = Number(item.meal_id ?? item.mealId ?? item.Meal_ID ?? item.MealId)
+                  if (Number.isFinite(id) && idToName.has(id)) return idToName.get(id) as string
+                  return Number.isFinite(id) ? `Meal #${id}` : 'Unknown meal'
+                }
+                const getQty = (item: any): number => {
+                  const q = Number(item.quantity ?? item.qty ?? item.count ?? 1)
+                  return Number.isFinite(q) && q > 0 ? q : 1
+                }
+                const summary = new Map<string, number>()
+                selections.forEach((it) => {
+                  const name = getName(it)
+                  const qty = getQty(it)
+                  summary.set(name, (summary.get(name) || 0) + qty)
+                })
+                const entries = Array.from(summary.entries()).sort((a, b) => a[0].localeCompare(b[0]))
+                return (
+                  <div className="space-y-3">
+                    <div className="text-sm text-muted-foreground">Total selections: {selections.length}</div>
+                    <ul className="space-y-1">
+                      {entries.map(([name, count]) => (
+                        <li key={name} className="flex items-center justify-between border rounded px-3 py-2">
+                          <span className="font-medium">{name}</span>
+                          <Badge variant="secondary">{count}</Badge>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )
+              })()
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsViewOpen(false)}>Close</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   )
