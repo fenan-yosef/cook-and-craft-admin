@@ -33,15 +33,13 @@ interface Interval {
 }
 
 export default function SubscriptionIntervalsPage() {
-  const [intervals, setIntervals] = useState<Interval[]>([])
+  const [intervals, setIntervals] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const { toast } = useToast()
   // View modal state
   const [isViewOpen, setIsViewOpen] = useState(false)
-  const [selectedInterval, setSelectedInterval] = useState<Interval | null>(null)
-  const [selLoading, setSelLoading] = useState(false)
-  const [selections, setSelections] = useState<any[]>([])
+  const [selectedInterval, setSelectedInterval] = useState<any | null>(null)
 
   // Add Product Modal State
   const [isAddOpen, setIsAddOpen] = useState(false)
@@ -161,30 +159,10 @@ export default function SubscriptionIntervalsPage() {
     try {
       setLoading(true)
       const response = await apiService.get("/subscription_intervals")
-      const mappedIntervals: Interval[] = (response.data || []).map((item: any) => ({
-        id: item.id,
-        title: item.title,
-        start_date: item.start_date,
-        end_date: item.end_date,
-        status: item.status,
-        price_per_serving_cents: item.price_per_serving_cents,
-        cutoff_date: item.cutoff_date || item.cutoffDate || undefined,
-      }))
-      setIntervals(mappedIntervals)
+      // Use the data as-is, including meals field
+      setIntervals(Array.isArray(response.data) ? response.data : [])
     } catch (error) {
-      // Mock data for demonstration
-      const mockIntervals: Interval[] = [
-        {
-          id: 1,
-          title: "aa",
-          start_date: "2025-09-01",
-          end_date: "2025-10-14",
-          status: "active",
-          is_served: 1,
-          price_per_serving_cents: 0,
-        },
-      ]
-      setIntervals(mockIntervals)
+      setIntervals([])
     } finally {
       setLoading(false)
     }
@@ -446,33 +424,10 @@ export default function SubscriptionIntervalsPage() {
     interval.title.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  // Open view modal and load meal selections for the interval
-  const openViewModal = async (interval: Interval) => {
+  // Open view modal for interval
+  const openViewModal = (interval: any) => {
     setSelectedInterval(interval)
     setIsViewOpen(true)
-    setSelLoading(true)
-    try {
-      const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
-      if (token) apiService.setAuthToken(token)
-      const res: any = await apiService.get(`/sub-meal-selections/subscription/${interval.id}`)
-      // Normalize results from various possible shapes
-      let items: any[] = []
-      if (Array.isArray(res)) items = res
-      else if (Array.isArray(res?.data)) items = res.data
-      else if (Array.isArray(res?.results)) items = res.results
-      else if (Array.isArray(res?.selections)) items = res.selections
-      else if (res && typeof res === 'object') {
-        const maybe = [res.items, res.records, res.result]
-        const firstArr = maybe.find((x: any) => Array.isArray(x))
-        if (firstArr) items = firstArr
-      }
-      setSelections(Array.isArray(items) ? items : [])
-    } catch (err: any) {
-      setSelections([])
-      toast({ title: 'Error', description: err?.message || 'Failed to load meal selections', variant: 'destructive' })
-    } finally {
-      setSelLoading(false)
-    }
   }
 
   const handleDeleteInterval = async (id: number) => {
@@ -929,50 +884,30 @@ export default function SubscriptionIntervalsPage() {
               </DialogTitle>
               <DialogDescription>Meal selections for this interval</DialogDescription>
             </DialogHeader>
-            {selLoading ? (
-              <div className="py-6 text-center text-sm text-muted-foreground">Loading selections...</div>
-            ) : selections.length === 0 ? (
-              <div className="py-4 text-sm text-muted-foreground">No meal selections found for this interval.</div>
-            ) : (
+            {selectedInterval ? (
               (() => {
-                // Build a summary by meal name
-                const idToName = new Map<number, string>()
-                mealsOptions.forEach(m => idToName.set(m.id, m.name))
-                const getName = (item: any): string => {
-                  const m = item.meal ?? item.Meal ?? item.recipe ?? item.Recipe
-                  if (m && typeof m === 'object') return m.Name ?? m.name ?? m.Label ?? m.label ?? `Meal #${m.ID ?? m.id ?? ''}`
-                  const fromFields = item.meal_name ?? item.name ?? item.MealName ?? item.Label
-                  if (fromFields) return String(fromFields)
-                  const id = Number(item.meal_id ?? item.mealId ?? item.Meal_ID ?? item.MealId)
-                  if (Number.isFinite(id) && idToName.has(id)) return idToName.get(id) as string
-                  return Number.isFinite(id) ? `Meal #${id}` : 'Unknown meal'
+                // meals is an array of arrays of meal objects
+                const mealsArr = Array.isArray(selectedInterval.meals)
+                  ? selectedInterval.meals.flat().filter(Boolean)
+                  : []
+                if (mealsArr.length === 0) {
+                  return <div className="py-4 text-sm text-muted-foreground">No meals assigned for this interval.</div>
                 }
-                const getQty = (item: any): number => {
-                  const q = Number(item.quantity ?? item.qty ?? item.count ?? 1)
-                  return Number.isFinite(q) && q > 0 ? q : 1
-                }
-                const summary = new Map<string, number>()
-                selections.forEach((it) => {
-                  const name = getName(it)
-                  const qty = getQty(it)
-                  summary.set(name, (summary.get(name) || 0) + qty)
-                })
-                const entries = Array.from(summary.entries()).sort((a, b) => a[0].localeCompare(b[0]))
                 return (
                   <div className="space-y-3">
-                    <div className="text-sm text-muted-foreground">Total selections: {selections.length}</div>
+                    <div className="text-sm text-muted-foreground">Total meals: {mealsArr.length}</div>
                     <ul className="space-y-1">
-                      {entries.map(([name, count]) => (
-                        <li key={name} className="flex items-center justify-between border rounded px-3 py-2">
-                          <span className="font-medium">{name}</span>
-                          <Badge variant="secondary">{count}</Badge>
+                      {mealsArr.map((meal: any) => (
+                        <li key={meal.id} className="flex items-center justify-between border rounded px-3 py-2">
+                          <span className="font-medium">{meal.label || meal.name || `Meal #${meal.id}`}</span>
+                          <Badge variant="secondary">ID: {meal.id}</Badge>
                         </li>
                       ))}
                     </ul>
                   </div>
                 )
               })()
-            )}
+            ) : null}
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsViewOpen(false)}>Close</Button>
             </DialogFooter>
