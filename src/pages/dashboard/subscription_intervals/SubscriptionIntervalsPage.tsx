@@ -28,8 +28,8 @@ interface Interval {
   end_date: string
   status: "active"
   is_served: number
-  price_per_serving_cents: number
   cutoff_date?: string
+  meals?: any[][]
 }
 
 export default function SubscriptionIntervalsPage() {
@@ -49,7 +49,6 @@ export default function SubscriptionIntervalsPage() {
     start_date: "",
     end_date: "",
     status: "active" as "active" | "expired",
-    price_per_serving_cents: "",
     cutoff_date: "",
   })
   // Meals selection state for Add modal
@@ -69,7 +68,6 @@ export default function SubscriptionIntervalsPage() {
     start_date: "",
     end_date: "",
     status: "active" as "active" | "expired",
-    price_per_serving_cents: "",
     cutoff_date: "",
   })
   // Edit selected week key
@@ -185,7 +183,6 @@ export default function SubscriptionIntervalsPage() {
       start_date: "",
       end_date: "",
       status: "active",
-      price_per_serving_cents: "",
       cutoff_date: "",
     })
     setSelectedWeekKey("")
@@ -241,7 +238,6 @@ export default function SubscriptionIntervalsPage() {
         start_date: addForm.start_date,
         end_date: addForm.end_date,
         status: addForm.status,
-        price_per_serving_cents: Number(addForm.price_per_serving_cents) * 100,
         cutoff_date: addForm.cutoff_date,
       }
 
@@ -309,7 +305,6 @@ export default function SubscriptionIntervalsPage() {
       start_date: interval.start_date,
       end_date: interval.end_date,
       status: (interval.status as "active" | "expired") ?? "active",
-      price_per_serving_cents: (interval.price_per_serving_cents / 100).toString(),
       cutoff_date: interval.cutoff_date || "",
     })
     // Ensure existing interval week is present in options; prepend if missing
@@ -349,7 +344,6 @@ export default function SubscriptionIntervalsPage() {
       start_date: "",
       end_date: "",
       status: "active",
-      price_per_serving_cents: "",
       cutoff_date: "",
     })
     setEditSelectedWeekKey("")
@@ -382,7 +376,6 @@ export default function SubscriptionIntervalsPage() {
       formData.append("start_date", editForm.start_date)
       formData.append("end_date", editForm.end_date)
       formData.append("status", editForm.status)
-      formData.append("price_per_serving_cents", String(Number(editForm.price_per_serving_cents) * 100))
       formData.append("cutoff_date", editForm.cutoff_date)
 
       const response = await apiService.postMultipart(`/subscription_intervals/${editForm.id}?_method=put`, formData)
@@ -603,19 +596,7 @@ export default function SubscriptionIntervalsPage() {
                   )}
                 </div>
               </div>
-              <div>
-                <Label htmlFor="price_per_serving_cents">Price per Serving ($)</Label>
-                <Input
-                  id="price_per_serving_cents"
-                  name="price_per_serving_cents"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={addForm.price_per_serving_cents}
-                  onChange={handleAddChange}
-                  required
-                />
-              </div>
+              {/* Price per serving removed per API update */}
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>
                   Cancel
@@ -775,19 +756,7 @@ export default function SubscriptionIntervalsPage() {
                   )}
                 </div>
               </div>
-              <div>
-                <Label htmlFor="edit_price_per_serving_cents">Price per Serving ($)</Label>
-                <Input
-                  id="edit_price_per_serving_cents"
-                  name="price_per_serving_cents"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={editForm.price_per_serving_cents}
-                  onChange={handleEditChange}
-                  required
-                />
-              </div>
+              {/* Price per serving removed per API update */}
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)}>
                   Cancel
@@ -825,18 +794,18 @@ export default function SubscriptionIntervalsPage() {
                   <TableHead>Start Date</TableHead>
                   <TableHead>End Date</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Price per Serving</TableHead>
+                  {/* Price column removed per API update */}
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center">Loading...</TableCell>
+                    <TableCell colSpan={5} className="text-center">Loading...</TableCell>
                   </TableRow>
                 ) : filteredIntervals.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center">No intervals found</TableCell>
+                    <TableCell colSpan={5} className="text-center">No intervals found</TableCell>
                   </TableRow>
                 ) : (
                   filteredIntervals.map(interval => (
@@ -853,7 +822,7 @@ export default function SubscriptionIntervalsPage() {
                           {interval.status}
                         </Badge>
                       </TableCell>
-                      <TableCell>{`$${(interval.price_per_serving_cents/100).toFixed(2)}`}</TableCell>
+                      {/* Price cell removed per API update */}
                       <TableCell className="text-right space-x-2" onClick={(e) => e.stopPropagation()}>
                         <Button size="sm" variant="outline" onClick={() => openEditModal(interval)} disabled={deletingId === interval.id}>
                           <Edit className="mr-2 h-4 w-4" /> Edit
@@ -900,7 +869,7 @@ export default function SubscriptionIntervalsPage() {
                       {mealsArr.map((meal: any) => (
                         <li key={meal.id} className="flex items-center justify-between border rounded px-3 py-2">
                           <span className="font-medium">{meal.label || meal.name || `Meal #${meal.id}`}</span>
-                          <Badge variant="secondary">ID: {meal.id}</Badge>
+                          {/* <Badge variant="secondary">ID: {meal.id}</Badge> */}
                         </li>
                       ))}
                     </ul>
