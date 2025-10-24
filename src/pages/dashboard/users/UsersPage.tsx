@@ -84,8 +84,10 @@ export default function UsersPage() {
   // Delete confirmation state
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
   const [pendingDeleteUserId, setPendingDeleteUserId] = useState<number | null>(null)
-  // User preference answers state
-  const [userAnswers, setUserAnswers] = useState<any[]>([])
+  // User preference answers state (grouped by question per new API)
+  interface UserAnswerItem { id: number; answer_id: number; answer_text: string; answered_at?: string }
+  interface UserAnswerGroup { question_id: number; question_text: string; answers: UserAnswerItem[] }
+  const [userAnswers, setUserAnswers] = useState<UserAnswerGroup[]>([])
   const [answersLoading, setAnswersLoading] = useState(false)
   const [answersError, setAnswersError] = useState<string | null>(null)
   // Track in-flight requests to avoid stale overwrite
@@ -384,7 +386,7 @@ export default function UsersPage() {
     }
   }
 
-  // Fetch all preference answers then filter for selected user
+  // Fetch preference answers for a user (grouped by question)
   const fetchAndFilterUserAnswers = async (userId: number) => {
   const reqId = ++answersReqRef.current;
   setAnswersLoading(true);
@@ -394,26 +396,25 @@ export default function UsersPage() {
     const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
     if (token) apiService.setAuthToken(token);
     const res = await apiService.get(`/admins/users_preference_answers/${userId}`);
-    // New API shape: { data: [ { id, user_id, question, answer, answered_at } ], ... }
-    const answers = Array.isArray(res?.data) ? res.data : [];
-    const normalized = answers.map((a: any) => ({
-      id: a.id,
-      userId: Number(a.user_id),
-      question: a.question,
-      answer: a.answer,
-      createdAt: a.answered_at,
-      _raw: a,
+    // Updated API shape:
+    // { data: [ { question_id, question_text, answers: [{ id, answer_id, answer_text, answered_at }, ...] } ], ... }
+    const groupsRaw = Array.isArray(res?.data) ? res.data : [];
+    const groups: UserAnswerGroup[] = groupsRaw.map((g: any) => ({
+      question_id: Number(g?.question_id),
+      question_text: String(g?.question_text ?? "Question"),
+      answers: Array.isArray(g?.answers)
+        ? g.answers.map((a: any) => ({
+            id: Number(a?.id),
+            answer_id: Number(a?.answer_id),
+            answer_text: String(a?.answer_text ?? "—"),
+            answered_at: a?.answered_at ? String(a.answered_at) : undefined,
+          }))
+        : [],
     }));
-    // Filter for current user
-  let filtered = normalized.filter((a: { userId: number }) => a.userId === userId && !isNaN(a.userId));
-    // Fallback: if none, show all for debugging
-    if (filtered.length === 0 && normalized.length > 0) {
-      filtered = normalized;
-    }
     // If a newer request started, ignore this result
     if (reqId !== answersReqRef.current) return;
     lastAnswersUserIdRef.current = userId;
-    setUserAnswers(filtered);
+    setUserAnswers(groups);
   } catch (err: any) {
     if (reqId !== answersReqRef.current) return;
     setAnswersError(err?.message || 'Failed to load answers');
@@ -712,7 +713,7 @@ export default function UsersPage() {
 
                 {/* User Answer Section */}
                 <div className="mt-4 border-t pt-3">
-                  <h4 className="text-sm font-semibold mb-2">User Answer</h4>
+                  <h4 className="text-sm font-semibold mb-2">User Answers</h4>
                   {answersLoading && (
                     <div className="text-xs text-muted-foreground">Loading answers...</div>
                   )}
@@ -723,15 +724,23 @@ export default function UsersPage() {
                     <div className="text-xs text-muted-foreground">No answers found.</div>
                   )}
                   {!answersLoading && !answersError && userAnswers.length > 0 && (
-                    <ul className="space-y-2 max-h-60 overflow-auto pr-1">
-                      {userAnswers.map((ans) => (
-                        <li key={ans.id} className="rounded-md border p-2">
-                          <p className="text-xs font-medium mb-1">{ans.question || 'Question'}</p>
-                          <p className="text-xs text-muted-foreground break-words">{ans.answer || '—'}</p>
-                          {ans.createdAt && (
-                            <p className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                              {new Date(ans.createdAt).toLocaleString()}
-                            </p>
+                    <ul className="space-y-3 max-h-60 overflow-auto pr-1">
+                      {userAnswers.map((group) => (
+                        <li key={group.question_id} className="rounded-md border p-2">
+                          <p className="text-xs font-medium mb-2">{group.question_text}</p>
+                          {group.answers.length === 0 ? (
+                            <p className="text-xs text-muted-foreground">No selection</p>
+                          ) : (
+                            <ul className="ml-2 space-y-1">
+                              {group.answers.map((a) => (
+                                <li key={a.id} className="flex items-start justify-between gap-2">
+                                  <span className="text-xs text-foreground">{a.answer_text}</span>
+                                  {a.answered_at ? (
+                                    <span className="text-[10px] text-muted-foreground whitespace-nowrap">{new Date(a.answered_at).toLocaleString()}</span>
+                                  ) : null}
+                                </li>
+                              ))}
+                            </ul>
                           )}
                         </li>
                       ))}
