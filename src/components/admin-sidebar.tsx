@@ -132,6 +132,10 @@ const menuItems = [
         title: "Metrics",
         url: "/dashboard/metrics",
       },
+      {
+        title: "Notifications",
+        url: "/dashboard/community-notifications",
+      }
     ],
   },
   {
