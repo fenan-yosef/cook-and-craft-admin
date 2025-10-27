@@ -83,6 +83,8 @@ export default function OrdersPage() {
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [orderedByName, setOrderedByName] = useState<string | null>(null);
+  const [orderedByEmail, setOrderedByEmail] = useState<string | null>(null);
+  const [orderedByPhone, setOrderedByPhone] = useState<string | null>(null);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -179,6 +181,8 @@ export default function OrdersPage() {
   const handleViewOrder = async (orderId: number) => {
     try {
       setOrderedByName(null);
+      setOrderedByEmail(null);
+      setOrderedByPhone(null);
       const result = await apiService.get(`/admins/orders/${orderId}`);
       setSelectedOrder(result.data);
       setIsViewModalOpen(true);
@@ -191,11 +195,15 @@ export default function OrdersPage() {
             ? `${userResp?.data?.userFirstName || ''} ${userResp?.data?.userLastName || ''}`.trim()
             : null;
           setOrderedByName(userResp?.data?.name || userName || null);
+          setOrderedByEmail(userResp?.data?.userEmail || userResp?.data?.email || null);
+          setOrderedByPhone(userResp?.data?.userPhone || userResp?.data?.phone || null);
         } catch (e) {
           setOrderedByName(null);
         }
       } else if (result.data.user && result.data.user.name) {
         setOrderedByName(result.data.user.name);
+        setOrderedByEmail(result.data.user.userEmail || result.data.user.email || null);
+        setOrderedByPhone(result.data.user.userPhone || result.data.user.phone || null);
       }
     } catch (error: any) {
       const message = error?.message || 'Unknown error';
@@ -463,7 +471,8 @@ export default function OrdersPage() {
 
       {/* View Order Dialog */}
       <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        {/* Larger dialog for readability */}
+        <DialogContent className="sm:max-w-3xl w-full">
           <DialogHeader>
             <DialogTitle>Order Details</DialogTitle>
             <DialogDescription>
@@ -489,31 +498,80 @@ export default function OrdersPage() {
               </div>
               <div className="grid grid-cols-2 items-center gap-4">
                 <Label>Subtotal:</Label>
-                <span>${selectedOrder.subtotal.toFixed(2)}</span>
+                <span>SAR {selectedOrder.subtotal.toFixed(2)}</span>
               </div>
               <div className="grid grid-cols-2 items-center gap-4">
                 <Label>Delivery Fee:</Label>
-                <span>${selectedOrder.deliveryFee.toFixed(2)}</span>
+                <span>SAR {selectedOrder.deliveryFee.toFixed(2)}</span>
               </div>
               <div className="grid grid-cols-2 items-center gap-4">
                 <Label>Total:</Label>
-                <span>${selectedOrder.total.toFixed(2)}</span>
+                <span>SAR {selectedOrder.total.toFixed(2)}</span>
               </div>
               <div className="grid grid-cols-1 gap-2">
                 <Label>Delivery Address:</Label>
                 <p className="text-sm text-gray-500">{selectedOrder.deliveryAddress}</p>
               </div>
               <div className="grid gap-2">
-                <Label>Items:</Label>
-                <div className="space-y-2">
-                  {selectedOrder.orderItems.map((item) => (
-                    <div key={item.id} className="flex justify-between items-center">
-                      <span className="text-sm font-medium">{item.product.name}</span>
-                      <span className="text-sm text-gray-500">x{item.quantity}</span>
+                    <Label>Items:</Label>
+                    <div className="space-y-3">
+                      {selectedOrder.orderItems.map((item) => (
+                        <div key={item.id} className="flex items-center gap-3">
+                          {item.product?.images && item.product.images.length > 0 ? (
+                            <img src={item.product.images[0]} alt={item.product.name} className="h-14 w-14 rounded object-cover border" />
+                          ) : (
+                            <div className="h-14 w-14 rounded bg-slate-100 flex items-center justify-center text-sm text-muted-foreground border">
+                              {String(item.product.name || "").slice(0, 1).toUpperCase()}
+                            </div>
+                          )}
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium">{item.product.name}</span>
+                              <span className="text-sm text-muted-foreground">x{item.quantity}</span>
+                            </div>
+                            <div className="text-xs text-muted-foreground">{item.product.sku}</div>
+                            {item.product.description && (
+                              <div className="text-xs text-muted-foreground truncate">{item.product.description}</div>
+                            )}
+                          </div>
+                          <div className="text-sm font-medium">SAR {(item.price ?? item.product.price ?? 0).toFixed(2)}</div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
               </div>
+                  {/* Bottom sections: User info and Products summary */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
+                    <div className="rounded-md border p-3">
+                      <h5 className="text-sm font-semibold mb-2">User Information</h5>
+                      <div className="text-sm text-muted-foreground">Name</div>
+                      <div className="mb-2">{orderedByName || selectedOrder.userId}</div>
+                      <div className="text-sm text-muted-foreground">Email</div>
+                      <div className="mb-2">{orderedByEmail || (selectedOrder as any).userEmail || '-'}</div>
+                      <div className="text-sm text-muted-foreground">Phone</div>
+                      <div className="">{orderedByPhone || (selectedOrder as any).userPhone || '-'}</div>
+                    </div>
+                    <div className="rounded-md border p-3">
+                      <h5 className="text-sm font-semibold mb-2">Products</h5>
+                      <div className="space-y-3">
+                        {selectedOrder.orderItems.map((item) => (
+                          <div key={item.id} className="flex items-center gap-3">
+                            {item.product?.images && item.product.images.length > 0 ? (
+                              <img src={item.product.images[0]} alt={item.product.name} className="h-12 w-12 rounded object-cover border" />
+                            ) : (
+                              <div className="h-12 w-12 rounded bg-slate-100 flex items-center justify-center text-sm text-muted-foreground border">
+                                {String(item.product.name || "").slice(0, 1).toUpperCase()}
+                              </div>
+                            )}
+                            <div className="flex-1">
+                              <div className="text-sm font-medium">{item.product.name}</div>
+                              <div className="text-xs text-muted-foreground">{item.product.sku}</div>
+                            </div>
+                            <div className="text-sm font-medium">SAR {(item.price ?? item.product.price ?? 0).toFixed(2)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
             </div>
           )}
           <DialogFooter>
