@@ -64,7 +64,7 @@ const AddonsPage: React.FC = () => {
         current_page: 1,
         nextPage: null,
         last_page: 1,
-        per_page: 15,
+        per_page: 10,
         total: 0,
     });
 
@@ -192,7 +192,7 @@ const AddonsPage: React.FC = () => {
                                     <SelectValue placeholder={String(perPage)} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {[10, 15, 25, 50, 100].map((n) => (
+                                    {[10, 25, 50, 100].map((n) => (
                                         <SelectItem key={n} value={String(n)}>{n}</SelectItem>
                                     ))}
                                 </SelectContent>
@@ -234,7 +234,7 @@ const AddonsPage: React.FC = () => {
                                         <SelectValue placeholder={String(perPage)} />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {[10, 15, 25, 50, 100].map((n) => (
+                                        {[10, 25, 50, 100].map((n) => (
                                             <SelectItem key={n} value={String(n)}>{n}</SelectItem>
                                         ))}
                                     </SelectContent>
