@@ -309,6 +309,12 @@ export default function PostsPage() {
       const formData = new FormData();
       formData.append("description", newPost.description);
       formData.append("user_id", String(user.id));
+      // Ensure admin-created posts are published
+      if (isAdmin) {
+        formData.append("status", "published");
+        // Some backends also honor explicit visibility flags
+        formData.append("is_hidden", "0");
+      }
       newPost.media.forEach((file, idx) => {
         formData.append(`images[${idx}]`, file);
       });
@@ -335,7 +341,40 @@ export default function PostsPage() {
         });
       }
 
-      await apiService.postMultipart("/posts", formData);
+      const createRes: any = await apiService.postMultipart("/posts", formData);
+
+      // Best-effort: immediately publish created post and its latest version if admin
+      if (isAdmin) {
+        // Try to determine the new post ID from common response shapes
+        const createdObj = createRes?.data ?? createRes?.post ?? createRes;
+        const newPostId: number | undefined = Number(
+          createdObj?.id ?? createdObj?.post_id ?? createdObj?.data?.id
+        ) || undefined;
+
+        if (newPostId) {
+          try {
+            // Fetch the post to locate the latest version ID
+            const createdFull = await fetchPostById(newPostId);
+            const versions = createdFull?.post_versions || [];
+            if (versions.length > 0) {
+              const latest = [...versions].sort((a: any, b: any) => {
+                const bt = new Date(b.updated_at || b.created_at || 0).getTime();
+                const at = new Date(a.updated_at || a.created_at || 0).getTime();
+                return bt - at;
+              })[0];
+              if (latest?.id) {
+                // Publish latest version so UI status computes to 'published'
+                await apiService.put(`/post_versions/${newPostId}/${latest.id}/status`, { status: "published" });
+              }
+            }
+            // Also ensure the post itself is marked published and visible
+            await apiService.put(`/posts/${newPostId}`, { post_id: newPostId, status: "published", is_hidden: 0 });
+          } catch (publishErr) {
+            // Non-fatal: we'll still refresh the list; errors will be surfaced via fetch
+            console.warn("Auto-publish after create failed:", publishErr);
+          }
+        }
+      }
 
       toast({ title: "Success", description: "Post created successfully!" });
       setIsCreatePostDialogOpen(false);
@@ -348,7 +387,7 @@ export default function PostsPage() {
         pollCloseAt: "",
       });
 
-      // Show newest posts at top: go to page 1 and refetch
+  // Show newest posts at top: go to page 1 and refetch
       setCurrentPage(1);
       await fetchPosts(1);
     } catch (error: any) {
