@@ -467,26 +467,27 @@ export default function UsersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Phone No</TableHead>
-                  <TableHead>Created</TableHead>
-                  {/* <TableHead>Last Login</TableHead> */}
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
+                    <TableHead>User ID</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Phone No</TableHead>
+                    <TableHead>Created</TableHead>
+                    {/* <TableHead>Last Login</TableHead> */}
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center">
+                    <TableCell colSpan={8} className="text-center">
                       Loading...
                     </TableCell>
                   </TableRow>
                 ) : filteredUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center">
+                    <TableCell colSpan={8} className="text-center">
                       No users found
                     </TableCell>
                   </TableRow>
@@ -497,6 +498,7 @@ export default function UsersPage() {
                       className="cursor-pointer hover:bg-muted/40"
                       onClick={() => handleOpenUserDialog(user)}
                     >
+                      <TableCell className="font-mono text-sm">{user.id}</TableCell>
                       <TableCell className="font-medium">{user.name}</TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>{user.userRole ? user.userRole.charAt(0).toUpperCase() + user.userRole.slice(1) : "User"}</TableCell>

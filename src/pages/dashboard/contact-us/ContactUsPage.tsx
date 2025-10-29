@@ -133,7 +133,7 @@ export default function ContactUsPage() {
             </DialogHeader>
             {selected ? (
               <div className="space-y-3 text-sm">
-                <div><span className="text-muted-foreground">ID:</span> {selected.id}</div>
+                {/* <div><span className="text-muted-foreground">ID:</span> {selected.id}</div> */}
                 <div><span className="text-muted-foreground">Full Name:</span> {selected.full_name}</div>
                 <div><span className="text-muted-foreground">Email:</span> {selected.email}</div>
                 <div><span className="text-muted-foreground">Phone:</span> {selected.phone}</div>
