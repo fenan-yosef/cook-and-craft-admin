@@ -110,6 +110,7 @@ export default function PostsPage() {
   const [handledViewId, setHandledViewId] = useState<number | null>(null);
 
   const [newPost, setNewPost] = useState({
+    title: "",
     description: "",
     media: [] as File[],
     pollQuestion: "",
@@ -192,11 +193,18 @@ export default function PostsPage() {
     );
     const latestVersion = sortedVersions[0];
     const latestDesc: string | undefined = latestVersion?.description;
+    const latestTitle: string | undefined = latestVersion?.title;
     const titleBase = latestDesc?.slice(0, 30) ?? "";
-    const safeTitle =
+    const derivedTitle =
       titleBase.length > 0
         ? `${titleBase}${latestDesc && latestDesc.length > 30 ? "..." : ""}`
         : `Post #${post.id}`;
+    const safeTitle =
+      (typeof post?.title === 'string' && post.title.trim().length > 0)
+        ? post.title
+        : (typeof latestTitle === 'string' && latestTitle.trim().length > 0)
+          ? latestTitle
+          : derivedTitle;
 
     return {
       ...post,
@@ -307,6 +315,7 @@ export default function PostsPage() {
 
     try {
       const formData = new FormData();
+      if (newPost.title) formData.append("title", newPost.title);
       formData.append("description", newPost.description);
       formData.append("user_id", String(user.id));
       // Ensure admin-created posts are published
@@ -379,6 +388,7 @@ export default function PostsPage() {
       toast({ title: "Success", description: "Post created successfully!" });
       setIsCreatePostDialogOpen(false);
       setNewPost({
+        title: "",
         description: "",
         media: [] as File[],
         pollQuestion: "",
@@ -780,6 +790,18 @@ export default function PostsPage() {
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleCreatePost} className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="title">Title</Label>
+                  <Input
+                    id="title"
+                    value={newPost.title}
+                    onChange={(e) =>
+                      setNewPost({ ...newPost, title: e.target.value })
+                    }
+                    placeholder="Enter a title"
+                    maxLength={100}
+                  />
+                </div>
                 <div className="grid gap-2">
                   <Label htmlFor="description">Description</Label>
                   <Textarea

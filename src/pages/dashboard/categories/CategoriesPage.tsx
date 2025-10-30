@@ -75,7 +75,19 @@ export default function CategoriesPage() {
       const mapped: Category[] = items.map((it: any) => {
         const id = Number(it.id ?? it.categoryId ?? it.category_id ?? it.categoryID)
         const name = String(it.name ?? it.categoryName ?? it.title ?? "").trim()
-        const thumb = it.thumbnail_url ?? it.thumbnailUrl ?? it.thumbnail ?? it.image ?? it.photo ?? null
+        // Handle various thumbnail shapes: string URL, object with url, or array of { url, isThumbnail }
+        const thumbRaw = it.thumbnail_url ?? it.thumbnailUrl ?? it.thumbnail ?? it.image ?? it.photo ?? null
+        let thumb: string | null = null
+        if (Array.isArray(thumbRaw)) {
+          const chosen = thumbRaw.find((x: any) => x?.isThumbnail === true || x?.is_thumbnail === true || x?.is_thumbnail === 1) ?? thumbRaw[0]
+          thumb = chosen?.url ?? chosen?.image ?? null
+        } else if (thumbRaw && typeof thumbRaw === 'object') {
+          thumb = thumbRaw.url ?? thumbRaw.image ?? null
+        } else if (typeof thumbRaw === 'string') {
+          thumb = thumbRaw
+        } else {
+          thumb = null
+        }
         const createdAt = it.created_at ?? it.createdAt ?? null
         const updatedAt = it.updated_at ?? it.updatedAt ?? null
         return { id, name, thumbnail: thumb, createdAt, updatedAt, _raw: it }
