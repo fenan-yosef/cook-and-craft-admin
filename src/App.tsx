@@ -19,6 +19,7 @@ import MetricsPage from "./pages/dashboard/metrics/MetricsPage"
 import MealsPage from "./pages/dashboard/meals/MealsPage"
 import PreferencesPage from "./pages/dashboard/questions/QuestionsPage"
 import SubscriptionIntervalsPage from "./pages/dashboard/subscription_intervals/SubscriptionIntervalsPage"
+import SubscriptionTypesPage from "./pages/dashboard/subscription_types/SubscriptionTypesPage"
 import SubscriptionAndMealSelections from "./pages/dashboard/subscription_and_meal_selection/SubscriptionAndMealSelections"
 import QuestionsPage from "./pages/dashboard/questions/QuestionsPage"
 import AnswersPage from "./pages/dashboard/answers/AnswersPage"
@@ -59,6 +60,7 @@ function App() {
             <Route path="addons" element={<AddonsPage />} />
             <Route path="wallets" element={<WalletsPage />} />
             <Route path="subscription-intervals" element={<SubscriptionIntervalsPage />} />
+            <Route path="subscription-types" element={<SubscriptionTypesPage />} />
             <Route path="subscription-meal-selections" element={<SubscriptionAndMealSelections />} />
             <Route path="conversion-rules" element={<ConversionRulesPage />} />
             <Route path="rewards" element={<RewardsPage />} />

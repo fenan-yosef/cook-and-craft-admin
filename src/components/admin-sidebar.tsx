@@ -161,6 +161,10 @@ const menuItems = [
         url: "/dashboard/subscription-intervals",
       },
       {
+        title: "Subscription Type",
+        url: "/dashboard/subscription-types",
+      },
+      {
         title: "Subscriptions",
         url: "/dashboard/subscriptions",
       },
