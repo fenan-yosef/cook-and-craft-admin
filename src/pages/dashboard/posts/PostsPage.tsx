@@ -11,6 +11,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -97,6 +104,7 @@ export default function PostsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [lastPage, setLastPage] = useState(1);
+  const [perPage, setPerPage] = useState(15); // default 15 as requested
   const { toast } = useToast();
   const { user, isLoading, token } = useAuth();
   const isAdmin = user?.role === "admin";
@@ -145,7 +153,9 @@ export default function PostsPage() {
         if (token) apiService.setAuthToken(token);
 
         const url = `/posts?withLikes=true&withPolls=true&withVersions=true&page=${page}&isDeleted=${showDeleted}`
-          + `&order=desc&sort=desc&orderBy=created_at&sortBy=created_at`;
+          + `&order=desc&sort=desc&orderBy=created_at&sortBy=created_at`
+          // send multiple per-page aliases for backend compatibility
+          + `&per_page=${perPage}&perPage=${perPage}&limit=${perPage}&page_size=${perPage}&pageSize=${perPage}`;
 
         const res = await apiService.get(url);
 
@@ -177,7 +187,7 @@ export default function PostsPage() {
         setLoading(false);
       }
     },
-    [toast, token, showDeleted, user]
+    [toast, token, showDeleted, user, perPage]
   );
   useEffect(() => {
     if (!isLoading && user) {
@@ -951,7 +961,30 @@ export default function PostsPage() {
               </Button>
             </div>
             <div className="flex items-center justify-between mb-4">
-              <div />
+              {/* Per page selector */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Per page</span>
+                <Select
+                  value={String(perPage)}
+                  onValueChange={(val) => {
+                    const next = Number(val);
+                    setPerPage(next);
+                    setCurrentPage(1);
+                    // optional immediate fetch for snappy UX
+                    fetchPosts(1);
+                  }}
+                >
+                  <SelectTrigger className="w-[100px]">
+                    <SelectValue placeholder="15" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="flex gap-2">
                 <Button
                   variant="outline"
