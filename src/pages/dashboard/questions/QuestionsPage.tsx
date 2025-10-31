@@ -214,6 +214,11 @@ export default function QuestionsPage() {
       (q.description || "").toLowerCase().includes(searchTerm.toLowerCase()),
   )
 
+  const openViewModal = (q: PreferenceQuestion) => {
+    setSelectedQuestion(q)
+    setIsViewDialogOpen(true)
+  }
+
   const handleDeleteQuestion = async (id: number) => {
     const confirmed = window.confirm("Are you sure you want to delete this question?")
     if (!confirmed) return
@@ -295,7 +300,11 @@ export default function QuestionsPage() {
                   </TableRow>
                 ) : (
                   filteredQuestions.map((q) => (
-                    <TableRow key={q.id}>
+                    <TableRow
+                      key={q.id}
+                      onClick={() => openViewModal(q)}
+                      className="cursor-pointer hover:bg-muted/50"
+                    >
                       <TableCell>
                         <div className="font-medium">{q.question}</div>
                         <div className="text-sm text-muted-foreground">{q.description}</div>
@@ -316,18 +325,17 @@ export default function QuestionsPage() {
                       </TableCell>
                       <TableCell>{q.order_index}</TableCell>
                       <TableCell>{q.answers?.length ?? 0}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
+                            <Button variant="ghost" className="h-8 w-8 p-0" onClick={(e) => e.stopPropagation()}>
                               <MoreVertical className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem
                               onClick={() => {
-                                setSelectedQuestion(q)
-                                setIsViewDialogOpen(true)
+                                openViewModal(q)
                               }}
                             >
                               <Eye className="mr-2 h-4 w-4" />
