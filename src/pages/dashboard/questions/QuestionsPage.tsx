@@ -43,7 +43,16 @@ export default function QuestionsPage() {
     sort_order: 1,
   })
   const [editAnswers, setEditAnswers] = useState<string[]>([])
-  const [existingAnswers, setExistingAnswers] = useState<Array<{ id: number; text: string; sort: number }>>([])
+  const [existingAnswers, setExistingAnswers] = useState<Array<{
+    id: number;
+    text: string;
+    sort: number;
+    logoUrl?: string;
+    editText?: string;
+    newLogoFile?: File;
+    previewUrl?: string;
+    saving?: boolean;
+  }>>([])
   const [newQuestion, setNewQuestion] = useState({
     question: "",
     allow_multiple: 0,
@@ -64,7 +73,12 @@ export default function QuestionsPage() {
       const targetQ = norm(questionText)
       const mapped = raw
         .filter((it: any) => norm(it?.Question) === targetQ)
-        .map((it: any) => ({ id: Number(it.ID), text: String(it.Answer ?? ''), sort: Number(it.Sort ?? 1) }))
+        .map((it: any) => {
+          const logoArr = Array.isArray(it?.Logo) ? it.Logo : []
+          const logoFromArr = logoArr.find((l: any) => l?.isThumbnail) || logoArr[0]
+          const url = logoFromArr?.url || it?.logoUrl || it?.logo_url || null
+          return { id: Number(it.ID), text: String(it.Answer ?? ''), sort: Number(it.Sort ?? 1), logoUrl: url || undefined }
+        })
       setExistingAnswers(mapped)
     } catch (e) {
       setExistingAnswers([])
@@ -465,20 +479,37 @@ export default function QuestionsPage() {
               </div>
               <div>
                 <Label>Answers ({selectedQuestion.answers?.length ?? 0})</Label>
-                <div className="mt-2 space-y-2">
+                <div className="mt-2">
                   {selectedQuestion.answers && selectedQuestion.answers.length > 0 ? (
-                    selectedQuestion.answers.map((ans: any, idx: number) => (
-                      <div
-                        key={idx}
-                        className="rounded-md border p-3 text-sm bg-muted/30"
-                      >
-                        {typeof ans === "string" || typeof ans === "number"
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      {selectedQuestion.answers.map((ans: any, idx: number) => {
+                        // Extract logo URL if present in Logo array
+                        let logoUrl: string | undefined
+                        if (ans && typeof ans === 'object') {
+                          const logoArr = Array.isArray(ans.Logo) ? ans.Logo : []
+                          const chosen = logoArr.find((l: any) => l?.isThumbnail) || logoArr[0]
+                          logoUrl = chosen?.url
+                        }
+                        const text = (typeof ans === 'string' || typeof ans === 'number')
                           ? String(ans)
-                          : ans && typeof ans === "object" && "Answer" in ans
-                            ? `Answer: ${ans.Answer}`
-                            : <pre className="whitespace-pre-wrap text-xs">{JSON.stringify(ans, null, 2)}</pre>}
-                      </div>
-                    ))
+                          : ans && typeof ans === 'object' && 'Answer' in ans
+                            ? String(ans.Answer ?? '')
+                            : JSON.stringify(ans)
+                        return (
+                          <div
+                            key={idx}
+                            className="rounded-xl border p-4 bg-muted/10 hover:bg-muted/20 transition flex items-center gap-3"
+                          >
+                            {logoUrl ? (
+                              <img src={logoUrl} alt="logo" className="w-10 h-10 rounded object-cover border" />
+                            ) : (
+                              <div className="w-10 h-10 rounded border bg-muted" />
+                            )}
+                            <div className="font-semibold text-sm sm:text-base">{text}</div>
+                          </div>
+                        )
+                      })}
+                    </div>
                   ) : (
                     <div className="text-sm text-muted-foreground">No answers</div>
                   )}
@@ -527,29 +558,102 @@ export default function QuestionsPage() {
                   existingAnswers
                     .sort((a, b) => a.sort - b.sort)
                     .map((ans) => (
-                      <div key={ans.id} className="flex items-center gap-2">
-                        <div className="flex-1 text-sm">{ans.text}</div>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={async () => {
-                            const confirmed = window.confirm('Remove this answer?')
-                            if (!confirmed) return
-                            try {
-                              const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
-                              if (token) apiService.setAuthToken(token)
-                              await apiService.delete(`/preference_answers/${ans.id}`)
-                              setExistingAnswers((prev) => prev.filter((a) => a.id !== ans.id))
-                              setQuestions((prev) => prev.map((q) => (q.id === editTargetId ? { ...q, answers: (q.answers || []).filter((ea: any) => Number(ea?.ID ?? ea?.id) !== ans.id) } : q)))
-                              toast({ title: 'Deleted', description: 'Answer removed.' })
-                            } catch (err) {
-                              toast({ title: 'Error', description: 'Failed to remove answer', variant: 'destructive' })
-                            }
-                          }}
-                        >
-                          Remove
-                        </Button>
+                      <div key={ans.id} className="flex flex-col gap-2 rounded-md border p-2">
+                        <div className="flex items-center gap-3">
+                          {(ans.previewUrl || ans.logoUrl) ? (
+                            <img src={ans.previewUrl || ans.logoUrl} alt="logo" className="w-8 h-8 rounded object-cover border" />
+                          ) : (
+                            <div className="w-8 h-8 rounded border bg-muted" />
+                          )}
+                          <Input
+                            value={ans.editText ?? ans.text}
+                            onChange={(e) => {
+                              const val = e.target.value
+                              setExistingAnswers((prev) => prev.map((a) => a.id === ans.id ? { ...a, editText: val } : a))
+                            }}
+                          />
+                          <Input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = e.target.files && e.target.files[0]
+                              if (!file) return
+                              const preview = URL.createObjectURL(file)
+                              setExistingAnswers((prev) => prev.map((a) => a.id === ans.id ? { ...a, newLogoFile: file, previewUrl: preview } : a))
+                            }}
+                          />
+                        </div>
+                        <div className="flex items-center gap-2 justify-end">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={async () => {
+                              const confirmed = window.confirm('Remove this answer?')
+                              if (!confirmed) return
+                              try {
+                                const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+                                if (token) apiService.setAuthToken(token)
+                                await apiService.delete(`/preference_answers/${ans.id}`)
+                                setExistingAnswers((prev) => prev.filter((a) => a.id !== ans.id))
+                                setQuestions((prev) => prev.map((q) => (q.id === editTargetId ? { ...q, answers: (q.answers || []).filter((ea: any) => Number(ea?.ID ?? ea?.id) !== ans.id) } : q)))
+                                toast({ title: 'Deleted', description: 'Answer removed.' })
+                              } catch (err) {
+                                toast({ title: 'Error', description: 'Failed to remove answer', variant: 'destructive' })
+                              }
+                            }}
+                          >
+                            Remove
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={!!ans.saving}
+                            onClick={async () => {
+                              if (!editTargetId) return
+                              try {
+                                setExistingAnswers((prev) => prev.map((a) => a.id === ans.id ? { ...a, saving: true } : a))
+                                const fd = new FormData()
+                                fd.append('question_id', String(editTargetId))
+                                fd.append('answer_text', String(ans.editText ?? ans.text ?? ''))
+                                fd.append('sort_order', String(ans.sort))
+                                if (ans.newLogoFile) fd.append('logo', ans.newLogoFile)
+                                const resp = await apiService.postMultipart(`/preference_answers/${ans.id}?_method=put`, fd)
+                                const updated = resp?.data ?? resp
+                                // Try to pull back updated values
+                                const newText = String(updated?.Answer ?? (ans.editText ?? ans.text))
+                                const logoArr = Array.isArray(updated?.Logo) ? updated.Logo : []
+                                const chosen = logoArr.find((l: any) => l?.isThumbnail) || logoArr[0]
+                                const newUrl = chosen?.url ?? ans.previewUrl ?? ans.logoUrl
+                                setExistingAnswers((prev) => prev.map((a) => a.id === ans.id ? { ...a, text: newText, editText: undefined, logoUrl: newUrl, newLogoFile: undefined, previewUrl: undefined, saving: false } : a))
+                                // Update in questions state as well
+                                setQuestions((prev) => prev.map((q) => (
+                                  q.id === editTargetId
+                                    ? {
+                                        ...q,
+                                        answers: (q.answers || []).map((ea: any) => {
+                                          const aid = Number(ea?.ID ?? ea?.id)
+                                          if (aid !== ans.id) return ea
+                                          const updatedLogo = newUrl ? [{ id: 0, url: newUrl, isThumbnail: true }] : ea?.Logo
+                                          return { ...ea, Answer: newText, Logo: updatedLogo }
+                                        }),
+                                      }
+                                    : q
+                                )))
+                                toast({ title: 'Saved', description: 'Answer updated successfully.' })
+                              } catch (err: any) {
+                                const backendMsg = err?.response?.data?.error
+                                const msg = typeof backendMsg === 'object' && backendMsg?.answer_text?.[0]
+                                  ? backendMsg.answer_text[0]
+                                  : 'Failed to update answer'
+                                toast({ title: 'Error', description: msg, variant: 'destructive' })
+                                setExistingAnswers((prev) => prev.map((a) => a.id === ans.id ? { ...a, saving: false } : a))
+                              }
+                            }}
+                          >
+                            {ans.saving ? 'Saving...' : 'Save'}
+                          </Button>
+                        </div>
                       </div>
                     ))
                 )}

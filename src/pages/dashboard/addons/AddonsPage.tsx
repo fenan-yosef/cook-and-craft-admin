@@ -26,7 +26,7 @@ const formatCurrency = (value: number | string | null | undefined): string => {
     const n = Number(value);
     if (Number.isNaN(n)) return String(value ?? "");
     try {
-        return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(n);
+        return new Intl.NumberFormat(undefined, { style: "currency", currency: "SAR" }).format(n);
     } catch {
         return n.toFixed(2);
     }
@@ -59,7 +59,7 @@ const AddonsPage: React.FC = () => {
     const [fatalError, setFatalError] = useState<string>("");
     const [searchTerm, setSearchTerm] = useState<string>("");
     const [page, setPage] = useState<number>(1);
-    const [perPage, setPerPage] = useState<number>(15);
+    const [perPage, setPerPage] = useState<number>(10);
     const [pagination, setPagination] = useState<Pagination>({
         current_page: 1,
         nextPage: null,
