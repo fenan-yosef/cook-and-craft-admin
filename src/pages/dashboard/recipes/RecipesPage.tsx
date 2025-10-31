@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -67,6 +68,7 @@ export default function RecipesPage() {
   const [recipes, setRecipes] = useState<ApiRecipe[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
+  const [perPage, setPerPage] = useState(15)
   // Mock: pending recipe requests
   // Pending requests kept in localStorage (UI section is currently commented out)
   // const [pending, setPending] = useState<PendingRecipe[]>([])
@@ -198,10 +200,10 @@ export default function RecipesPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newImages])
 
-  const fetchRecipes = async () => {
+  const fetchRecipes = async (size = perPage) => {
     try {
       setLoading(true)
-  const res = await apiService.get("/recipes")
+  const res = await apiService.get(`/recipes?per_page=${size}&perPage=${size}&limit=${size}&page_size=${size}&pageSize=${size}`)
       const items: ApiRecipe[] = Array.isArray(res?.data) ? res.data : []
       setRecipes(items)
     } catch (error: any) {
@@ -643,6 +645,26 @@ export default function RecipesPage() {
                   className="pl-8"
                 />
               </div>
+              <Select
+                value={String(perPage)}
+                onValueChange={(val) => {
+                  const n = Number(val)
+                  setPerPage(n)
+                  // refetch with explicit size to avoid stale state
+                  fetchRecipes(n)
+                }}
+              >
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Per page" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="15">15 (default)</SelectItem>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="25">25</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <Table>

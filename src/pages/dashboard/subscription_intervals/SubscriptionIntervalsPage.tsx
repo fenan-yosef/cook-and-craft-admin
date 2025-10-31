@@ -36,6 +36,7 @@ export default function SubscriptionIntervalsPage() {
   const [intervals, setIntervals] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
+  const [perPage, setPerPage] = useState(15)
   const { toast } = useToast()
   // View modal state
   const [isViewOpen, setIsViewOpen] = useState(false)
@@ -153,10 +154,12 @@ export default function SubscriptionIntervalsPage() {
     }
   }, [isAddOpen, isEditOpen, mealsOptions.length])
 
-  const fetchIntervals = async () => {
+  const fetchIntervals = async (size = perPage) => {
     try {
       setLoading(true)
-      const response = await apiService.get("/subscription_intervals")
+      const response = await apiService.get(
+        `/subscription_intervals?per_page=${size}&perPage=${size}&limit=${size}&page_size=${size}&pageSize=${size}`,
+      )
       // Use the data as-is, including meals field
       setIntervals(Array.isArray(response.data) ? response.data : [])
     } catch (error) {
@@ -785,6 +788,26 @@ export default function SubscriptionIntervalsPage() {
                   className="pl-8"
                 />
               </div>
+              <Select
+                value={String(perPage)}
+                onValueChange={(val) => {
+                  const n = Number(val)
+                  setPerPage(n)
+                  // refetch with explicit size to avoid stale closures
+                  fetchIntervals(n)
+                }}
+              >
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Per page" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="15">15 (default)</SelectItem>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="25">25</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <Table>

@@ -152,13 +152,15 @@ export default function ProductsPage() {
     fetchProducts(1)
   }, [])
 
-  const fetchProducts = async (page = 1) => {
+  const fetchProducts = async (page = 1, size = perPage) => {
     try {
       setLoading(true)
   // Ensure auth token is set for this request (if available)
   const token = localStorage.getItem("auth_token")
   if (token) apiService.setAuthToken(token)
-      const response = await apiService.get(`/admins/products?page=${page}`)
+      const response = await apiService.get(
+        `/admins/products?page=${page}&per_page=${size}&perPage=${size}&limit=${size}&page_size=${size}&pageSize=${size}`,
+      )
 
       // Normalize common API shapes for items and pagination meta
       const normalize = (res: any) => {
@@ -272,8 +274,8 @@ export default function ProductsPage() {
         // Derive last page from total/per_page if API didn't provide it
         last = per > 0 ? Math.ceil(totalCount / per) : 1
       }
-      setCurrentPage(current)
-      setPerPage(per)
+  setCurrentPage(current)
+  // Keep user-selected perPage; do not override with backend meta
       setTotal(totalCount)
       setLastPage(last)
     } catch (error) {
@@ -1759,6 +1761,27 @@ export default function ProductsPage() {
                   onChange={(e) => setAddTagValue(e.target.value)}
                 />
               </div>
+              <Select
+                value={String(perPage)}
+                onValueChange={(val) => {
+                  const n = Number(val)
+                  setPerPage(n)
+                  setCurrentPage(1)
+                  // explicitly pass n to avoid stale state
+                  fetchProducts(1, n)
+                }}
+              >
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Per page" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="15">15 (default)</SelectItem>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="25">25</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <DialogFooter>
               <Button variant="outline" type="button" onClick={() => setIsAddTagOpen(false)}>Cancel</Button>
@@ -2180,6 +2203,26 @@ export default function ProductsPage() {
                   className="pl-8"
                 />
               </div>
+              <Select
+                value={String(perPage)}
+                onValueChange={(val) => {
+                  const n = Number(val)
+                  setPerPage(n)
+                  setCurrentPage(1)
+                  fetchProducts(1)
+                }}
+              >
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Per page" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="15">15 (default)</SelectItem>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="25">25</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             
 

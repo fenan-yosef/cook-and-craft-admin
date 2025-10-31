@@ -38,6 +38,7 @@ import {
   PaginationLink,
   PaginationEllipsis,
 } from "@/components/ui/pagination"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface User {
   id: number
@@ -120,10 +121,10 @@ export default function UsersPage() {
   const [showPwdConfirm, setShowPwdConfirm] = useState(false)
 
   useEffect(() => {
-    fetchUsers(currentPage)
+    fetchUsers(currentPage, perPage)
   }, [])
 
-  const fetchUsers = async (page = 1) => {
+  const fetchUsers = async (page = 1, size = perPage) => {
     try {
       setLoading(true)
       // Ensure auth token is set on the apiService
@@ -133,7 +134,9 @@ export default function UsersPage() {
       }
 
       // Fetch users from the API and map to local User type
-      const response = await apiService.get(`/admins/users?page=${page}`)
+      const response = await apiService.get(
+        `/admins/users?page=${page}&per_page=${size}&perPage=${size}&limit=${size}&page_size=${size}&pageSize=${size}`,
+      )
 
       // Normalize common API shapes for items and pagination meta
       const normalize = (res: any) => {
@@ -216,10 +219,10 @@ export default function UsersPage() {
       setUsers(mappedUsers)
 
       // Pagination meta (fallbacks if not present)
-      setCurrentPage(Number(meta.current_page ?? page) || 1)
-      setLastPage(Number(meta.last_page ?? 1) || 1)
-      setPerPage(Number((meta.per_page ?? mappedUsers.length) || 15))
-      setTotal(Number(meta.total ?? mappedUsers.length))
+  setCurrentPage(Number(meta.current_page ?? page) || 1)
+  setLastPage(Number(meta.last_page ?? 1) || 1)
+  // Keep user-selected perPage; do not override with backend meta
+  setTotal(Number(meta.total ?? mappedUsers.length))
 
     } catch (error) {
       toast({
@@ -462,6 +465,27 @@ export default function UsersPage() {
                   className="pl-8"
                 />
               </div>
+              <Select
+                value={String(perPage)}
+                onValueChange={(val) => {
+                  const n = Number(val)
+                  setPerPage(n)
+                  setCurrentPage(1)
+                  // explicitly pass size to avoid stale state
+                  fetchUsers(1, n)
+                }}
+              >
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Per page" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="15">15 (default)</SelectItem>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="25">25</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <Table>

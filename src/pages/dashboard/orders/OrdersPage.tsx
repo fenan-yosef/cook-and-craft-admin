@@ -95,14 +95,16 @@ export default function OrdersPage() {
   useEffect(() => {
     const token = localStorage.getItem("auth_token") || "";
     apiService.setAuthToken(token);
-    fetchOrders(currentPage);
-  }, [currentPage]);
+    fetchOrders(currentPage, perPage);
+  }, [currentPage, perPage]);
 
-  const fetchOrders = async (page = 1) => {
+  const fetchOrders = async (page = 1, size = perPage) => {
     try {
       setLoading(true);
       setError(null);
-      const result = await apiService.get(`/admins/orders?page=${page}`);
+      const result = await apiService.get(
+        `/admins/orders?page=${page}&per_page=${size}&perPage=${size}&limit=${size}&page_size=${size}&pageSize=${size}`,
+      );
       setOrders(result.data);
 
       // Hydrate user names for the listed orders
@@ -112,10 +114,10 @@ export default function OrdersPage() {
         // ignore name hydration errors to avoid noisy UI; list still renders
       }
 
-      const { current_page, last_page, per_page, total } = result.meta || {};
+  const { current_page, last_page, total } = result.meta || {};
       setCurrentPage(current_page || page);
       setLastPage(last_page || 1);
-      setPerPage(per_page || 15);
+  // Do not override user's selected perPage with backend meta; keep selection stable
       setTotal(total || result.data.length);
 
     } catch (error: any) {
@@ -325,6 +327,27 @@ export default function OrdersPage() {
                   <SelectItem value="shipped">Shipped</SelectItem>
                   <SelectItem value="delivered">Delivered</SelectItem>
                   <SelectItem value="cancelled">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
+                value={String(perPage)}
+                onValueChange={(val) => {
+                  const n = Number(val)
+                  setPerPage(n)
+                  setCurrentPage(1)
+                  // explicitly pass the selected size to avoid stale state
+                  fetchOrders(1, n)
+                }}
+              >
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Per page" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="15">15 (default)</SelectItem>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="25">25</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
                 </SelectContent>
               </Select>
             </div>
