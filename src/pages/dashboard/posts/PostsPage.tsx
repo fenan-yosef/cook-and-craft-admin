@@ -1146,7 +1146,7 @@ export default function PostsPage() {
           open={isViewPostDialogOpen}
           onOpenChange={setIsViewPostDialogOpen}
         >
-          <DialogContent className="w-fit max-w-[90%] sm:max-w-screen-md">
+          <DialogContent className="w-full max-w-[95vw] sm:max-w-screen-lg">
             <DialogHeader>
               <DialogTitle>View Post</DialogTitle>
               <DialogDescription>
@@ -1154,143 +1154,132 @@ export default function PostsPage() {
               </DialogDescription>
             </DialogHeader>
             {selectedPost && (
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <span className="col-span-1 text-sm font-medium">Title:</span>
-                  <span className="col-span-3">{selectedPost.title}</span>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <span className="col-span-1 text-sm font-medium">
-                    Content:
-                  </span>
-                  <span className="col-span-3">{selectedPost.content}</span>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <span className="col-span-1 text-sm font-medium">
-                    Status:
-                  </span>
-                  <Badge
-                    className={`col-span-3 w-fit ${
-                      statusColors[selectedPost.status]
-                    }`}
-                  >
-                    {selectedPost.status}
-                  </Badge>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <span className="col-span-1 text-sm font-medium">Likes:</span>
-                  <span className="col-span-3">{selectedPost.likes_count}</span>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <span className="col-span-1 text-sm font-medium">
-                    Posted by:
-                  </span>
-                  <span className="col-span-3">{selectedPost.user?.full_name || selectedPost.user?.display_name}</span>
-                </div>
-                {selectedPost.post_poll && (
-                  <div className="grid gap-2 mt-4">
-                    <h3 className="text-lg font-bold">Poll</h3>
-                    <Button
-                      variant="ghost"
-                      onClick={() => setShowPollOptions(!showPollOptions)}
-                      className="justify-start px-0"
-                    >
-                      {selectedPost.post_poll.question}
-                    </Button>
-                    {showPollOptions && (
-                      <div className="grid gap-1 pl-4">
-                        {selectedPost.post_poll?.poll_options.map(
-                          (option: { option_txt: string }, index: number) => (
-                            <div
-                              key={index}
-                              className="flex items-center space-x-2"
-                            >
-                              <Badge>{option.option_txt}</Badge>
-                            </div>
-                          )
-                        )}
+              <div className="py-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Left panel: Post details (no poll) */}
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <span className="col-span-1 text-sm font-medium">Title:</span>
+                      <span className="col-span-3">{selectedPost.title}</span>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <span className="col-span-1 text-sm font-medium">Content:</span>
+                      <span className="col-span-3">{selectedPost.content}</span>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <span className="col-span-1 text-sm font-medium">Status:</span>
+                      <Badge className={`col-span-3 w-fit ${statusColors[selectedPost.status]}`}>
+                        {selectedPost.status}
+                      </Badge>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <span className="col-span-1 text-sm font-medium">Likes:</span>
+                      <span className="col-span-3">{selectedPost.likes_count}</span>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <span className="col-span-1 text-sm font-medium">Posted by:</span>
+                      <span className="col-span-3">{selectedPost.user?.full_name || selectedPost.user?.display_name}</span>
+                    </div>
+
+                    <div className="flex gap-2 mt-2 items-center">
+                      {selectedPost.is_pinned && (
+                        <Badge variant="secondary">Pinned</Badge>
+                      )}
+                      {selectedPost.is_highlighted && (
+                        <Badge variant="secondary">Highlighted</Badge>
+                      )}
+                      {isAdmin && (
+                        selectedPost.is_pinned ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleUnpinPost(selectedPost.id)}
+                          >
+                            <PinOff className="mr-2 h-4 w-4" /> Unpin
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handlePinPost(selectedPost)}
+                          >
+                            <Pin className="mr-2 h-4 w-4" /> Pin
+                          </Button>
+                        )
+                      )}
+                    </div>
+
+                    {/* Post Versions Table */}
+                    {selectedPost.post_versions && selectedPost.post_versions.length > 0 && (
+                      <div className="grid gap-2 mt-4">
+                        <h3 className="text-lg font-bold">Versions</h3>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>ID</TableHead>
+                              <TableHead>Description</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {selectedPost.post_versions.map((version) => (
+                              <TableRow key={version.id}>
+                                <TableCell>{version.id}</TableCell>
+                                <TableCell>{version.description.slice(0, 30)}...</TableCell>
+                                <TableCell>
+                                  <Badge className={statusColors[version.status]}>{version.status}</Badge>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  {version.status !== "published" && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleUpdateVersionStatus(selectedPost.id, version.id, "published")}
+                                    >
+                                      Publish
+                                    </Button>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
                       </div>
                     )}
                   </div>
-                )}
-                <div className="flex gap-2 mt-2 items-center">
-                  {selectedPost.is_pinned && (
-                    <Badge variant="secondary">Pinned</Badge>
-                  )}
-                  {selectedPost.is_highlighted && (
-                    <Badge variant="secondary">Highlighted</Badge>
-                  )}
-                  {isAdmin &&
-                    (selectedPost.is_pinned ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleUnpinPost(selectedPost.id)}
-                      >
-                        <PinOff className="mr-2 h-4 w-4" /> Unpin
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handlePinPost(selectedPost)}
-                      >
-                        <Pin className="mr-2 h-4 w-4" /> Pin
-                      </Button>
-                    ))}
-                </div>
 
-                {/* Post Versions Table */}
-                {selectedPost.post_versions &&
-                  selectedPost.post_versions.length > 0 && (
-                    <div className="grid gap-2 mt-4">
-                      <h3 className="text-lg font-bold">Versions</h3>
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>ID</TableHead>
-                            <TableHead>Description</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead className="text-right">
-                              Actions
-                            </TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {selectedPost.post_versions.map((version) => (
-                            <TableRow key={version.id}>
-                              <TableCell>{version.id}</TableCell>
-                              <TableCell>
-                                {version.description.slice(0, 30)}...
-                              </TableCell>
-                              <TableCell>
-                                <Badge className={statusColors[version.status]}>
-                                  {version.status}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {version.status !== "published" && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() =>
-                                      handleUpdateVersionStatus(
-                                        selectedPost.id,
-                                        version.id,
-                                        "published"
-                                      )
-                                    }
-                                  >
-                                    Publish
-                                  </Button>
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
+                  {/* Right panel: Poll details */}
+                  <div className="space-y-3 md:pl-6 md:border-l border-t md:border-t-0 border-border pt-4 md:pt-0">
+                    <h3 className="text-lg font-bold">Poll</h3>
+                    {selectedPost.post_poll && selectedPost.post_poll.question ? (
+                      <>
+                        <Button
+                          variant="ghost"
+                          onClick={() => setShowPollOptions(!showPollOptions)}
+                          className="justify-start px-0"
+                        >
+                          {selectedPost.post_poll.question}
+                        </Button>
+                        {showPollOptions && (
+                          <div className="grid gap-1 pl-4">
+                            {selectedPost.post_poll?.poll_options?.length ? (
+                              selectedPost.post_poll.poll_options.map((option: { option_txt: string }, index: number) => (
+                                <div key={index} className="flex items-center space-x-2">
+                                  <Badge>{option.option_txt}</Badge>
+                                </div>
+                              ))
+                            ) : (
+                              <span className="text-sm text-muted-foreground">No options</span>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">No Poll</span>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
             {isAdmin && selectedPost && (
