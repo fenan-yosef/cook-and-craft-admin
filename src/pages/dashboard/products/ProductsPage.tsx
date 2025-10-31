@@ -448,12 +448,27 @@ export default function ProductsPage() {
   // Also include isProductActive / isProductPrivate aliases
   formData.append("isProductActive", addForm.is_active ? "1" : "0")
   formData.append("isProductPrivate", addForm.is_private ? "1" : "0")
-      // SKU
+      // Category (send as many compatible shapes as possible)
       if (addForm.productCategoryId) {
-        const catId = String(Number(addForm.productCategoryId))
+        const catIdNum = Number(addForm.productCategoryId)
+        const catId = String(catIdNum)
+        const catName = categoryMap[catIdNum]
+        // primary ids
         formData.append("productCategoryId", catId)
-        // also send alias for compatibility
         formData.append("category_id", catId)
+        // relationship sync with array-of-objects
+        formData.append("productCategories[0][id]", catId)
+        if (catName) formData.append("productCategories[0][name]", String(catName))
+        // common id-array aliases
+        formData.append("productCategories[]", catId)
+        formData.append("product_category_ids[]", catId)
+        formData.append("productCategoryIds[]", catId)
+        formData.append("category_ids[]", catId)
+        formData.append("categories[]", catId)
+        // JSON payload variants that some backends expect
+        const pcJson = JSON.stringify([{ id: catIdNum, name: catName ?? undefined }])
+        formData.append("productCategories", pcJson)
+        formData.append("product_categories", pcJson)
       }
       if (addForm.productVersionNumber) formData.append("productVersionNumber", addForm.productVersionNumber)
   // tags are handled via Add Tag modal
@@ -695,8 +710,28 @@ export default function ProductsPage() {
       formData.append("isProductActive", editForm.is_active ? "1" : "0")
       formData.append("is_private", editForm.is_private ? "1" : "0")
       formData.append("isProductPrivate", editForm.is_private ? "1" : "0")
-      if (editForm.productCategoryId) formData.append("productCategoryId", String(editForm.productCategoryId))
-      if (editForm.productCategoryId) formData.append("category_id", String(editForm.productCategoryId))
+      // Category (send as many compatible shapes as possible)
+      if (editForm.productCategoryId) {
+        const catIdNum = Number(editForm.productCategoryId)
+        const catId = String(catIdNum)
+        const catName = categoryMap[catIdNum]
+        // primary ids
+        formData.append("productCategoryId", catId)
+        formData.append("category_id", catId)
+        // relationship sync with array-of-objects
+        formData.append("productCategories[0][id]", catId)
+        if (catName) formData.append("productCategories[0][name]", String(catName))
+        // common id-array aliases
+        formData.append("productCategories[]", catId)
+        formData.append("product_category_ids[]", catId)
+        formData.append("productCategoryIds[]", catId)
+        formData.append("category_ids[]", catId)
+        formData.append("categories[]", catId)
+        // JSON payload variants that some backends expect
+        const pcJson = JSON.stringify([{ id: catIdNum, name: catName ?? undefined }])
+        formData.append("productCategories", pcJson)
+        formData.append("product_categories", pcJson)
+      }
       if (editForm.productVersionNumber) formData.append("productVersionNumber", String(editForm.productVersionNumber))
       if (editForm.original_price !== "") {
         formData.append("original_price", String(editForm.original_price))
