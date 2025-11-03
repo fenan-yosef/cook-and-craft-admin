@@ -132,14 +132,14 @@ const menuItems = [
         title: "Metrics",
         url: "/dashboard/metrics",
       },
-      {
-        title: "Notifications",
-        url: "/dashboard/community-notifications",
-      }
+      // {
+      //   title: "Notifications",
+      //   url: "/dashboard/community-notifications",
+      // }
     ],
   },
   {
-    title: "Loyality and Rewards",
+    title: "Loyality & Rewards",
     icon: Settings,
     items: [
       {
