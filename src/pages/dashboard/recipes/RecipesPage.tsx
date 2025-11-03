@@ -203,15 +203,24 @@ export default function RecipesPage() {
   const fetchRecipes = async (size = perPage) => {
     try {
       setLoading(true)
-  const res = await apiService.get(`/recipes?per_page=${size}&perPage=${size}&limit=${size}&page_size=${size}&pageSize=${size}`)
+      // Avoid sending `per_page` here as the endpoint reports it invalid; use other common aliases instead.
+      const query = `perPage=${size}&limit=${size}&page_size=${size}&pageSize=${size}`
+      const res = await apiService.get(`/recipes?${query}`)
       const items: ApiRecipe[] = Array.isArray(res?.data) ? res.data : []
       setRecipes(items)
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to fetch recipes",
-        variant: "destructive",
-      })
+      // Fallback: try a minimal query using only `limit`
+      try {
+        const res2 = await apiService.get(`/recipes?limit=${size}`)
+        const items2: ApiRecipe[] = Array.isArray(res2?.data) ? res2.data : []
+        setRecipes(items2)
+      } catch (e2: any) {
+        toast({
+          title: "Error",
+          description: e2?.message || error?.message || "Failed to fetch recipes",
+          variant: "destructive",
+        })
+      }
     } finally {
       setLoading(false)
     }
