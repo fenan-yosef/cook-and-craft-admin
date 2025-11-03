@@ -909,8 +909,77 @@ export default function RecipesPage() {
                     )}
                   </div>
                 </div>
+                {/* Tags and Best Choice */}
+                {(() => {
+                  const tags: any[] = (selectedRecipe as any).Tags ?? []
+                  const hasBest = typeof (selectedRecipe as any).Is_best_choice !== 'undefined'
+                  if ((!Array.isArray(tags) || tags.length === 0) && !hasBest) return null
+                  return (
+                    <div className="grid grid-cols-3 gap-4 text-sm items-start">
+                      <div className="col-span-2">
+                        {Array.isArray(tags) && tags.length > 0 ? (
+                          <div>
+                            <h3 className="font-semibold mb-2">Tags</h3>
+                            <div className="flex flex-wrap gap-2">
+                              {tags.map((t: any, i: number) => (
+                                <Badge key={i} variant="secondary">{t?.name || t?.slug || `#${t?.id ?? i+1}`}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                      {hasBest ? (
+                        <div className="flex items-center gap-2 justify-end">
+                          <span>Best choice:</span>
+                          {(selectedRecipe as any).Is_best_choice ? (
+                            <Badge className="bg-green-100 text-green-800" variant="secondary">Yes</Badge>
+                          ) : (
+                            <Badge className="bg-gray-100 text-gray-800" variant="secondary">No</Badge>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  )
+                })()}
                 {/* Steps */}
                 {(() => {
+                  const detailed: any[] = (selectedRecipe as any).Recipe_steps ?? []
+                  if (Array.isArray(detailed) && detailed.length > 0) {
+                    return (
+                      <div>
+                        <h3 className="font-semibold mb-2">Steps</h3>
+                        <div className="space-y-3">
+                          {detailed
+                            .sort((a: any, b: any) => (a?.step_number ?? 0) - (b?.step_number ?? 0))
+                            .map((st: any, idx: number) => (
+                              <div key={st?.id ?? idx} className="rounded-md border p-3">
+                                <div className="flex items-center justify-between mb-2 text-sm">
+                                  <div className="font-medium">Step {st?.step_number ?? idx + 1}</div>
+                                  {typeof st?.prep_minutes !== 'undefined' ? (
+                                    <span className="text-muted-foreground">{st.prep_minutes} min</span>
+                                  ) : null}
+                                </div>
+                                <p className="text-sm text-foreground">{st?.instructions || '-'}</p>
+                                {Array.isArray(st?.image) && st.image.length > 0 ? (
+                                  <div className="grid grid-cols-3 gap-3 mt-3">
+                                    {st.image.slice(0, 6).map((im: any, i: number) => (
+                                      <div key={im?.id ?? i} className="aspect-square rounded border overflow-hidden bg-muted">
+                                        {im?.url ? (
+                                          <img src={im.url} alt={`Step ${st?.step_number} image ${i + 1}`} className="w-full h-full object-cover" />
+                                        ) : (
+                                          <div className="w-full h-full bg-muted" />
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : null}
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    )
+                  }
+                  // Fallback to legacy simple steps
                   const steps: any = (selectedRecipe as any).Steps ?? (selectedRecipe as any).steps ?? []
                   const stepsArr: string[] = Array.isArray(steps)
                     ? steps.map((s: any) => String(s ?? "")).filter(Boolean)
@@ -931,25 +1000,41 @@ export default function RecipesPage() {
                 })()}
                 {/* Ingredients */}
                 {(() => {
-                  const ings: any[] =
-                    (selectedRecipe as any).Ingredients ?? (selectedRecipe as any).ingredients ?? []
+                  const ings: any[] = (selectedRecipe as any).Ingredients ?? (selectedRecipe as any).ingredients ?? []
                   if (!Array.isArray(ings) || ings.length === 0) return null
                   return (
                     <div>
                       <h3 className="font-semibold mb-2">Ingredients</h3>
-                      <ul className="list-disc pl-5 space-y-1 text-sm text-muted-foreground">
+                      <div className="grid sm:grid-cols-2 gap-3">
                         {ings.map((it: any, i: number) => {
-                          if (typeof it === "string") return <li key={i}>{it}</li>
+                          if (typeof it === "string") {
+                            return (
+                              <div key={i} className="flex items-center gap-3 p-2 rounded border">
+                                <div className="w-12 h-12 rounded bg-muted border" />
+                                <div className="text-sm text-muted-foreground">{it}</div>
+                              </div>
+                            )
+                          }
                           const name = it?.name ?? it?.ingredient ?? "—"
                           const amount = it?.amount ?? it?.qty ?? ""
+                          const img = it?.image_url
                           return (
-                            <li key={i}>
-                              {name}
-                              {amount ? ` — ${amount}` : ""}
-                            </li>
+                            <div key={i} className="flex items-center gap-3 p-2 rounded border">
+                              <div className="w-12 h-12 rounded overflow-hidden bg-muted border">
+                                {img ? (
+                                  <img src={img} alt={`${name} image`} className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="w-full h-full bg-muted" />
+                                )}
+                              </div>
+                              <div className="text-sm">
+                                <div className="font-medium text-foreground">{name}</div>
+                                <div className="text-muted-foreground">{amount || ""}</div>
+                              </div>
+                            </div>
                           )
                         })}
-                      </ul>
+                      </div>
                     </div>
                   )
                 })()}
