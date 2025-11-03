@@ -159,7 +159,7 @@ export default function ProductsPage() {
   const token = localStorage.getItem("auth_token")
   if (token) apiService.setAuthToken(token)
       const response = await apiService.get(
-        `/admins/products?page=${page}&per_page=${size}&perPage=${size}&limit=${size}&page_size=${size}&pageSize=${size}`,
+        `/admins/products?page=${page}&perPage=${size}&limit=${size}&page_size=${size}&pageSize=${size}`,
       )
 
       // Normalize common API shapes for items and pagination meta
@@ -2209,7 +2209,8 @@ export default function ProductsPage() {
                   const n = Number(val)
                   setPerPage(n)
                   setCurrentPage(1)
-                  fetchProducts(1)
+                  // Explicitly pass n to avoid stale state issues
+                  fetchProducts(1, n)
                 }}
               >
                 <SelectTrigger className="w-[140px]">
