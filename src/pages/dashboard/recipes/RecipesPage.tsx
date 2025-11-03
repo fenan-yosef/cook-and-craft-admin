@@ -20,6 +20,7 @@ import { apiService } from "@/lib/api-service"
 import { useAuth } from "@/contexts/auth-context"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 
 type ApiRecipe = {
   Recipe_ID: number
@@ -69,6 +70,17 @@ export default function RecipesPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [perPage, setPerPage] = useState(15)
+  // Filters
+  const TAG_OPTIONS = [
+    { id: 1, label: "New" },
+    { id: 2, label: "Popular" },
+    { id: 3, label: "Loved" },
+  ]
+  const [tagSelections, setTagSelections] = useState<number[]>([])
+  const [minCalories, setMinCalories] = useState<string>("")
+  const [maxCalories, setMaxCalories] = useState<string>("")
+  const [minPrep, setMinPrep] = useState<string>("")
+  const [maxPrep, setMaxPrep] = useState<string>("")
   // Mock: pending recipe requests
   // Pending requests kept in localStorage (UI section is currently commented out)
   // const [pending, setPending] = useState<PendingRecipe[]>([])
@@ -204,7 +216,22 @@ export default function RecipesPage() {
     try {
       setLoading(true)
       // Avoid sending `per_page` here as the endpoint reports it invalid; use other common aliases instead.
-      const query = `perPage=${size}&limit=${size}&page_size=${size}&pageSize=${size}`
+      // Also include filters as required by backend: tags[0..n], min/max calories, min/max prep time.
+      const filterParts: string[] = []
+      // tags (only include when selected)
+      if (Array.isArray(tagSelections) && tagSelections.length > 0) {
+        tagSelections.forEach((id, i) => {
+          filterParts.push(`tags[${i}]=${encodeURIComponent(String(id))}`)
+        })
+      }
+      // Always include these, even if empty, to satisfy backend parameter expectations
+      filterParts.push(`min_calories=${encodeURIComponent(minCalories ?? "")}`)
+      filterParts.push(`max_calories=${encodeURIComponent(maxCalories ?? "")}`)
+      filterParts.push(`min_prep_time=${encodeURIComponent(minPrep ?? "")}`)
+      filterParts.push(`max_prep_time=${encodeURIComponent(maxPrep ?? "")}`)
+
+      const basePaging = [`perPage=${size}`, `limit=${size}`, `page_size=${size}`, `pageSize=${size}`]
+      const query = [...basePaging, ...filterParts].join("&")
       const res = await apiService.get(`/recipes?${query}`)
       const items: ApiRecipe[] = Array.isArray(res?.data) ? res.data : []
       setRecipes(items)
@@ -674,6 +701,98 @@ export default function RecipesPage() {
                   <SelectItem value="100">100</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* Filters: Tags, Calories, Prep time */}
+            <div className="flex flex-col gap-3 mb-4">
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-3">
+                  <Label className="text-sm">Tags</Label>
+                  <div className="flex flex-wrap gap-3">
+                    {TAG_OPTIONS.map((t) => (
+                      <label key={t.id} className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={tagSelections.includes(t.id)}
+                          onCheckedChange={(checked) => {
+                            setTagSelections((prev) => {
+                              const set = new Set(prev)
+                              if (checked) set.add(t.id)
+                              else set.delete(t.id)
+                              return Array.from(set)
+                            })
+                          }}
+                        />
+                        <span>{t.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="grid gap-1">
+                  <Label className="text-sm">Min calories</Label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="e.g. 100"
+                    value={minCalories}
+                    onChange={(e) => setMinCalories(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-1">
+                  <Label className="text-sm">Max calories</Label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="e.g. 200"
+                    value={maxCalories}
+                    onChange={(e) => setMaxCalories(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-1">
+                  <Label className="text-sm">Min prep (min)</Label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="e.g. 5"
+                    value={minPrep}
+                    onChange={(e) => setMinPrep(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-1">
+                  <Label className="text-sm">Max prep (min)</Label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="e.g. 45"
+                    value={maxPrep}
+                    onChange={(e) => setMaxPrep(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => fetchRecipes(perPage)}
+                  disabled={loading}
+                >
+                  Apply filters
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setTagSelections([])
+                    setMinCalories("")
+                    setMaxCalories("")
+                    setMinPrep("")
+                    setMaxPrep("")
+                    fetchRecipes(perPage)
+                  }}
+                  disabled={loading}
+                >
+                  Clear
+                </Button>
+              </div>
             </div>
 
             <Table>
