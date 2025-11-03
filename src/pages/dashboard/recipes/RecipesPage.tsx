@@ -288,45 +288,46 @@ export default function RecipesPage() {
         return
       }
       setCreating(true)
-  let res: any
-  const ingredientsClean = (newRecipe.Ingredients || []).filter((x) => (x.name?.trim() || x.amount?.trim()))
-  const nutritionClean = (newRecipe.Nutrition_facts || []).filter((x) => (x.label?.trim() || x.value?.trim()))
-  const utensilsClean = (newRecipe.Utensils || []).map((u) => (u ?? "").trim()).filter(Boolean)
-  const stepsArray = newRecipe.StepsText
+      // Always send multipart form-data using bracketed keys to match backend expectations
+      const fd = new FormData()
+      fd.append("name", nameVal)
+      fd.append("description", descVal)
+      fd.append("calories_kcal", String(calNum))
+      fd.append("prep_minutes", String(prepNum))
+      fd.append("is_active", newRecipe.Is_active ? "1" : "0")
+
+      // Ingredients: use ingredients[i][name] and ingredients[i][amount]
+      const ingredientsClean = (newRecipe.Ingredients || []).filter((x) => (x.name?.trim() || x.amount?.trim()))
+      ingredientsClean.forEach((ing, i) => {
+        if (ing.name?.trim()) fd.append(`ingredients[${i}][name]`, ing.name.trim())
+        if (ing.amount?.trim()) fd.append(`ingredients[${i}][amount]`, ing.amount.trim())
+        // Ingredient image upload not supported in UI yet; skip ingredients[i][image]
+      })
+
+      // Nutrition facts and utensils as JSON strings (per Postman example)
+      const nutritionClean = (newRecipe.Nutrition_facts || []).filter((x) => (x.label?.trim() || x.value?.trim()))
+      if (nutritionClean.length > 0) fd.append("nutrition_facts", JSON.stringify(nutritionClean))
+      const utensilsClean = (newRecipe.Utensils || []).map((u) => (u ?? "").trim()).filter(Boolean)
+      if (utensilsClean.length > 0) fd.append("utensils", JSON.stringify(utensilsClean))
+
+      // Steps: map each line to steps[i][step_number], steps[i][instructions], steps[i][prep_minutes]
+      const stepsArray = newRecipe.StepsText
         ? newRecipe.StepsText.split("\n").map((s) => s.trim()).filter(Boolean)
         : []
-      const stepsToSend: any = stepsArray.length > 0 ? stepsArray : null
-      if (newImages.length > 0) {
-        const fd = new FormData()
-        fd.append("name", nameVal)
-        fd.append("description", descVal)
-        fd.append("calories_kcal", String(calNum))
-        fd.append("prep_minutes", String(prepNum))
-        fd.append("is_active", newRecipe.Is_active ? "1" : "0")
-        // Complex fields as JSON strings in multipart (backend should json_decode)
-        fd.append("ingredients", JSON.stringify(ingredientsClean))
-        fd.append("nutrition_facts", JSON.stringify(nutritionClean))
-        fd.append("utensils", JSON.stringify(utensilsClean))
-        if (stepsToSend !== null) {
-          fd.append("steps", JSON.stringify(stepsToSend))
-        }
+      stepsArray.forEach((txt, i) => {
+        fd.append(`steps[${i}][step_number]`, String(i + 1))
+        fd.append(`steps[${i}][instructions]`, txt)
+        // Default minimal prep per-step to 1 to satisfy backend requirement; user can edit later
+        fd.append(`steps[${i}][prep_minutes]`, "1")
+        // If you need to associate ingredients with this step, append steps[i][ingredient_indices][j] values here
+      })
+
+      // Recipe images (optional)
+      if (Array.isArray(newImages) && newImages.length > 0) {
         for (const file of newImages) fd.append("images[]", file)
-        res = await apiService.postMultipart("/recipes", fd)
-      } else {
-        const payload: any = {
-          name: nameVal,
-          description: descVal,
-          calories_kcal: String(calNum),
-          prep_minutes: String(prepNum),
-          ingredients: ingredientsClean,
-          nutrition_facts: nutritionClean,
-          utensils: utensilsClean,
-          steps: stepsToSend,
-          is_active: newRecipe.Is_active ? 1 : 0,
-          images: [],
-        }
-        res = await apiService.post("/recipes", payload)
       }
+
+      const res: any = await apiService.postMultipart("/recipes", fd)
       const created = Array.isArray(res?.data) && res.data.length > 0 ? (res.data[0] as ApiRecipe) : null
       if (created) {
         setRecipes((prev) => [created, ...prev])
@@ -337,11 +338,21 @@ export default function RecipesPage() {
       resetNewRecipe()
       toast({ title: "Success", description: "Recipe created" })
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to create recipe",
-        variant: "destructive",
-      })
+      // Surface backend validation errors if available
+      let desc = error?.message || "Failed to create recipe"
+      const serverErr = (error?.response?.data?.error || error?.data?.error) as any
+      if (serverErr && typeof serverErr === "object") {
+        try {
+          const parts: string[] = []
+          for (const k of Object.keys(serverErr)) {
+            const val = (serverErr as any)[k]
+            if (Array.isArray(val)) parts.push(`${k}: ${val.join(", ")}`)
+            else if (typeof val === "string") parts.push(`${k}: ${val}`)
+          }
+          if (parts.length > 0) desc = parts.join("; ")
+        } catch {}
+      }
+      toast({ title: "Error", description: desc, variant: "destructive" })
     } finally {
       setCreating(false)
     }
@@ -426,6 +437,7 @@ export default function RecipesPage() {
         return
       }
       setEditing(true)
+      // Build multipart form to match backend's bracketed fields
       const fd = new FormData()
       fd.append("_method", "put")
       fd.append("name", nameVal)
@@ -433,23 +445,38 @@ export default function RecipesPage() {
       fd.append("calories_kcal", String(calNum))
       fd.append("prep_minutes", String(prepNum))
       fd.append("is_active", editRecipe.Is_active ? "1" : "0")
-      // Additional structured fields
+
+      // Ingredients: ingredients[i][name]/[amount]
       const ingredientsClean = (editRecipe.Ingredients || []).filter((x) => (x.name?.trim() || x.amount?.trim()))
+      ingredientsClean.forEach((ing, i) => {
+        if (ing.name?.trim()) fd.append(`ingredients[${i}][name]`, ing.name.trim())
+        if (ing.amount?.trim()) fd.append(`ingredients[${i}][amount]`, ing.amount.trim())
+      })
+
+      // Nutrition facts and utensils as JSON (per API examples)
       const nutritionClean = (editRecipe.Nutrition_facts || []).filter((x) => (x.label?.trim() || x.value?.trim()))
+      if (nutritionClean.length > 0) fd.append("nutrition_facts", JSON.stringify(nutritionClean))
       const utensilsClean = (editRecipe.Utensils || []).map((u) => (u ?? "").trim()).filter(Boolean)
+      if (utensilsClean.length > 0) fd.append("utensils", JSON.stringify(utensilsClean))
+
+      // Steps: steps[i][step_number]/[instructions]/[prep_minutes]
       const stepsArray = editRecipe.StepsText
         ? editRecipe.StepsText.split("\n").map((s) => s.trim()).filter(Boolean)
         : []
-      if (ingredientsClean.length > 0) fd.append("ingredients", JSON.stringify(ingredientsClean))
-      if (nutritionClean.length > 0) fd.append("nutrition_facts", JSON.stringify(nutritionClean))
-      if (utensilsClean.length > 0) fd.append("utensils", JSON.stringify(utensilsClean))
-      if (stepsArray.length > 0) fd.append("steps", JSON.stringify(stepsArray))
+      stepsArray.forEach((txt, i) => {
+        fd.append(`steps[${i}][step_number]`, String(i + 1))
+        fd.append(`steps[${i}][instructions]`, txt)
+        fd.append(`steps[${i}][prep_minutes]`, "1")
+      })
+
+      // Newly added images
       if (Array.isArray(editRecipe.Images)) {
         for (const file of editRecipe.Images) {
           fd.append("images[]", file)
         }
       }
-      const res = await apiService.postMultipart(`/recipes/${editRecipe.id}?_method=put`, fd)
+
+      const res = await apiService.postMultipart(`/recipes/${editRecipe.id}`, fd)
       const updated = Array.isArray(res?.data) && res.data.length > 0 ? (res.data[0] as ApiRecipe) : null
       if (updated) {
         setRecipes((prev) => prev.map((r) => (r.Recipe_ID === updated.Recipe_ID ? updated : r)))
@@ -460,7 +487,21 @@ export default function RecipesPage() {
         setIsEditDialogOpen(false)
       }
     } catch (error: any) {
-      toast({ title: "Error", description: error?.message || "Failed to update recipe", variant: "destructive" })
+      // Surface backend validation errors if available
+      let desc = error?.message || "Failed to update recipe"
+      const serverErr = (error?.response?.data?.error || error?.data?.error) as any
+      if (serverErr && typeof serverErr === "object") {
+        try {
+          const parts: string[] = []
+          for (const k of Object.keys(serverErr)) {
+            const val = (serverErr as any)[k]
+            if (Array.isArray(val)) parts.push(`${k}: ${val.join(", ")}`)
+            else if (typeof val === "string") parts.push(`${k}: ${val}`)
+          }
+          if (parts.length > 0) desc = parts.join("; ")
+        } catch {}
+      }
+      toast({ title: "Error", description: desc, variant: "destructive" })
     } finally {
       setEditing(false)
     }
