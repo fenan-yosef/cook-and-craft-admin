@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, Plus, Edit, Trash2, Calendar as CalendarIcon } from "lucide-react"
+import { Search, Plus, Edit, Trash2, Calendar as CalendarIcon, MoreHorizontal, Eye } from "lucide-react"
 import { apiService } from "@/lib/api-service"
 import { useToast } from "@/hooks/use-toast"
 import {
@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { ChevronDown } from "lucide-react"
 // Calendar removed in favor of week dropdown selection
 
@@ -876,6 +876,8 @@ export default function SubscriptionIntervalsPage() {
                   <TableHead>Title</TableHead>
                   <TableHead>Start Date</TableHead>
                   <TableHead>End Date</TableHead>
+                  <TableHead>Cutoff Date</TableHead>
+                  <TableHead>Meals</TableHead>
                   <TableHead>Status</TableHead>
                   {/* Price column removed per API update */}
                   <TableHead className="text-right">Actions</TableHead>
@@ -900,19 +902,33 @@ export default function SubscriptionIntervalsPage() {
                       <TableCell>{interval.title}</TableCell>
                       <TableCell>{new Date(interval.start_date).toLocaleDateString()}</TableCell>
                       <TableCell>{(() => { const d = new Date(interval.end_date); d.setDate(d.getDate()-1); return d.toLocaleDateString() })()}</TableCell>
+                      <TableCell>{interval.cutoff_date ? new Date(interval.cutoff_date).toLocaleDateString() : '-'}</TableCell>
+                      <TableCell>{Array.isArray(interval.meals) ? interval.meals.flat().filter(Boolean).length : 0}</TableCell>
                       <TableCell>
                         <Badge variant={interval.status === "active" ? "default" : "secondary"}>
                           {interval.status}
                         </Badge>
                       </TableCell>
                       {/* Price cell removed per API update */}
-                      <TableCell className="text-right space-x-2" onClick={(e) => e.stopPropagation()}>
-                        <Button size="sm" variant="outline" onClick={() => openEditModal(interval)} disabled={deletingId === interval.id}>
-                          <Edit className="mr-2 h-4 w-4" /> Edit
-                        </Button>
-                        <Button size="sm" variant="destructive" onClick={() => handleDeleteInterval(interval.id)} disabled={deletingId === interval.id}>
-                          {deletingId === interval.id ? 'Deleting...' : <><Trash2 className="mr-2 h-4 w-4" /> Delete</>}
-                        </Button>
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenuItem onClick={() => openViewModal(interval)}>
+                              <Eye className="mr-2 h-4 w-4" /> View
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openEditModal(interval)} disabled={deletingId === interval.id}>
+                              <Edit className="mr-2 h-4 w-4" /> Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-red-600" onClick={() => handleDeleteInterval(interval.id)} disabled={deletingId === interval.id}>
+                              {deletingId === interval.id ? 'Deleting...' : (<><Trash2 className="mr-2 h-4 w-4" /> Delete</>)}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))
@@ -980,7 +996,7 @@ export default function SubscriptionIntervalsPage() {
 
         {/* View Interval Modal */}
         <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-          <DialogContent className="sm:max-w-[560px] max-h-[80vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-[680px] max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center justify-between">
                 <span>{selectedInterval?.title || 'Interval'}</span>
@@ -990,28 +1006,37 @@ export default function SubscriptionIntervalsPage() {
                   </span>
                 ) : null}
               </DialogTitle>
-              <DialogDescription>Meal selections for this interval</DialogDescription>
+              <DialogDescription>Interval details and assigned meals</DialogDescription>
             </DialogHeader>
             {selectedInterval ? (
               (() => {
-                // meals is an array of arrays of meal objects
                 const mealsArr = Array.isArray(selectedInterval.meals)
                   ? selectedInterval.meals.flat().filter(Boolean)
                   : []
-                if (mealsArr.length === 0) {
-                  return <div className="py-4 text-sm text-muted-foreground">No meals assigned for this interval.</div>
-                }
+                const cutoff = selectedInterval.cutoff_date ? new Date(selectedInterval.cutoff_date).toLocaleDateString() : '—'
+                const endDisplay = (() => { const d = new Date(selectedInterval.end_date); d.setDate(d.getDate()-1); return d.toLocaleDateString() })()
                 return (
-                  <div className="space-y-3">
-                    <div className="text-sm text-muted-foreground">Total meals: {mealsArr.length}</div>
-                    <ul className="space-y-1">
-                      {mealsArr.map((meal: any) => (
-                        <li key={meal.id} className="flex items-center justify-between border rounded px-3 py-2">
-                          <span className="font-medium">{meal.label || meal.name || `Meal #${meal.id}`}</span>
-                          {/* <Badge variant="secondary">ID: {meal.id}</Badge> */}
-                        </li>
-                      ))}
-                    </ul>
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                      <div className="flex items-center justify-between border rounded px-3 py-2"><span className="text-muted-foreground">Status</span><Badge variant={selectedInterval.status === 'active' ? 'default' : 'secondary'}>{selectedInterval.status}</Badge></div>
+                      <div className="flex items-center justify-between border rounded px-3 py-2"><span className="text-muted-foreground">Cutoff Date</span><span>{cutoff}</span></div>
+                      <div className="flex items-center justify-between border rounded px-3 py-2"><span className="text-muted-foreground">Week</span><span>{new Date(selectedInterval.start_date).toLocaleDateString()} → {endDisplay}</span></div>
+                      <div className="flex items-center justify-between border rounded px-3 py-2"><span className="text-muted-foreground">Meals Count</span><span>{mealsArr.length}</span></div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-muted-foreground mb-2">Meals</div>
+                      {mealsArr.length === 0 ? (
+                        <div className="py-2 text-sm text-muted-foreground">No meals assigned for this interval.</div>
+                      ) : (
+                        <ul className="space-y-1">
+                          {mealsArr.map((meal: any) => (
+                            <li key={meal.id} className="flex items-center justify-between border rounded px-3 py-2">
+                              <span className="font-medium">{meal.label || meal.name || `Meal #${meal.id}`}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
                   </div>
                 )
               })()
