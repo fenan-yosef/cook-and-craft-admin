@@ -37,6 +37,9 @@ export default function SubscriptionIntervalsPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [perPage, setPerPage] = useState(15)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [lastPage, setLastPage] = useState(1)
+  const [total, setTotal] = useState(0)
   const { toast } = useToast()
   // View modal state
   const [isViewOpen, setIsViewOpen] = useState(false)
@@ -118,7 +121,7 @@ export default function SubscriptionIntervalsPage() {
   const [deletingId, setDeletingId] = useState<number | null>(null)
 
   useEffect(() => {
-    fetchIntervals()
+    fetchIntervals(1, perPage)
   }, [])
 
   // Lazy-load meals when Add or Edit modal opens
@@ -154,16 +157,65 @@ export default function SubscriptionIntervalsPage() {
     }
   }, [isAddOpen, isEditOpen, mealsOptions.length])
 
-  const fetchIntervals = async (size = perPage) => {
+  const fetchIntervals = async (page = currentPage, size = perPage) => {
     try {
       setLoading(true)
-      const response = await apiService.get(
-        `/subscription_intervals?per_page=${size}&perPage=${size}&limit=${size}&page_size=${size}&pageSize=${size}`,
+      const response: any = await apiService.get(
+        `/subscription_intervals?page=${page}&perPage=${size}&limit=${size}&page_size=${size}&pageSize=${size}`,
       )
-      // Use the data as-is, including meals field
-      setIntervals(Array.isArray(response.data) ? response.data : [])
+      // Normalize items array from common locations
+      const candidates = [response, response?.data, response?.result, response?.results, response?.items, response?.records]
+      let items: any[] = []
+      for (const c of candidates) {
+        if (Array.isArray(c)) { items = c; break }
+        if (c && Array.isArray(c.data)) { items = c.data; break }
+      }
+      items = Array.isArray(items) ? items : (Array.isArray(response?.data) ? response.data : [])
+      setIntervals(items)
+
+      // Parse pagination meta from various shapes
+      const metaSources = [response?.meta, response?.data?.meta, response]
+      let current_page = Number(page)
+      let last_page = 1
+      let total_items = Number(items?.length ?? 0)
+      let server_per_page: number | undefined
+      for (const ms of metaSources) {
+        if (ms && (ms.current_page != null || ms.last_page != null || ms.total != null || ms.per_page != null)) {
+          current_page = Number(ms.current_page ?? current_page)
+          last_page = Number(ms.last_page ?? last_page)
+          total_items = Number(ms.total ?? total_items)
+          server_per_page = ms.per_page != null ? Number(ms.per_page) : server_per_page
+          break
+        }
+      }
+      // Derive last_page if not provided
+      if (!last_page || !isFinite(last_page)) {
+        const denom = server_per_page || size || items.length || 1
+        last_page = Math.max(1, Math.ceil((total_items || items.length) / denom))
+      }
+      // Sync perPage with server if it differs
+      if (server_per_page && server_per_page !== perPage) {
+        setPerPage(server_per_page)
+      }
+      setCurrentPage(current_page)
+      setLastPage(last_page)
+      setTotal(Number.isFinite(total_items) ? total_items : items.length)
     } catch (error) {
-      setIntervals([])
+      // Fallback: try minimal query with only page & limit
+      try {
+        const res2: any = await apiService.get(`/subscription_intervals?page=${page}&limit=${size}`)
+        const items = Array.isArray(res2?.data) ? res2.data : (Array.isArray(res2) ? res2 : [])
+        setIntervals(items)
+        // Minimal meta derivation
+        setCurrentPage(page)
+        setTotal(Array.isArray(items) ? items.length : 0)
+        setLastPage(1)
+      } catch (e2) {
+        setIntervals([])
+        setCurrentPage(1)
+        setLastPage(1)
+        setTotal(0)
+      }
     } finally {
       setLoading(false)
     }
@@ -288,7 +340,7 @@ export default function SubscriptionIntervalsPage() {
       })
       setIsAddOpen(false)
       resetAddForm()
-      fetchIntervals()
+      fetchIntervals(currentPage, perPage)
     } catch (err: any) {
       toast({
         title: "Error",
@@ -403,7 +455,7 @@ export default function SubscriptionIntervalsPage() {
       })
       setIsEditOpen(false)
       resetEditForm()
-      fetchIntervals()
+      fetchIntervals(currentPage, perPage)
     } catch (err: any) {
       console.error("Interval update error:", err)
       toast({
@@ -433,7 +485,14 @@ export default function SubscriptionIntervalsPage() {
       await apiService.delete(`/subscription_intervals/${id}`)
       toast({ title: 'Deleted', description: 'Interval removed.' })
       // Optimistic removal or refetch
-      setIntervals(prev => prev.filter(i => i.id !== id))
+      setIntervals(prev => {
+        const next = prev.filter(i => i.id !== id)
+        // If page becomes empty and there are previous pages, refetch previous page
+        if (next.length === 0 && currentPage > 1) {
+          fetchIntervals(currentPage - 1, perPage)
+        }
+        return next
+      })
       // If edit modal was open for this interval close it
       if (editForm.id && Number(editForm.id) === id) {
         setIsEditOpen(false)
@@ -794,7 +853,8 @@ export default function SubscriptionIntervalsPage() {
                   const n = Number(val)
                   setPerPage(n)
                   // refetch with explicit size to avoid stale closures
-                  fetchIntervals(n)
+                  setCurrentPage(1)
+                  fetchIntervals(1, n)
                 }}
               >
                 <SelectTrigger className="w-[140px]">
@@ -859,6 +919,62 @@ export default function SubscriptionIntervalsPage() {
                 )}
               </TableBody>
             </Table>
+            {/* Pagination controls */}
+            <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="text-sm text-muted-foreground">
+                Page {currentPage} of {lastPage} • Showing {intervals.length} of {total || intervals.length} items
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage <= 1 || loading}
+                  onClick={() => fetchIntervals(currentPage - 1, perPage)}
+                >
+                  Prev
+                </Button>
+                {(() => {
+                  const pages: (number | string)[] = []
+                  const maxToShow = 5
+                  let start = Math.max(1, currentPage - 2)
+                  let end = Math.min(lastPage, start + maxToShow - 1)
+                  // Adjust start if we're near the end
+                  start = Math.max(1, Math.min(start, Math.max(1, end - maxToShow + 1)))
+                  if (start > 1) {
+                    pages.push(1)
+                    if (start > 2) pages.push('…')
+                  }
+                  for (let p = start; p <= end; p++) pages.push(p)
+                  if (end < lastPage) {
+                    if (end < lastPage - 1) pages.push('…')
+                    pages.push(lastPage)
+                  }
+                  return pages.map((p, idx) =>
+                    typeof p === 'number' ? (
+                      <Button
+                        key={idx}
+                        variant={p === currentPage ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => fetchIntervals(p, perPage)}
+                        disabled={loading}
+                      >
+                        {p}
+                      </Button>
+                    ) : (
+                      <span key={idx} className="px-2 text-muted-foreground">{p}</span>
+                    )
+                  )
+                })()}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage >= lastPage || loading}
+                  onClick={() => fetchIntervals(currentPage + 1, perPage)}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
