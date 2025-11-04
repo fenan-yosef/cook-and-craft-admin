@@ -99,7 +99,7 @@ export default function UsersPage() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
   const [lastPage, setLastPage] = useState(1)
-  const [perPage, setPerPage] = useState(15)
+  const [perPage, setPerPage] = useState(10)
   const [total, setTotal] = useState(0)
 
   // Add User modal state
@@ -134,9 +134,17 @@ export default function UsersPage() {
       }
 
       // Fetch users from the API and map to local User type
-      const response = await apiService.get(
-        `/admins/users?page=${page}&per_page=${size}&perPage=${size}&limit=${size}&page_size=${size}&pageSize=${size}`,
-      )
+      let response: any
+      try {
+        // Primary: use per_page as requested by backend; only send allowed values
+        const allowed = [10, 25, 50, 100]
+        const usePerPage = allowed.includes(Number(size))
+        const url = `/admins/users?page=${page}${usePerPage ? `&per_page=${size}` : ""}`
+        response = await apiService.get(url)
+      } catch (primaryErr) {
+        // Fallback: minimal query shape
+        response = await apiService.get(`/admins/users?page=${page}&limit=${size}`)
+      }
 
       // Normalize common API shapes for items and pagination meta
       const normalize = (res: any) => {
@@ -195,7 +203,7 @@ export default function UsersPage() {
         return { items, meta }
       }
 
-      const { items, meta } = normalize(response)
+  const { items, meta } = normalize(response)
 
       const mappedUsers: User[] = items.map((u: any) => ({
         id: Number(u.userId),
@@ -219,10 +227,10 @@ export default function UsersPage() {
       setUsers(mappedUsers)
 
       // Pagination meta (fallbacks if not present)
-  setCurrentPage(Number(meta.current_page ?? page) || 1)
-  setLastPage(Number(meta.last_page ?? 1) || 1)
-  // Keep user-selected perPage; do not override with backend meta
-  setTotal(Number(meta.total ?? mappedUsers.length))
+      setCurrentPage(Number(meta.current_page ?? page) || 1)
+      setLastPage(Number(meta.last_page ?? 1) || 1)
+      // Keep user-selected perPage; do not override with backend meta
+      setTotal(Number(meta.total ?? mappedUsers.length))
 
     } catch (error) {
       toast({
@@ -479,8 +487,8 @@ export default function UsersPage() {
                   <SelectValue placeholder="Per page" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="15">15 (default)</SelectItem>
-                  <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="15">15 (default)</SelectItem>
+                    <SelectItem value="10">10</SelectItem>
                   <SelectItem value="25">25</SelectItem>
                   <SelectItem value="50">50</SelectItem>
                   <SelectItem value="100">100</SelectItem>
