@@ -89,7 +89,7 @@ export default function OrdersPage() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [lastPage, setLastPage] = useState(1);
-  const [perPage, setPerPage] = useState(15);
+  const [perPage, setPerPage] = useState(10);
   const [total, setTotal] = useState(0);
 
   useEffect(() => {
@@ -102,9 +102,17 @@ export default function OrdersPage() {
     try {
       setLoading(true);
       setError(null);
-      const result = await apiService.get(
-        `/admins/orders?page=${page}&per_page=${size}&perPage=${size}&limit=${size}&page_size=${size}&pageSize=${size}`,
-      );
+      let result: any;
+      try {
+        // Primary: use per_page if it is one of the allowed values
+        const allowed = [10, 25, 50, 100];
+        const usePerPage = allowed.includes(Number(size));
+        const url = `/admins/orders?page=${page}${usePerPage ? `&per_page=${size}` : ""}`;
+        result = await apiService.get(url);
+      } catch (primaryErr) {
+        // Fallback: minimal query with page & limit
+        result = await apiService.get(`/admins/orders?page=${page}&limit=${size}`);
+      }
       setOrders(result.data);
 
       // Hydrate user names for the listed orders
@@ -114,7 +122,7 @@ export default function OrdersPage() {
         // ignore name hydration errors to avoid noisy UI; list still renders
       }
 
-  const { current_page, last_page, total } = result.meta || {};
+    const { current_page, last_page, total } = result.meta || {};
       setCurrentPage(current_page || page);
       setLastPage(last_page || 1);
   // Do not override user's selected perPage with backend meta; keep selection stable
@@ -343,8 +351,7 @@ export default function OrdersPage() {
                   <SelectValue placeholder="Per page" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="15">15 (default)</SelectItem>
-                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="10">10 (default)</SelectItem>
                   <SelectItem value="25">25</SelectItem>
                   <SelectItem value="50">50</SelectItem>
                   <SelectItem value="100">100</SelectItem>
