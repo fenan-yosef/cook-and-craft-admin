@@ -10,6 +10,7 @@ type User = {
   email: string
   role: string
   phone?: string
+  avatarUrl?: string
 }
 
 type AuthContextType = {
@@ -64,12 +65,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const adminProfile = response.data
       if (adminProfile) {
         const fullName = `${adminProfile.adminFirstName || ""} ${adminProfile.adminLastName || ""}`.trim()
+        const avatarUrl = Array.isArray(adminProfile.adminProfileImage) && adminProfile.adminProfileImage.length > 0
+          ? adminProfile.adminProfileImage[0].url
+          : undefined
         const loadedUser: User = {
           id: adminProfile.adminId,
           name: fullName || adminProfile.adminEmail,
           email: adminProfile.adminEmail,
           role: adminProfile.adminRole || "admin",
           phone: adminProfile.adminPhone || undefined,
+          avatarUrl,
         }
         setUser(loadedUser)
         localStorage.setItem(AUTH_USER_KEY, JSON.stringify(loadedUser))

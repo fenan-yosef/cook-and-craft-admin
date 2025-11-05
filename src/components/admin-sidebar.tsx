@@ -248,11 +248,10 @@ export function AdminSidebar() {
   return (
     <div
       className="relative flex h-full select-none"
-      style={{ width: width, minWidth: width }}
       data-resizable-sidebar
     >
       <Sidebar
-        style={{ width: width, minWidth: width, ['--sidebar-width' as any]: width + 'px' }}
+        style={{ ['--sidebar-width' as any]: width + 'px' }}
         className="border-r"
       >
       <SidebarHeader>
@@ -378,6 +377,7 @@ export function AdminSidebar() {
         aria-orientation="vertical"
         onMouseDown={startResizing}
         className="absolute top-0 right-0 h-full w-1 cursor-col-resize bg-transparent hover:bg-primary/40 active:bg-primary/60 transition-colors"
+        title="Drag to resize sidebar"
       />
     </div>
   )

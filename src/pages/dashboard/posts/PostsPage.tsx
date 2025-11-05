@@ -104,7 +104,7 @@ export default function PostsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [lastPage, setLastPage] = useState(1);
-  const [perPage, setPerPage] = useState(15); // default 15 as requested
+  const [perPage, setPerPage] = useState(10); // default 10 to satisfy backend per_page validator
   const { toast } = useToast();
   const { user, isLoading, token } = useAuth();
   const isAdmin = user?.role === "admin";
@@ -152,12 +152,21 @@ export default function PostsPage() {
 
         if (token) apiService.setAuthToken(token);
 
-        const url = `/posts?withLikes=true&withPolls=true&withVersions=true&page=${page}&isDeleted=${showDeleted}`
-          + `&order=desc&sort=desc&orderBy=created_at&sortBy=created_at`
-          // send multiple per-page aliases for backend compatibility
-          + `&per_page=${perPage}&perPage=${perPage}&limit=${perPage}&page_size=${perPage}&pageSize=${perPage}`;
-
-        const res = await apiService.get(url);
+        // Build paging query: use per_page only for allowed values; avoid aliases that trigger backend validation
+        const allowed = [10, 25, 50, 100];
+        const usePer = allowed.includes(Number(perPage));
+        let res: any;
+        try {
+          const url = `/posts?withLikes=true&withPolls=true&withVersions=true&page=${page}&isDeleted=${showDeleted}`
+            + `&order=desc&sort=desc&orderBy=created_at&sortBy=created_at`
+            + (usePer ? `&per_page=${perPage}` : "");
+          res = await apiService.get(url);
+        } catch (primaryErr) {
+          // Fallback: minimal query with page & limit only
+          const fallbackUrl = `/posts?withLikes=true&withPolls=true&withVersions=true&page=${page}&isDeleted=${showDeleted}`
+            + `&order=desc&sort=desc&orderBy=created_at&sortBy=created_at&limit=${perPage}`;
+          res = await apiService.get(fallbackUrl);
+        }
 
         const pageObj = res?.data ?? res;
         const postsArray: any[] = Array.isArray(pageObj.data)
@@ -975,7 +984,7 @@ export default function PostsPage() {
                   }}
                 >
                   <SelectTrigger className="w-[100px]">
-                    <SelectValue placeholder="15" />
+                    <SelectValue placeholder="10" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="10">10</SelectItem>

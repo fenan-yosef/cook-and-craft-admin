@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,12 +33,16 @@ export function ProfileAvatar() {
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [profileData, setProfileData] = useState({
-    name: user?.name || "",
+    first_name: "",
+    middle_name: "",
+    last_name: "",
     email: user?.email || "",
     phone: user?.phone || "",
+    birth_date: "",
     newPassword: "",
     confirmPassword: "",
   })
+  const [profileImageFile, setProfileImageFile] = useState<File | null>(null)
 
   // Basic email validator that requires a TLD (e.g., example.com)
   const isValidEmail = (email: string) => {
@@ -49,11 +53,19 @@ export function ProfileAvatar() {
   useEffect(() => {
     // Update profileData state when user context changes
     if (user) {
+      const fullName = String(user.name || "").trim()
+      const parts = fullName ? fullName.split(/\s+/) : []
+      const first = parts[0] || ""
+      const last = parts.length > 1 ? parts[parts.length - 1] : ""
+      const middle = parts.length > 2 ? parts.slice(1, -1).join(" ") : ""
       setProfileData((prev) => ({
         ...prev,
-        name: user.name,
+        first_name: first,
+        middle_name: middle,
+        last_name: last,
         email: user.email,
         phone: user.phone || "",
+        birth_date: (user as any)?.birth_date || "",
       }))
     }
   }, [user])
@@ -101,19 +113,59 @@ export function ProfileAvatar() {
           return
         }
       }
-      // Build payload
-      const [firstNameRaw, ...rest] = (profileData.name || "").trim().split(/\s+/)
-      const first_name = firstNameRaw || profileData.name
-      const last_name = rest.join(" ") || ""
-      const payload: Record<string, any> = {
-        first_name,
-        last_name,
-        email: profileData.email,
-        phone: profileData.phone,
+      // Client-side basic validation matching backend rules
+      const firstNameValid = /^[A-Za-z]+$/.test(profileData.first_name.trim())
+      if (!firstNameValid) {
+        toast({
+          title: "Invalid first name",
+          description: "First name must contain letters only (A-Z).",
+          variant: "destructive",
+        })
+        return
       }
+      const lastNameValid = /^[A-Za-z]+$/.test(profileData.last_name.trim())
+      if (!lastNameValid) {
+        toast({
+          title: "Invalid last name",
+          description: "Last name must contain letters only (A-Z).",
+          variant: "destructive",
+        })
+        return
+      }
+      if (profileData.middle_name.trim() && !/^[A-Za-z]+$/.test(profileData.middle_name.trim())) {
+        toast({
+          title: "Invalid middle name",
+          description: "Middle name must contain letters only (A-Z).",
+          variant: "destructive",
+        })
+        return
+      }
+      const phoneTrimmed = profileData.phone.trim()
+      const phoneValid = /^\+?[0-9]{7,15}$/.test(phoneTrimmed)
+      if (!phoneValid) {
+        toast({
+          title: "Invalid phone",
+          description: "Phone format must be + and digits only, 7-15 digits (e.g., +201012345678).",
+          variant: "destructive",
+        })
+        return
+      }
+      // Build payload fields from separate name inputs
+      const first_name = profileData.first_name.trim()
+      const last_name = profileData.last_name.trim()
+      // Prepare multipart form data per updated API contract
+      const formData = new FormData()
+      formData.append("first_name", String(first_name ?? ""))
+      formData.append("last_name", String(last_name ?? ""))
+      if (profileData.birth_date) formData.append("birth_date", String(profileData.birth_date))
+      formData.append("email", String(profileData.email ?? ""))
+      formData.append("phone", String(phoneTrimmed))
       if (profileData.newPassword) {
-        payload.password = profileData.newPassword
-        payload.password_confirmation = profileData.confirmPassword
+        formData.append("password", String(profileData.newPassword))
+        formData.append("password_confirmation", String(profileData.confirmPassword ?? ""))
+      }
+      if (profileImageFile) {
+        formData.append("profile_image", profileImageFile)
       }
 
       // Ensure auth token is set
@@ -127,25 +179,21 @@ export function ProfileAvatar() {
       const { apiService } = await import("@/lib/api-service")
       apiService.setAuthToken(token)
 
-      // Some Laravel routes accept PATCH on /admins (not /admins/profile) and prefer form encoding
-      const formPayload: Record<string, string> = {
-        first_name: String(payload.first_name ?? ""),
-        last_name: String(payload.last_name ?? ""),
-        email: String(payload.email ?? ""),
-        phone: String(payload.phone ?? ""),
-      }
-      if (payload.password) {
-        formPayload.password = String(payload.password)
-        formPayload.password_confirmation = String(payload.password_confirmation ?? "")
-      }
-      await apiService.patchFormData("/admins", formPayload)
+      // Updated endpoint: POST with method override
+      const resp = await apiService.postMultipart("/admins?_method=patch", formData)
+
+      // Extract avatar URL from response if present
+      const updatedAvatarUrl: string | undefined = Array.isArray(resp?.data?.adminProfileImage) && resp.data.adminProfileImage.length > 0
+        ? String(resp.data.adminProfileImage[0].url)
+        : undefined
 
       // Update local user data
       const updatedUser = {
         ...user,
-        name: profileData.name,
+        name: [profileData.first_name, profileData.middle_name, profileData.last_name].filter(Boolean).join(" "),
         email: profileData.email,
         phone: profileData.phone,
+        avatarUrl: updatedAvatarUrl ?? user.avatarUrl,
       }
       updateUser?.(updatedUser)
 
@@ -160,6 +208,7 @@ export function ProfileAvatar() {
         newPassword: "",
         confirmPassword: "",
       })
+      setProfileImageFile(null)
     } catch (error) {
       console.error("Profile update error:", error)
       toast({
@@ -183,14 +232,23 @@ export function ProfileAvatar() {
   }
 
   const handleCancel = () => {
+    const fullName = String(user?.name || "").trim()
+    const parts = fullName ? fullName.split(/\s+/) : []
+    const first = parts[0] || ""
+    const last = parts.length > 1 ? parts[parts.length - 1] : ""
+    const middle = parts.length > 2 ? parts.slice(1, -1).join(" ") : ""
     setProfileData({
-      name: user?.name || "",
+      first_name: first,
+      middle_name: middle,
+      last_name: last,
       email: user?.email || "",
       phone: user?.phone || "",
+      birth_date: (user as any)?.birth_date || "",
       newPassword: "",
       confirmPassword: "",
     })
     setIsEditing(false)
+    setProfileImageFile(null)
   }
 
   return (
@@ -199,6 +257,9 @@ export function ProfileAvatar() {
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="relative h-8 w-8 rounded-full">
             <Avatar className="h-8 w-8">
+              {user.avatarUrl ? (
+                <AvatarImage src={user.avatarUrl} alt={user.name} />
+              ) : null}
               <AvatarFallback className="bg-primary text-primary-foreground">{getInitials(user.name)}</AvatarFallback>
             </Avatar>
           </Button>
@@ -244,6 +305,9 @@ export function ProfileAvatar() {
             {/* Avatar Section */}
             <div className="flex items-center space-x-4">
               <Avatar className="h-16 w-16">
+                {user.avatarUrl ? (
+                  <AvatarImage src={user.avatarUrl} alt={user.name} />
+                ) : null}
                 <AvatarFallback className="bg-primary text-primary-foreground text-lg">
                   {getInitials(user.name)}
                 </AvatarFallback>
@@ -257,15 +321,45 @@ export function ProfileAvatar() {
             {/* Profile Form */}
             <div className="space-y-4">
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="name" className="text-right">
-                  Name
+                <Label htmlFor="first_name" className="text-right">
+                  First Name
                 </Label>
                 <Input
-                  id="name"
-                  value={profileData.name}
-                  onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
+                  id="first_name"
+                  value={profileData.first_name}
+                  onChange={(e) => setProfileData({ ...profileData, first_name: e.target.value })}
                   className="col-span-3"
                   disabled={!isEditing}
+                  pattern="[A-Za-z]+"
+                  title="First name must contain letters only"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="middle_name" className="text-right">
+                  Middle Name (optional)
+                </Label>
+                <Input
+                  id="middle_name"
+                  value={profileData.middle_name}
+                  onChange={(e) => setProfileData({ ...profileData, middle_name: e.target.value })}
+                  className="col-span-3"
+                  disabled={!isEditing}
+                  pattern="[A-Za-z]+"
+                  title="Middle name must contain letters only"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="last_name" className="text-right">
+                  Last Name
+                </Label>
+                <Input
+                  id="last_name"
+                  value={profileData.last_name}
+                  onChange={(e) => setProfileData({ ...profileData, last_name: e.target.value })}
+                  className="col-span-3"
+                  disabled={!isEditing}
+                  pattern="[A-Za-z]+"
+                  title="Last name must contain letters only"
                 />
               </div>
 
@@ -296,8 +390,39 @@ export function ProfileAvatar() {
                   onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
                   className="col-span-3"
                   disabled={!isEditing}
+                  pattern="^\+?[0-9]{7,15}$"
+                  title="Enter phone like +201012345678 (7-15 digits)"
                 />
               </div>
+
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="birth_date" className="text-right">
+                  Birth Date
+                </Label>
+                <Input
+                  id="birth_date"
+                  type="date"
+                  value={profileData.birth_date}
+                  onChange={(e) => setProfileData({ ...profileData, birth_date: e.target.value })}
+                  className="col-span-3"
+                  disabled={!isEditing}
+                />
+              </div>
+
+              {isEditing && (
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="profile_image" className="text-right">
+                    Profile Image
+                  </Label>
+                  <Input
+                    id="profile_image"
+                    type="file"
+                    accept="image/*"
+                    className="col-span-3"
+                    onChange={(e) => setProfileImageFile(e.target.files?.[0] ?? null)}
+                  />
+                </div>
+              )}
 
               {isEditing && (
                 <>
