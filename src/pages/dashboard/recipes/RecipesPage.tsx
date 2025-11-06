@@ -70,6 +70,9 @@ export default function RecipesPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [perPage, setPerPage] = useState(15)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [lastPage, setLastPage] = useState(1)
+  const [total, setTotal] = useState(0)
   // Filters
   const TAG_OPTIONS = [
     { id: 1, label: "New" },
@@ -129,7 +132,7 @@ export default function RecipesPage() {
 
   useEffect(() => {
     if (token) {
-      fetchRecipes()
+      fetchRecipes(1, perPage)
       loadPending()
     } else if (!authLoading) {
       setLoading(false)
@@ -212,11 +215,10 @@ export default function RecipesPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newImages])
 
-  const fetchRecipes = async (size = perPage) => {
+  const fetchRecipes = async (page = currentPage, size = perPage) => {
     try {
       setLoading(true)
-      // Avoid sending `per_page` here as the endpoint reports it invalid; use other common aliases instead.
-      // Also include filters as required by backend: tags[0..n], min/max calories, min/max prep time.
+      // Build filters and use server-side paging with per_page & page.
       const filterParts: string[] = []
       // tags (only include when selected)
       if (Array.isArray(tagSelections) && tagSelections.length > 0) {
@@ -230,17 +232,32 @@ export default function RecipesPage() {
       filterParts.push(`min_prep_time=${encodeURIComponent(minPrep ?? "")}`)
       filterParts.push(`max_prep_time=${encodeURIComponent(maxPrep ?? "")}`)
 
-      const basePaging = [`perPage=${size}`, `limit=${size}`, `page_size=${size}`, `pageSize=${size}`]
-      const query = [...basePaging, ...filterParts].join("&")
+      const query = [`page=${page}`, `per_page=${size}`, ...filterParts].join("&")
       const res = await apiService.get(`/recipes?${query}`)
       const items: ApiRecipe[] = Array.isArray(res?.data) ? res.data : []
       setRecipes(items)
+
+      // Parse pagination meta defensively
+      const meta: any = res?.meta || res?.data?.meta || res?.pagination || res?.data?.pagination || {}
+      const cur = Number(meta.current_page ?? meta.currentPage ?? res?.current_page ?? page ?? 1) || 1
+      const tot = Number(meta.total ?? res?.total ?? (Array.isArray(res?.data) ? res.data.length : 0)) || 0
+      let last = Number(meta.last_page ?? meta.lastPage ?? res?.last_page) || 0
+      if (!last) {
+        last = size ? Math.max(1, Math.ceil(tot / Number(size))) : 1
+      }
+      setCurrentPage(cur)
+      setLastPage(last)
+      setTotal(tot)
     } catch (error: any) {
-      // Fallback: try a minimal query using only `limit`
+      // Fallback: try a minimal query if per_page unsupported
       try {
-        const res2 = await apiService.get(`/recipes?limit=${size}`)
+        const res2 = await apiService.get(`/recipes?page=${page}&limit=${size}`)
         const items2: ApiRecipe[] = Array.isArray(res2?.data) ? res2.data : []
         setRecipes(items2)
+        // Best-effort meta from fallback
+        setCurrentPage(page)
+        setTotal(Array.isArray(items2) ? items2.length : 0)
+        setLastPage(items2.length < size ? page : page + 1)
       } catch (e2: any) {
         toast({
           title: "Error",
@@ -727,8 +744,9 @@ export default function RecipesPage() {
                 onValueChange={(val) => {
                   const n = Number(val)
                   setPerPage(n)
-                  // refetch with explicit size to avoid stale state
-                  fetchRecipes(n)
+                  setCurrentPage(1)
+                  // refetch with explicit size to avoid stale state (use per_page)
+                  fetchRecipes(1, n)
                 }}
               >
                 <SelectTrigger className="w-[140px]">
@@ -814,7 +832,7 @@ export default function RecipesPage() {
               <div className="flex items-center gap-2">
                 <Button
                   variant="secondary"
-                  onClick={() => fetchRecipes(perPage)}
+                  onClick={() => fetchRecipes(1, perPage)}
                   disabled={loading}
                 >
                   Apply filters
@@ -827,7 +845,8 @@ export default function RecipesPage() {
                     setMaxCalories("")
                     setMinPrep("")
                     setMaxPrep("")
-                    fetchRecipes(perPage)
+                    setCurrentPage(1)
+                    fetchRecipes(1, perPage)
                   }}
                   disabled={loading}
                 >
@@ -936,6 +955,38 @@ export default function RecipesPage() {
                 )}
               </TableBody>
             </Table>
+            {/* Pagination controls */}
+            <div className="mt-4 flex items-center justify-between">
+              <div className="text-sm text-muted-foreground">
+                Page {currentPage} of {lastPage}{total ? ` • ${total} items` : ""}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={loading || currentPage <= 1}
+                  onClick={() => {
+                    const p = Math.max(1, currentPage - 1)
+                    setCurrentPage(p)
+                    fetchRecipes(p, perPage)
+                  }}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={loading || currentPage >= lastPage}
+                  onClick={() => {
+                    const p = Math.min(lastPage, currentPage + 1)
+                    setCurrentPage(p)
+                    fetchRecipes(p, perPage)
+                  }}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
