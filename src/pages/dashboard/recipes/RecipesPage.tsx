@@ -1318,6 +1318,25 @@ export default function RecipesPage() {
                     </div>
                   )
                 })()}
+                {Array.isArray(selectedRecipe.Images) && selectedRecipe.Images.length > 0 ? (
+                  <div>
+                    <h3 className="font-semibold mb-2">Images</h3>
+                    <div className="grid grid-cols-3 gap-4">
+                      {selectedRecipe.Images.map((img: any, i: number) => {
+                        const src = getImageSrc(img)
+                        return (
+                          <div key={i} className="aspect-square rounded border overflow-hidden bg-muted">
+                            {src ? (
+                              <img src={src} alt={`Recipe image ${i + 1}`} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full bg-muted" />
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ) : null}
                 {/* Steps */}
                 {(() => {
                   const detailed: any[] = (selectedRecipe as any).Recipe_steps ?? []
@@ -1459,25 +1478,7 @@ export default function RecipesPage() {
                     </div>
                   )
                 })()}
-                {Array.isArray(selectedRecipe.Images) && selectedRecipe.Images.length > 0 ? (
-                  <div>
-                    <h3 className="font-semibold mb-2">Images</h3>
-                    <div className="grid grid-cols-3 gap-4">
-                      {selectedRecipe.Images.map((img: any, i: number) => {
-                        const src = getImageSrc(img)
-                        return (
-                          <div key={i} className="aspect-square rounded border overflow-hidden bg-muted">
-                            {src ? (
-                              <img src={src} alt={`Recipe image ${i + 1}`} className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full bg-muted" />
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                ) : null}
+                
               </div>
             )}
             <DialogFooter>
