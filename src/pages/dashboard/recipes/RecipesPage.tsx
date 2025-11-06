@@ -112,12 +112,16 @@ export default function RecipesPage() {
     Description: "",
     Calories: "" as string | number,
     Prep_minutes: "" as string | number,
-  Ingredients: [{ name: "", amount: "" }] as { name: string; amount: string }[],
+  Ingredients: [{ name: "", amount: "", image: null as File | null }] as { name: string; amount: string; image?: File | null }[],
   Nutrition_facts: [{ label: "", value: "" }] as { label: string; value: string }[],
   Utensils: [""] as string[],
   StepsText: "",
     Is_active: true,
+    isBestChoice: false,
   })
+  const [newSteps, setNewSteps] = useState<Array<{ instructions: string; prep: number; ingredientIndices: number[]; image: File | null }>>([
+    { instructions: "", prep: 1, ingredientIndices: [], image: null },
+  ])
   const [newImages, setNewImages] = useState<File[]>([])
   const [newImagePreviews, setNewImagePreviews] = useState<string[]>([])
   const [deletingId, setDeletingId] = useState<number | null>(null)
@@ -279,12 +283,14 @@ export default function RecipesPage() {
       Description: "",
       Calories: "",
       Prep_minutes: "",
-      Ingredients: [{ name: "", amount: "" }],
+      Ingredients: [{ name: "", amount: "", image: null }],
       Nutrition_facts: [{ label: "", value: "" }],
       Utensils: [""],
       StepsText: "",
       Is_active: true,
+      isBestChoice: false,
     })
+    setNewSteps([{ instructions: "", prep: 1, ingredientIndices: [], image: null }])
     setNewImages([])
     setNewImagePreviews([])
   }
@@ -314,11 +320,11 @@ export default function RecipesPage() {
       fd.append("is_active", newRecipe.Is_active ? "1" : "0")
 
       // Ingredients: use ingredients[i][name] and ingredients[i][amount]
-      const ingredientsClean = (newRecipe.Ingredients || []).filter((x) => (x.name?.trim() || x.amount?.trim()))
+      const ingredientsClean = (newRecipe.Ingredients || []).filter((x) => (x.name?.trim() || x.amount?.trim() || x.image))
       ingredientsClean.forEach((ing, i) => {
         if (ing.name?.trim()) fd.append(`ingredients[${i}][name]`, ing.name.trim())
         if (ing.amount?.trim()) fd.append(`ingredients[${i}][amount]`, ing.amount.trim())
-        // Ingredient image upload not supported in UI yet; skip ingredients[i][image]
+        if (ing.image) fd.append(`ingredients[${i}][image]`, ing.image)
       })
 
       // Nutrition facts and utensils as JSON strings (per Postman example)
@@ -327,22 +333,27 @@ export default function RecipesPage() {
       const utensilsClean = (newRecipe.Utensils || []).map((u) => (u ?? "").trim()).filter(Boolean)
       if (utensilsClean.length > 0) fd.append("utensils", JSON.stringify(utensilsClean))
 
-      // Steps: map each line to steps[i][step_number], steps[i][instructions], steps[i][prep_minutes]
-      const stepsArray = newRecipe.StepsText
-        ? newRecipe.StepsText.split("\n").map((s) => s.trim()).filter(Boolean)
-        : []
-      stepsArray.forEach((txt, i) => {
+      // Steps: steps[i][step_number], steps[i][instructions], steps[i][prep_minutes], steps[i][ingredient_indices][j], steps[i][image]
+      const stepsClean = (newSteps || []).filter((s) => s.instructions.trim() || s.image)
+      stepsClean.forEach((st, i) => {
         fd.append(`steps[${i}][step_number]`, String(i + 1))
-        fd.append(`steps[${i}][instructions]`, txt)
-        // Default minimal prep per-step to 1 to satisfy backend requirement; user can edit later
-        fd.append(`steps[${i}][prep_minutes]`, "1")
-        // If you need to associate ingredients with this step, append steps[i][ingredient_indices][j] values here
+        fd.append(`steps[${i}][instructions]`, st.instructions.trim())
+        fd.append(`steps[${i}][prep_minutes]`, String(st.prep || 1))
+        if (Array.isArray(st.ingredientIndices)) {
+          st.ingredientIndices.forEach((idx, j) => {
+            fd.append(`steps[${i}][ingredient_indices][${j}]`, String(idx))
+          })
+        }
+        if (st.image) fd.append(`steps[${i}][image]`, st.image)
       })
 
       // Recipe images (optional)
       if (Array.isArray(newImages) && newImages.length > 0) {
         for (const file of newImages) fd.append("images[]", file)
       }
+
+      // Best choice flag
+      fd.append("is_best_choice", newRecipe.isBestChoice ? "1" : "0")
 
       const res: any = await apiService.postMultipart("/recipes", fd)
       const created = Array.isArray(res?.data) && res.data.length > 0 ? (res.data[0] as ApiRecipe) : null
@@ -576,34 +587,49 @@ export default function RecipesPage() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => setNewRecipe((s) => ({ ...s, Ingredients: [...(s.Ingredients || []), { name: "", amount: "" }] }))}
+                    onClick={() => setNewRecipe((s) => ({ ...s, Ingredients: [...(s.Ingredients || []), { name: "", amount: "", image: null }] }))}
                   >
                     Add
                   </Button>
                 </div>
                 <div className="grid gap-2">
                   {(newRecipe.Ingredients || []).map((ing, idx) => (
-                    <div key={idx} className="grid grid-cols-5 gap-2">
-                      <Input
-                        placeholder="Name"
-                        value={ing.name}
-                        onChange={(e) => {
-                          const arr = [...(newRecipe.Ingredients || [])]
-                          arr[idx] = { ...arr[idx], name: e.target.value }
-                          setNewRecipe((s) => ({ ...s, Ingredients: arr }))
-                        }}
-                        className="col-span-3"
-                      />
-                      <Input
-                        placeholder="Amount (e.g. 200 g)"
-                        value={ing.amount}
-                        onChange={(e) => {
-                          const arr = [...(newRecipe.Ingredients || [])]
-                          arr[idx] = { ...arr[idx], amount: e.target.value }
-                          setNewRecipe((s) => ({ ...s, Ingredients: arr }))
-                        }}
-                        className="col-span-2"
-                      />
+                    <div key={idx} className="space-y-2">
+                      <div className="grid grid-cols-5 gap-2">
+                        <Input
+                          placeholder="Name"
+                          value={ing.name}
+                          onChange={(e) => {
+                            const arr = [...(newRecipe.Ingredients || [])]
+                            arr[idx] = { ...arr[idx], name: e.target.value }
+                            setNewRecipe((s) => ({ ...s, Ingredients: arr }))
+                          }}
+                          className="col-span-3"
+                        />
+                        <Input
+                          placeholder="Amount (e.g. 200 g)"
+                          value={ing.amount}
+                          onChange={(e) => {
+                            const arr = [...(newRecipe.Ingredients || [])]
+                            arr[idx] = { ...arr[idx], amount: e.target.value }
+                            setNewRecipe((s) => ({ ...s, Ingredients: arr }))
+                          }}
+                          className="col-span-2"
+                        />
+                      </div>
+                      <div className="grid gap-1">
+                        <Label className="text-xs text-muted-foreground">Ingredient image (optional)</Label>
+                        <Input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = (e.target.files && e.target.files[0]) || null
+                            const arr = [...(newRecipe.Ingredients || [])]
+                            arr[idx] = { ...arr[idx], image: file }
+                            setNewRecipe((s) => ({ ...s, Ingredients: arr }))
+                          }}
+                        />
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -680,16 +706,100 @@ export default function RecipesPage() {
                 </div>
               </div>
 
-              {/* Steps (multiline, one per line) */}
-              <div className="grid gap-2">
-                <Label htmlFor="steps">Steps (one per line)</Label>
-                <textarea
-                  id="steps"
-                  className="min-h-[100px] rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  placeholder="Write each step on a new line"
-                  value={newRecipe.StepsText}
-                  onChange={(e) => setNewRecipe((s) => ({ ...s, StepsText: e.target.value }))}
-                />
+              {/* Steps builder */}
+              <div className="grid gap-3">
+                <div className="flex items-center justify-between">
+                  <Label>Steps</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setNewSteps((prev) => [...prev, { instructions: "", prep: 1, ingredientIndices: [], image: null }])}
+                  >
+                    Add Step
+                  </Button>
+                </div>
+                <div className="grid gap-3">
+                  {newSteps.map((st, i) => (
+                    <div key={i} className="rounded border p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-medium">Step {i + 1}</div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setNewSteps((prev) => prev.filter((_, idx) => idx !== i))}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label className="text-sm">Instructions</Label>
+                        <textarea
+                          className="min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          placeholder="Describe the step"
+                          value={st.instructions}
+                          onChange={(e) => {
+                            const arr = [...newSteps]
+                            arr[i] = { ...arr[i], instructions: e.target.value }
+                            setNewSteps(arr)
+                          }}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="grid gap-1">
+                          <Label className="text-sm">Prep minutes</Label>
+                          <Input
+                            type="number"
+                            value={st.prep}
+                            onChange={(e) => {
+                              const val = Number(e.target.value || 1)
+                              const arr = [...newSteps]
+                              arr[i] = { ...arr[i], prep: val }
+                              setNewSteps(arr)
+                            }}
+                          />
+                        </div>
+                        <div className="grid gap-1">
+                          <Label className="text-sm">Step image (optional)</Label>
+                          <Input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = (e.target.files && e.target.files[0]) || null
+                              const arr = [...newSteps]
+                              arr[i] = { ...arr[i], image: file }
+                              setNewSteps(arr)
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label className="text-sm">Ingredient indices for this step</Label>
+                        <div className="flex flex-wrap gap-3 text-sm">
+                          {(newRecipe.Ingredients || []).map((ing, idx) => (
+                            <label key={idx} className="flex items-center gap-1">
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4"
+                                checked={st.ingredientIndices.includes(idx)}
+                                onChange={(e) => {
+                                  const arr = [...newSteps]
+                                  const set = new Set(arr[i].ingredientIndices)
+                                  if (e.target.checked) set.add(idx)
+                                  else set.delete(idx)
+                                  arr[i] = { ...arr[i], ingredientIndices: Array.from(set.values()).sort((a,b)=>a-b) }
+                                  setNewSteps(arr)
+                                }}
+                              />
+                              <span>{ing.name || `#${idx+1}`}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
               <div className="flex items-center justify-between border rounded-md px-3 py-2">
                 <div className="space-y-0.5">
@@ -697,6 +807,13 @@ export default function RecipesPage() {
                   <p className="text-xs text-muted-foreground">Mark recipe as active</p>
                 </div>
                 <Switch checked={newRecipe.Is_active} onCheckedChange={(v) => setNewRecipe((s) => ({ ...s, Is_active: v }))} />
+              </div>
+              <div className="flex items-center justify-between border rounded-md px-3 py-2">
+                <div className="space-y-0.5">
+                  <Label>Best choice</Label>
+                  <p className="text-xs text-muted-foreground">Feature as best choice</p>
+                </div>
+                <Switch checked={newRecipe.isBestChoice} onCheckedChange={(v) => setNewRecipe((s) => ({ ...s, isBestChoice: v }))} />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="cimages">Images</Label>
