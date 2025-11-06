@@ -101,10 +101,11 @@ export default function RecipesPage() {
     Prep_minutes: "" as string | number,
     Is_active: true,
     Images: [] as File[],
-    Ingredients: [{ name: "", amount: "" }] as { name: string; amount: string }[],
+    Ingredients: [{ name: "", amount: "", image: null as File | null }] as { name: string; amount: string; image?: File | null }[],
     Nutrition_facts: [{ label: "", value: "" }] as { label: string; value: string }[],
     Utensils: [""] as string[],
     StepsText: "",
+    isBestChoice: false,
   })
   const [editExistingImages, setEditExistingImages] = useState<any[]>([])
   const [newRecipe, setNewRecipe] = useState({
@@ -124,6 +125,11 @@ export default function RecipesPage() {
   ])
   const [newImages, setNewImages] = useState<File[]>([])
   const [newImagePreviews, setNewImagePreviews] = useState<string[]>([])
+  // Edit-mode steps and previews
+  const [editSteps, setEditSteps] = useState<Array<{ instructions: string; prep: number; ingredientIndices: number[]; image: File | null }>>([
+    { instructions: "", prep: 1, ingredientIndices: [], image: null },
+  ])
+  const [editImagePreviews, setEditImagePreviews] = useState<string[]>([])
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const { toast } = useToast()
   const { token, isLoading: authLoading } = useAuth()
@@ -218,6 +224,17 @@ export default function RecipesPage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newImages])
+
+  // Generate object URLs for edit image previews
+  useEffect(() => {
+    editImagePreviews.forEach((url) => URL.revokeObjectURL(url))
+    const urls = (editRecipe.Images || []).map((f) => URL.createObjectURL(f))
+    setEditImagePreviews(urls)
+    return () => {
+      urls.forEach((url) => URL.revokeObjectURL(url))
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editRecipe.Images])
 
   const fetchRecipes = async (page = currentPage, size = perPage) => {
     try {
@@ -408,6 +425,32 @@ export default function RecipesPage() {
   }
 
   const openEdit = (recipe: ApiRecipe) => {
+    // Derive initial structured steps from detailed steps or fallback
+    const detailed: any[] = (recipe as any).Recipe_steps ?? []
+    let initialEditSteps: Array<{ instructions: string; prep: number; ingredientIndices: number[]; image: File | null }> = []
+    if (Array.isArray(detailed) && detailed.length > 0) {
+      initialEditSteps = detailed
+        .sort((a: any, b: any) => (a?.step_number ?? 0) - (b?.step_number ?? 0))
+        .map((st: any) => {
+          const instr = st?.instructions ? String(st.instructions) : ""
+          const prep = typeof st?.prep_minutes !== 'undefined' ? Number(st.prep_minutes) || 1 : 1
+          const indices = Array.isArray(st?.ingredient_indices)
+            ? st.ingredient_indices.map((n: any) => Number(n)).filter((n: any) => Number.isFinite(n))
+            : []
+          return { instructions: instr, prep, ingredientIndices: indices, image: null }
+        })
+    } else {
+      const steps: any = (recipe as any).Steps ?? (recipe as any).steps
+      const stepsArr: string[] = Array.isArray(steps)
+        ? steps.map((s: any) => String(s ?? "")).filter(Boolean)
+        : typeof steps === "string"
+          ? steps.split("\n").map((s) => s.trim()).filter(Boolean)
+          : []
+      initialEditSteps = stepsArr.length > 0
+        ? stepsArr.map((txt) => ({ instructions: txt, prep: 1, ingredientIndices: [], image: null }))
+        : [{ instructions: "", prep: 1, ingredientIndices: [], image: null }]
+    }
+
     setEditRecipe({
       id: recipe.Recipe_ID,
       Name: recipe.Name || "",
@@ -421,10 +464,10 @@ export default function RecipesPage() {
         const normalized = Array.isArray(ings)
           ? ings.map((it: any) => {
               if (typeof it === "string") return { name: it, amount: "" }
-              return { name: it?.name ?? it?.ingredient ?? "", amount: it?.amount ?? it?.qty ?? "" }
+              return { name: it?.name ?? it?.ingredient ?? "", amount: it?.amount ?? it?.qty ?? "", image: null }
             })
           : []
-        return normalized.length > 0 ? normalized : [{ name: "", amount: "" }]
+        return normalized.length > 0 ? normalized : [{ name: "", amount: "", image: null }]
       })(),
       Nutrition_facts: (() => {
         const nfs: any[] = (recipe as any).Nutrition_facts ?? (recipe as any).nutrition_facts ?? []
@@ -438,15 +481,14 @@ export default function RecipesPage() {
         const normalized = Array.isArray(uts) ? uts.map((u: any) => (typeof u === "string" ? u : u?.name ?? "")) : []
         return normalized.length > 0 ? normalized : [""]
       })(),
-      StepsText: (() => {
-        const steps: any = (recipe as any).Steps ?? (recipe as any).steps
-        if (Array.isArray(steps)) return steps.map((s) => String(s ?? "")).join("\n")
-        if (typeof steps === "string") return steps
-        return ""
-      })(),
+      StepsText: "",
+      isBestChoice: Boolean((recipe as any).Is_best_choice),
     })
-  setEditExistingImages(Array.isArray(recipe.Images) ? recipe.Images : [])
+    setEditExistingImages(Array.isArray(recipe.Images) ? recipe.Images : [])
+    setEditSteps(initialEditSteps)
     setIsEditDialogOpen(true)
+    // reset new uploads for edit
+    setEditRecipe((s) => ({ ...s, Images: [] }))
   }
 
   const submitEdit = async () => {
@@ -474,11 +516,12 @@ export default function RecipesPage() {
       fd.append("prep_minutes", String(prepNum))
       fd.append("is_active", editRecipe.Is_active ? "1" : "0")
 
-      // Ingredients: ingredients[i][name]/[amount]
-      const ingredientsClean = (editRecipe.Ingredients || []).filter((x) => (x.name?.trim() || x.amount?.trim()))
+      // Ingredients: ingredients[i][name]/[amount]/[image]
+      const ingredientsClean = (editRecipe.Ingredients || []).filter((x) => (x.name?.trim() || x.amount?.trim() || x.image))
       ingredientsClean.forEach((ing, i) => {
         if (ing.name?.trim()) fd.append(`ingredients[${i}][name]`, ing.name.trim())
         if (ing.amount?.trim()) fd.append(`ingredients[${i}][amount]`, ing.amount.trim())
+        if (ing.image) fd.append(`ingredients[${i}][image]`, ing.image)
       })
 
       // Nutrition facts and utensils as JSON (per API examples)
@@ -487,15 +530,21 @@ export default function RecipesPage() {
       const utensilsClean = (editRecipe.Utensils || []).map((u) => (u ?? "").trim()).filter(Boolean)
       if (utensilsClean.length > 0) fd.append("utensils", JSON.stringify(utensilsClean))
 
-      // Steps: steps[i][step_number]/[instructions]/[prep_minutes]
-      const stepsArray = editRecipe.StepsText
-        ? editRecipe.StepsText.split("\n").map((s) => s.trim()).filter(Boolean)
-        : []
-      stepsArray.forEach((txt, i) => {
+      // Steps: steps[i][step_number]/[instructions]/[prep_minutes]/[ingredient_indices][j]/[image]
+      const stepsClean = (editSteps || []).filter((s) => s.instructions.trim() || s.image)
+      stepsClean.forEach((st, i) => {
         fd.append(`steps[${i}][step_number]`, String(i + 1))
-        fd.append(`steps[${i}][instructions]`, txt)
-        fd.append(`steps[${i}][prep_minutes]`, "1")
+        fd.append(`steps[${i}][instructions]`, st.instructions.trim())
+        fd.append(`steps[${i}][prep_minutes]`, String(st.prep || 1))
+        if (Array.isArray(st.ingredientIndices)) {
+          st.ingredientIndices.forEach((idx, j) => {
+            fd.append(`steps[${i}][ingredient_indices][${j}]`, String(idx))
+          })
+        }
+        if (st.image) fd.append(`steps[${i}][image]`, st.image)
       })
+  // Best choice flag
+  fd.append("is_best_choice", editRecipe.isBestChoice ? "1" : "0")
 
       // Newly added images
       if (Array.isArray(editRecipe.Images)) {
@@ -1492,34 +1541,49 @@ export default function RecipesPage() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => setEditRecipe((s) => ({ ...s, Ingredients: [...(s.Ingredients || []), { name: "", amount: "" }] }))}
+                    onClick={() => setEditRecipe((s) => ({ ...s, Ingredients: [...(s.Ingredients || []), { name: "", amount: "", image: null }] }))}
                   >
                     Add
                   </Button>
                 </div>
                 <div className="grid gap-2">
                   {(editRecipe.Ingredients || []).map((ing, idx) => (
-                    <div key={idx} className="grid grid-cols-5 gap-2">
-                      <Input
-                        placeholder="Name"
-                        value={ing.name}
-                        onChange={(e) => {
-                          const arr = [...(editRecipe.Ingredients || [])]
-                          arr[idx] = { ...arr[idx], name: e.target.value }
-                          setEditRecipe((s) => ({ ...s, Ingredients: arr }))
-                        }}
-                        className="col-span-3"
-                      />
-                      <Input
-                        placeholder="Amount (e.g. 200 g)"
-                        value={ing.amount}
-                        onChange={(e) => {
-                          const arr = [...(editRecipe.Ingredients || [])]
-                          arr[idx] = { ...arr[idx], amount: e.target.value }
-                          setEditRecipe((s) => ({ ...s, Ingredients: arr }))
-                        }}
-                        className="col-span-2"
-                      />
+                    <div key={idx} className="space-y-2">
+                      <div className="grid grid-cols-5 gap-2">
+                        <Input
+                          placeholder="Name"
+                          value={ing.name}
+                          onChange={(e) => {
+                            const arr = [...(editRecipe.Ingredients || [])]
+                            arr[idx] = { ...arr[idx], name: e.target.value }
+                            setEditRecipe((s) => ({ ...s, Ingredients: arr }))
+                          }}
+                          className="col-span-3"
+                        />
+                        <Input
+                          placeholder="Amount (e.g. 200 g)"
+                          value={ing.amount}
+                          onChange={(e) => {
+                            const arr = [...(editRecipe.Ingredients || [])]
+                            arr[idx] = { ...arr[idx], amount: e.target.value }
+                            setEditRecipe((s) => ({ ...s, Ingredients: arr }))
+                          }}
+                          className="col-span-2"
+                        />
+                      </div>
+                      <div className="grid gap-1">
+                        <Label className="text-xs text-muted-foreground">Ingredient image (optional)</Label>
+                        <Input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = (e.target.files && e.target.files[0]) || null
+                            const arr = [...(editRecipe.Ingredients || [])]
+                            arr[idx] = { ...arr[idx], image: file }
+                            setEditRecipe((s) => ({ ...s, Ingredients: arr }))
+                          }}
+                        />
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1596,16 +1660,100 @@ export default function RecipesPage() {
                 </div>
               </div>
 
-              {/* Steps (edit) */}
-              <div className="grid gap-2">
-                <Label htmlFor="esteps">Steps (one per line)</Label>
-                <textarea
-                  id="esteps"
-                  className="min-h-[100px] rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  placeholder="Write each step on a new line"
-                  value={editRecipe.StepsText}
-                  onChange={(e) => setEditRecipe((s) => ({ ...s, StepsText: e.target.value }))}
-                />
+              {/* Steps builder (edit) */}
+              <div className="grid gap-3">
+                <div className="flex items-center justify-between">
+                  <Label>Steps</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditSteps((prev) => [...prev, { instructions: "", prep: 1, ingredientIndices: [], image: null }])}
+                  >
+                    Add Step
+                  </Button>
+                </div>
+                <div className="grid gap-3">
+                  {editSteps.map((st, i) => (
+                    <div key={i} className="rounded border p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-medium">Step {i + 1}</div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setEditSteps((prev) => prev.filter((_, idx) => idx !== i))}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label className="text-sm">Instructions</Label>
+                        <textarea
+                          className="min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm"
+                          placeholder="Describe the step"
+                          value={st.instructions}
+                          onChange={(e) => {
+                            const arr = [...editSteps]
+                            arr[i] = { ...arr[i], instructions: e.target.value }
+                            setEditSteps(arr)
+                          }}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="grid gap-1">
+                          <Label className="text-sm">Prep minutes</Label>
+                          <Input
+                            type="number"
+                            value={st.prep}
+                            onChange={(e) => {
+                              const val = Number(e.target.value || 1)
+                              const arr = [...editSteps]
+                              arr[i] = { ...arr[i], prep: val }
+                              setEditSteps(arr)
+                            }}
+                          />
+                        </div>
+                        <div className="grid gap-1">
+                          <Label className="text-sm">Step image (optional)</Label>
+                          <Input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = (e.target.files && e.target.files[0]) || null
+                              const arr = [...editSteps]
+                              arr[i] = { ...arr[i], image: file }
+                              setEditSteps(arr)
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label className="text-sm">Ingredient indices for this step</Label>
+                        <div className="flex flex-wrap gap-3 text-sm">
+                          {(editRecipe.Ingredients || []).map((ing, idx) => (
+                            <label key={idx} className="flex items-center gap-1">
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4"
+                                checked={st.ingredientIndices.includes(idx)}
+                                onChange={(e) => {
+                                  const arr = [...editSteps]
+                                  const set = new Set(arr[i].ingredientIndices)
+                                  if (e.target.checked) set.add(idx)
+                                  else set.delete(idx)
+                                  arr[i] = { ...arr[i], ingredientIndices: Array.from(set.values()).sort((a,b)=>a-b) }
+                                  setEditSteps(arr)
+                                }}
+                              />
+                              <span>{ing.name || `#${idx+1}`}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
               <div className="flex items-center justify-between border rounded-md px-3 py-2">
                 <div className="space-y-0.5">
@@ -1614,15 +1762,22 @@ export default function RecipesPage() {
                 </div>
                 <Switch checked={editRecipe.Is_active} onCheckedChange={(v) => setEditRecipe((s) => ({ ...s, Is_active: v }))} />
               </div>
+              <div className="flex items-center justify-between border rounded-md px-3 py-2">
+                <div className="space-y-0.5">
+                  <Label>Best choice</Label>
+                  <p className="text-xs text-muted-foreground">Feature as best choice</p>
+                </div>
+                <Switch checked={editRecipe.isBestChoice} onCheckedChange={(v) => setEditRecipe((s) => ({ ...s, isBestChoice: v }))} />
+              </div>
               <div className="grid gap-2">
                 <Label htmlFor="eimages">Images</Label>
                 <Input id="eimages" type="file" multiple accept="image/*" onChange={(e) => {
                   const files = Array.from(e.target.files || []) as File[]
                   setEditRecipe((s) => ({ ...s, Images: files }))
                 }} />
-                {newImagePreviews.length > 0 ? (
+                {editImagePreviews.length > 0 ? (
                   <div className="grid grid-cols-3 gap-4">
-                    {newImagePreviews.map((src, i) => (
+                    {editImagePreviews.map((src, i) => (
                       <div key={i} className="aspect-square rounded border overflow-hidden bg-muted">
                         <img src={src} alt={`New image ${i + 1}`} className="w-full h-full object-cover" />
                       </div>
