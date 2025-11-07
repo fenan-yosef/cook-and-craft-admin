@@ -1772,15 +1772,39 @@ export default function RecipesPage() {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="eimages">Images</Label>
-                <Input id="eimages" type="file" multiple accept="image/*" onChange={(e) => {
-                  const files = Array.from(e.target.files || []) as File[]
-                  setEditRecipe((s) => ({ ...s, Images: files }))
-                }} />
+                <Input
+                  id="eimages"
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || []) as File[]
+                    if (files.length === 0) return
+                    setEditRecipe((s) => ({ ...s, Images: [...(s.Images || []), ...files] }))
+                    // allow re-selecting the same file to trigger onChange again
+                    if (e.currentTarget) e.currentTarget.value = ""
+                  }}
+                />
                 {editImagePreviews.length > 0 ? (
                   <div className="grid grid-cols-3 gap-4">
                     {editImagePreviews.map((src, i) => (
-                      <div key={i} className="aspect-square rounded border overflow-hidden bg-muted">
+                      <div key={i} className="relative aspect-square rounded border overflow-hidden bg-muted">
                         <img src={src} alt={`New image ${i + 1}`} className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          aria-label="Remove image"
+                          onClick={() =>
+                            setEditRecipe((s) => {
+                              const next = (s.Images || []).slice()
+                              next.splice(i, 1)
+                              return { ...s, Images: next }
+                            })
+                          }
+                          className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1 hover:bg-black"
+                          title="Remove"
+                        >
+                          <span className="inline-block leading-none">×</span>
+                        </button>
                       </div>
                     ))}
                   </div>
