@@ -105,6 +105,7 @@ export default function RecipesPage() {
     Nutrition_facts: [{ label: "", value: "" }] as { label: string; value: string }[],
     Utensils: [""] as string[],
     StepsText: "",
+    Tags: [] as string[],
     isBestChoice: false,
   })
   const [editExistingImages, setEditExistingImages] = useState<any[]>([])
@@ -118,6 +119,7 @@ export default function RecipesPage() {
   Utensils: [""] as string[],
   StepsText: "",
     Is_active: true,
+    Tags: [] as string[],
     isBestChoice: false,
   })
   const [newSteps, setNewSteps] = useState<Array<{ instructions: string; prep: number; ingredientIndices: number[]; image: File | null }>>([
@@ -305,6 +307,7 @@ export default function RecipesPage() {
       Utensils: [""],
       StepsText: "",
       Is_active: true,
+      Tags: [],
       isBestChoice: false,
     })
     setNewSteps([{ instructions: "", prep: 1, ingredientIndices: [], image: null }])
@@ -371,6 +374,13 @@ export default function RecipesPage() {
 
       // Best choice flag
       fd.append("is_best_choice", newRecipe.isBestChoice ? "1" : "0")
+
+      // Tags: send as bracketed fields tags[i]
+      if (Array.isArray(newRecipe.Tags)) {
+        newRecipe.Tags.filter(t => t && String(t).trim()).forEach((t, i) => {
+          fd.append(`tags[${i}]`, String(t).trim())
+        })
+      }
 
       const res: any = await apiService.postMultipart("/recipes", fd)
       const created = Array.isArray(res?.data) && res.data.length > 0 ? (res.data[0] as ApiRecipe) : null
@@ -482,13 +492,19 @@ export default function RecipesPage() {
         return normalized.length > 0 ? normalized : [""]
       })(),
       StepsText: "",
+      Tags: (() => {
+        const tags: any = (recipe as any).Tags ?? (recipe as any).tags ?? []
+        if (Array.isArray(tags)) return tags.map((t: any) => String(t))
+        if (typeof tags === 'string') return tags.split(',').map((s) => s.trim()).filter(Boolean)
+        return []
+      })(),
       isBestChoice: Boolean((recipe as any).Is_best_choice),
     })
-    setEditExistingImages(Array.isArray(recipe.Images) ? recipe.Images : [])
+  setEditExistingImages(Array.isArray(recipe.Images) ? recipe.Images : [])
     setEditSteps(initialEditSteps)
     setIsEditDialogOpen(true)
     // reset new uploads for edit
-    setEditRecipe((s) => ({ ...s, Images: [] }))
+  // Do not clear existingImages here; keep them until user removes explicitly
   }
 
   const submitEdit = async () => {
@@ -546,11 +562,19 @@ export default function RecipesPage() {
   // Best choice flag
   fd.append("is_best_choice", editRecipe.isBestChoice ? "1" : "0")
 
-      // Newly added images
-      if (Array.isArray(editRecipe.Images)) {
-        for (const file of editRecipe.Images) {
-          fd.append("images[]", file)
-        }
+      // Tags for edit
+      if (Array.isArray(editRecipe.Tags)) {
+        editRecipe.Tags.filter(t => t && String(t).trim()).forEach((t, i) => {
+          fd.append(`tags[${i}]`, String(t).trim())
+        })
+      }
+
+      // Do NOT send existing images; backend will keep them if no new images replace them.
+      // Only append newly added image files.
+
+      // Newly added images (append after existing references)
+      if (Array.isArray(editRecipe.Images) && editRecipe.Images.length > 0) {
+        editRecipe.Images.forEach((file) => fd.append('images[]', file))
       }
 
       const res = await apiService.postMultipart(`/recipes/${editRecipe.id}`, fd)
@@ -753,6 +777,46 @@ export default function RecipesPage() {
                     />
                   ))}
                 </div>
+              </div>
+
+              {/* Tags */}
+              <div className="grid gap-2">
+                <div className="flex items-center justify-between">
+                  <Label>Tags</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setNewRecipe((s) => ({ ...s, Tags: [...(s.Tags || []), ""] }))}
+                  >
+                    Add
+                  </Button>
+                </div>
+                <div className="grid gap-2">
+                  {(newRecipe.Tags || []).map((t, idx) => (
+                    <div key={idx} className="flex gap-2">
+                      <Input
+                        placeholder="e.g. 2 or summer"
+                        value={t}
+                        onChange={(e) => {
+                          const arr = [...(newRecipe.Tags || [])]
+                          arr[idx] = e.target.value
+                          setNewRecipe((s) => ({ ...s, Tags: arr }))
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="px-2 rounded border text-sm hover:bg-muted"
+                        onClick={() => setNewRecipe((s) => ({ ...s, Tags: (s.Tags || []).filter((_, i) => i !== idx) }))}
+                        aria-label="Remove tag"
+                        title="Remove"
+                      >
+                        <span className="inline-block leading-none">×</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">Sent as tags[0], tags[1], ...</p>
               </div>
 
               {/* Steps builder */}
@@ -1497,25 +1561,7 @@ export default function RecipesPage() {
               <DialogDescription>Update recipe details.</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-2">
-              {Array.isArray(editExistingImages) && editExistingImages.length > 0 ? (
-                <div>
-                  <Label>Existing images</Label>
-                  <div className="grid grid-cols-3 gap-4 mt-2">
-                    {editExistingImages.map((img: any, i: number) => {
-                      const src = getImageSrc(img)
-                      return (
-                        <div key={i} className="aspect-square rounded border overflow-hidden bg-muted">
-                          {src ? (
-                            <img src={src} alt={`Existing image ${i + 1}`} className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full bg-muted" />
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              ) : null}
+              {/* Existing images will be displayed beneath selector with removal controls */}
               <div className="grid gap-2">
                 <Label htmlFor="ename">Name</Label>
                 <Input id="ename" value={editRecipe.Name} onChange={(e) => setEditRecipe((s) => ({ ...s, Name: e.target.value }))} />
@@ -1661,6 +1707,46 @@ export default function RecipesPage() {
                 </div>
               </div>
 
+              {/* Tags (edit) */}
+              <div className="grid gap-2">
+                <div className="flex items-center justify-between">
+                  <Label>Tags</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditRecipe((s) => ({ ...s, Tags: [...(s.Tags || []), ""] }))}
+                  >
+                    Add
+                  </Button>
+                </div>
+                <div className="grid gap-2">
+                  {(editRecipe.Tags || []).map((t, idx) => (
+                    <div key={idx} className="flex gap-2">
+                      <Input
+                        placeholder="e.g. 2 or summer"
+                        value={t}
+                        onChange={(e) => {
+                          const arr = [...(editRecipe.Tags || [])]
+                          arr[idx] = e.target.value
+                          setEditRecipe((s) => ({ ...s, Tags: arr }))
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="px-2 rounded border text-sm hover:bg-muted"
+                        onClick={() => setEditRecipe((s) => ({ ...s, Tags: (s.Tags || []).filter((_, i) => i !== idx) }))}
+                        aria-label="Remove tag"
+                        title="Remove"
+                      >
+                        <span className="inline-block leading-none">×</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">Sent as tags[0], tags[1], ...</p>
+              </div>
+
               {/* Steps builder (edit) */}
               <div className="grid gap-3">
                 <div className="flex items-center justify-between">
@@ -1771,7 +1857,7 @@ export default function RecipesPage() {
                 <Switch checked={editRecipe.isBestChoice} onCheckedChange={(v) => setEditRecipe((s) => ({ ...s, isBestChoice: v }))} />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="eimages">Images</Label>
+                <Label htmlFor="eimages">Images (add more)</Label>
                 <Input
                   id="eimages"
                   type="file"
@@ -1785,6 +1871,25 @@ export default function RecipesPage() {
                     if (e.currentTarget) e.currentTarget.value = ""
                   }}
                 />
+                {Array.isArray(editExistingImages) && editExistingImages.length > 0 && (
+                  <div>
+                    <Label className="text-xs font-normal">Existing Images (kept)</Label>
+                    <div className="grid grid-cols-3 gap-3 mt-2">
+                      {editExistingImages.map((img: any, i: number) => {
+                        const src = getImageSrc(img)
+                        return (
+                          <div key={i} className="aspect-square rounded border overflow-hidden bg-muted">
+                            {src ? (
+                              <img src={src} alt={`Existing ${i + 1}`} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">No Src</div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
                 {editImagePreviews.length > 0 ? (
                   <div className="grid grid-cols-3 gap-4">
                     {editImagePreviews.map((src, i) => (
