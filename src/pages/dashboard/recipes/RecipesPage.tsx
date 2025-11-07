@@ -1403,8 +1403,11 @@ export default function RecipesPage() {
                 ) : null}
                 {/* Steps */}
                 {(() => {
+                  // Detailed steps with optional ingredient indices and images
                   const detailed: any[] = (selectedRecipe as any).Recipe_steps ?? []
                   if (Array.isArray(detailed) && detailed.length > 0) {
+                    // Base ingredients list to resolve indices per step
+                    const baseIngs: any[] = (selectedRecipe as any).Ingredients ?? (selectedRecipe as any).ingredients ?? []
                     return (
                       <div>
                         <h3 className="font-semibold mb-2">Steps</h3>
@@ -1420,6 +1423,33 @@ export default function RecipesPage() {
                                   ) : null}
                                 </div>
                                 <p className="text-sm text-foreground">{st?.instructions || '-'}</p>
+                                {(() => {
+                                  // Ingredient indices can arrive under `ingredient_indices` or `ingredients`
+                                  const raw = Array.isArray(st?.ingredient_indices)
+                                    ? st.ingredient_indices
+                                    : (Array.isArray(st?.ingredients) ? st.ingredients : [])
+                                  const idxs: number[] = raw
+                                    .map((n: any) => Number(n))
+                                    .filter((n: number) => Number.isFinite(n) && n >= 0 && n < baseIngs.length)
+                                  if (idxs.length === 0) return null
+                                  return (
+                                    <div className="mt-2">
+                                      <div className="text-xs text-muted-foreground mb-1">Ingredients used:</div>
+                                      <ul className="list-disc pl-5 text-sm text-muted-foreground space-y-0.5">
+                                        {idxs.map((n: number, i2: number) => {
+                                          const it: any = baseIngs[n]
+                                          const name = typeof it === 'string' ? it : (it?.name ?? it?.ingredient ?? `#${n + 1}`)
+                                          const amount = typeof it === 'string' ? '' : (it?.amount ?? it?.qty ?? '')
+                                          return (
+                                            <li key={i2}>
+                                              {name}{amount ? ` — ${amount}` : ''}
+                                            </li>
+                                          )
+                                        })}
+                                      </ul>
+                                    </div>
+                                  )
+                                })()}
                                 {Array.isArray(st?.image) && st.image.length > 0 ? (
                                   <div className="grid grid-cols-3 gap-3 mt-3">
                                     {st.image.slice(0, 6).map((im: any, i: number) => (
