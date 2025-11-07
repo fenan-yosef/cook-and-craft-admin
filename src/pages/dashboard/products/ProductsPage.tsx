@@ -91,8 +91,8 @@ export default function ProductsPage() {
     is_on_sale: false,
     currency: "",
     nutritionFacts: { calories: "", fat: "", protein: "" },
-    ingredientsMain: [{ name: "", emoji: "", amount: "" }] as Array<{ name: string; emoji: string; amount: string }>,
-    ingredientsExtra: [] as Array<{ name: string; emoji: string; amount: string }>,
+  ingredientsMain: [{ name: "", emoji: "", amount: "", imageFile: null as File | null }] as Array<{ name: string; emoji: string; amount: string; imageFile: File | null }>,
+  ingredientsExtra: [] as Array<{ name: string; emoji: string; amount: string; imageFile: File | null }>,
     ingredientsNotIncluded: [] as string[],
     utensils: [] as string[],
     dessertSuggestions: [] as Array<{ name: string; price: string; imageFile: File | null; imagePreview?: string }>,
@@ -121,8 +121,8 @@ export default function ProductsPage() {
     is_on_sale: false,
     currency: "",
     nutritionFacts: { calories: "", fat: "", protein: "" },
-    ingredientsMain: [{ name: "", emoji: "", amount: "" }] as Array<{ name: string; emoji: string; amount: string }>,
-    ingredientsExtra: [] as Array<{ name: string; emoji: string; amount: string }>,
+  ingredientsMain: [{ name: "", emoji: "", amount: "", imageFile: null as File | null }] as Array<{ name: string; emoji: string; amount: string; imageFile: File | null }>,
+  ingredientsExtra: [] as Array<{ name: string; emoji: string; amount: string; imageFile: File | null }>,
     ingredientsNotIncluded: [] as string[],
     utensils: [] as string[],
     dessertSuggestions: [] as Array<{ name: string; price: string; imageFile: File | null; imagePreview?: string }>,
@@ -404,7 +404,7 @@ export default function ProductsPage() {
   is_on_sale: false,
   currency: "",
   nutritionFacts: { calories: "", fat: "", protein: "" },
-  ingredientsMain: [{ name: "", emoji: "", amount: "" }],
+  ingredientsMain: [{ name: "", emoji: "", amount: "", imageFile: null }],
   ingredientsExtra: [],
   ingredientsNotIncluded: [],
   utensils: [],
@@ -476,28 +476,39 @@ export default function ProductsPage() {
   // tags are handled via Add Tag modal
       addForm.images.forEach((file) => formData.append("images[]", file))
 
-      // Nutrition facts
-      if (addForm.nutritionFacts.calories !== "") formData.append("nutritionFacts[calories]", addForm.nutritionFacts.calories)
-      if (addForm.nutritionFacts.fat !== "") formData.append("nutritionFacts[fat]", addForm.nutritionFacts.fat)
-      if (addForm.nutritionFacts.protein !== "") formData.append("nutritionFacts[protein]", addForm.nutritionFacts.protein)
+      // Nutrition facts (send camelCase and snake_case for compatibility)
+      if (addForm.nutritionFacts.calories !== "") {
+        formData.append("nutritionFacts[calories]", addForm.nutritionFacts.calories)
+        formData.append("nutrition_facts[calories]", addForm.nutritionFacts.calories)
+      }
+      if (addForm.nutritionFacts.fat !== "") {
+        formData.append("nutritionFacts[fat]", addForm.nutritionFacts.fat)
+        formData.append("nutrition_facts[fat]", addForm.nutritionFacts.fat)
+      }
+      if (addForm.nutritionFacts.protein !== "") {
+        formData.append("nutritionFacts[protein]", addForm.nutritionFacts.protein)
+        formData.append("nutrition_facts[protein]", addForm.nutritionFacts.protein)
+      }
 
-      // Ingredients main
+      // Ingredients main (use snake_case per Postman and include optional image)
       addForm.ingredientsMain.forEach((ing, i) => {
-        if (ing.name !== "") formData.append(`ingredientsMain[${i}][name]`, ing.name)
-        if (ing.emoji !== "") formData.append(`ingredientsMain[${i}][emoji]`, ing.emoji)
-        if (ing.amount !== "") formData.append(`ingredientsMain[${i}][amount]`, ing.amount)
+        if (ing.name !== "") formData.append(`ingredients_main[${i}][name]`, ing.name)
+        if (ing.emoji !== "") formData.append(`ingredients_main[${i}][emoji]`, ing.emoji)
+        if (ing.amount !== "") formData.append(`ingredients_main[${i}][amount]`, ing.amount)
+        if (ing.imageFile) formData.append(`ingredients_main[${i}][image]`, ing.imageFile)
       })
 
-      // Ingredients extra
+      // Ingredients extra (snake_case + image)
       addForm.ingredientsExtra.forEach((ing, i) => {
-        if (ing.name !== "") formData.append(`ingredientsExtra[${i}][name]`, ing.name)
-        if (ing.emoji !== "") formData.append(`ingredientsExtra[${i}][emoji]`, ing.emoji)
-        if (ing.amount !== "") formData.append(`ingredientsExtra[${i}][amount]`, ing.amount)
+        if (ing.name !== "") formData.append(`ingredients_extra[${i}][name]`, ing.name)
+        if (ing.emoji !== "") formData.append(`ingredients_extra[${i}][emoji]`, ing.emoji)
+        if (ing.amount !== "") formData.append(`ingredients_extra[${i}][amount]`, ing.amount)
+        if (ing.imageFile) formData.append(`ingredients_extra[${i}][image]`, ing.imageFile)
       })
 
-      // Ingredients not included
+      // Ingredients not included (snake_case)
       addForm.ingredientsNotIncluded.forEach((val, i) => {
-        if (val !== "") formData.append(`ingredientsNotIncluded[${i}]`, val)
+        if (val !== "") formData.append(`ingredients_not_included[${i}]`, val)
       })
 
       // Utensils
@@ -522,6 +533,9 @@ export default function ProductsPage() {
   // Use api service with base URL and token from localStorage
   const token = localStorage.getItem("auth_token")
   if (token) apiService.setAuthToken(token)
+  // Also include is_on_sale for compatibility
+  formData.append("is_on_sale", addForm.is_on_sale ? "1" : "0")
+
   await apiService.postMultipart("/products", formData)
 
       toast({
@@ -574,13 +588,15 @@ export default function ProductsPage() {
         name: String(r?.name ?? ""),
         emoji: String(r?.emoji ?? ""),
         amount: String(r?.amount ?? ""),
+        imageFile: null,
       }))
-    : [{ name: "", emoji: "", amount: "" }],
+    : [{ name: "", emoji: "", amount: "", imageFile: null }],
   ingredientsExtra: Array.isArray(raw?.ingredientsExtra)
     ? raw.ingredientsExtra.map((r: any) => ({
         name: String(r?.name ?? ""),
         emoji: String(r?.emoji ?? ""),
         amount: String(r?.amount ?? ""),
+        imageFile: null,
       }))
     : [],
   ingredientsNotIncluded: Array.isArray(raw?.ingredientsNotIncluded)
@@ -677,7 +693,7 @@ export default function ProductsPage() {
   is_on_sale: false,
   currency: "",
   nutritionFacts: { calories: "", fat: "", protein: "" },
-  ingredientsMain: [{ name: "", emoji: "", amount: "" }],
+  ingredientsMain: [{ name: "", emoji: "", amount: "", imageFile: null }],
   ingredientsExtra: [],
   ingredientsNotIncluded: [],
   utensils: [],
@@ -758,28 +774,39 @@ export default function ProductsPage() {
       // New images
       editForm.images.forEach((f) => formData.append("images[]", f))
 
-      // Nutrition facts
-      if (editForm.nutritionFacts.calories !== "") formData.append("nutritionFacts[calories]", editForm.nutritionFacts.calories)
-      if (editForm.nutritionFacts.fat !== "") formData.append("nutritionFacts[fat]", editForm.nutritionFacts.fat)
-      if (editForm.nutritionFacts.protein !== "") formData.append("nutritionFacts[protein]", editForm.nutritionFacts.protein)
+      // Nutrition facts (send camelCase and snake_case)
+      if (editForm.nutritionFacts.calories !== "") {
+        formData.append("nutritionFacts[calories]", editForm.nutritionFacts.calories)
+        formData.append("nutrition_facts[calories]", editForm.nutritionFacts.calories)
+      }
+      if (editForm.nutritionFacts.fat !== "") {
+        formData.append("nutritionFacts[fat]", editForm.nutritionFacts.fat)
+        formData.append("nutrition_facts[fat]", editForm.nutritionFacts.fat)
+      }
+      if (editForm.nutritionFacts.protein !== "") {
+        formData.append("nutritionFacts[protein]", editForm.nutritionFacts.protein)
+        formData.append("nutrition_facts[protein]", editForm.nutritionFacts.protein)
+      }
 
-      // Ingredients main
+      // Ingredients main (snake_case + optional image)
       editForm.ingredientsMain.forEach((ing, i) => {
-        if (ing.name !== "") formData.append(`ingredientsMain[${i}][name]`, ing.name)
-        if (ing.emoji !== "") formData.append(`ingredientsMain[${i}][emoji]`, ing.emoji)
-        if (ing.amount !== "") formData.append(`ingredientsMain[${i}][amount]`, ing.amount)
+        if (ing.name !== "") formData.append(`ingredients_main[${i}][name]`, ing.name)
+        if (ing.emoji !== "") formData.append(`ingredients_main[${i}][emoji]`, ing.emoji)
+        if (ing.amount !== "") formData.append(`ingredients_main[${i}][amount]`, ing.amount)
+        if (ing.imageFile) formData.append(`ingredients_main[${i}][image]`, ing.imageFile)
       })
 
-      // Ingredients extra
+      // Ingredients extra (snake_case + optional image)
       editForm.ingredientsExtra.forEach((ing, i) => {
-        if (ing.name !== "") formData.append(`ingredientsExtra[${i}][name]`, ing.name)
-        if (ing.emoji !== "") formData.append(`ingredientsExtra[${i}][emoji]`, ing.emoji)
-        if (ing.amount !== "") formData.append(`ingredientsExtra[${i}][amount]`, ing.amount)
+        if (ing.name !== "") formData.append(`ingredients_extra[${i}][name]`, ing.name)
+        if (ing.emoji !== "") formData.append(`ingredients_extra[${i}][emoji]`, ing.emoji)
+        if (ing.amount !== "") formData.append(`ingredients_extra[${i}][amount]`, ing.amount)
+        if (ing.imageFile) formData.append(`ingredients_extra[${i}][image]`, ing.imageFile)
       })
 
-      // Ingredients not included
+      // Ingredients not included (snake_case)
       editForm.ingredientsNotIncluded.forEach((val, i) => {
-        if (val !== "") formData.append(`ingredientsNotIncluded[${i}]`, val)
+        if (val !== "") formData.append(`ingredients_not_included[${i}]`, val)
       })
 
       // Utensils
@@ -1056,7 +1083,7 @@ export default function ProductsPage() {
                     onClick={() =>
                       setAddForm((p) => ({
                         ...p,
-                        ingredientsMain: [...p.ingredientsMain, { name: "", emoji: "", amount: "" }],
+                        ingredientsMain: [...p.ingredientsMain, { name: "", emoji: "", amount: "", imageFile: null }],
                       }))
                     }
                   >
@@ -1064,7 +1091,7 @@ export default function ProductsPage() {
                   </Button>
                 </div>
                 {addForm.ingredientsMain.map((row, idx) => (
-                  <div key={idx} className="grid grid-cols-3 gap-2">
+                  <div key={idx} className="grid grid-cols-4 gap-2">
                     <Input
                       placeholder="Name"
                       value={row.name}
@@ -1112,6 +1139,18 @@ export default function ProductsPage() {
                         <X className="h-4 w-4" />
                       </Button>
                     </div>
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = (e.target.files && e.target.files[0]) || null
+                        setAddForm((p) => {
+                          const next = p.ingredientsMain.slice()
+                          next[idx] = { ...next[idx], imageFile: file }
+                          return { ...p, ingredientsMain: next }
+                        })
+                      }}
+                    />
                   </div>
                 ))}
               </div>
@@ -1126,7 +1165,7 @@ export default function ProductsPage() {
                     onClick={() =>
                       setAddForm((p) => ({
                         ...p,
-                        ingredientsExtra: [...p.ingredientsExtra, { name: "", emoji: "", amount: "" }],
+                        ingredientsExtra: [...p.ingredientsExtra, { name: "", emoji: "", amount: "", imageFile: null }],
                       }))
                     }
                   >
@@ -1134,7 +1173,7 @@ export default function ProductsPage() {
                   </Button>
                 </div>
                 {addForm.ingredientsExtra.map((row, idx) => (
-                  <div key={idx} className="grid grid-cols-3 gap-2">
+                  <div key={idx} className="grid grid-cols-4 gap-2">
                     <Input
                       placeholder="Name"
                       value={row.name}
@@ -1182,6 +1221,18 @@ export default function ProductsPage() {
                         <X className="h-4 w-4" />
                       </Button>
                     </div>
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = (e.target.files && e.target.files[0]) || null
+                        setAddForm((p) => {
+                          const next = p.ingredientsExtra.slice()
+                          next[idx] = { ...next[idx], imageFile: file }
+                          return { ...p, ingredientsExtra: next }
+                        })
+                      }}
+                    />
                   </div>
                 ))}
               </div>
@@ -1265,153 +1316,49 @@ export default function ProductsPage() {
                 ))}
               </div>
 
-              {/* Dessert Suggestions */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label>Dessert Suggestions</Label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() =>
-                      setAddForm((p) => ({
-                        ...p,
-                        dessertSuggestions: [...p.dessertSuggestions, { name: "", price: "", imageFile: null }],
-                      }))
-                    }
-                  >
-                    Add Dessert
-                  </Button>
-                </div>
-                {addForm.dessertSuggestions.map((row, idx) => (
-                  <div key={idx} className="grid grid-cols-3 gap-2 items-center">
-                    <Input
-                      placeholder="Name"
-                      value={row.name}
-                      onChange={(e) =>
-                        setAddForm((p) => {
-                          const next = p.dessertSuggestions.slice()
-                          next[idx] = { ...next[idx], name: e.target.value }
-                          return { ...p, dessertSuggestions: next }
-                        })
+              {/* Dessert Suggestions (temporarily hidden) */}
+              {false && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Dessert Suggestions</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        setAddForm((p) => ({
+                          ...p,
+                          dessertSuggestions: [...p.dessertSuggestions, { name: "", price: "", imageFile: null }],
+                        }))
                       }
-                    />
-                    <Input
-                      placeholder="Price"
-                      value={row.price}
-                      onChange={(e) =>
-                        setAddForm((p) => {
-                          const next = p.dessertSuggestions.slice()
-                          next[idx] = { ...next[idx], price: e.target.value }
-                          return { ...p, dessertSuggestions: next }
-                        })
-                      }
-                    />
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0] || null
-                          setAddForm((p) => {
-                            const next = p.dessertSuggestions.slice()
-                            next[idx] = {
-                              ...next[idx],
-                              imageFile: file,
-                              imagePreview: file ? URL.createObjectURL(file) : next[idx].imagePreview,
-                            }
-                            return { ...p, dessertSuggestions: next }
-                          })
-                        }}
-                      />
-                      {row.imagePreview ? (
-                        <img src={row.imagePreview} className="w-10 h-10 object-cover rounded border" />
-                      ) : null}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={() =>
-                          setAddForm((p) => ({
-                            ...p,
-                            dessertSuggestions: p.dessertSuggestions.filter((_, i) => i !== idx),
-                          }))
-                        }
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    >
+                      Add Dessert
+                    </Button>
                   </div>
-                ))}
-              </div>
+                  {/* Hidden dessert suggestion fields */}
+                </div>
+              )}
 
-              {/* Serving Options */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label>Serving Options</Label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() =>
-                      setAddForm((p) => ({
-                        ...p,
-                        servingOptions: [...p.servingOptions, { servings: "", label: "", price: "" }],
-                      }))
-                    }
-                  >
-                    Add Option
-                  </Button>
-                </div>
-                {addForm.servingOptions.map((row, idx) => (
-                  <div key={idx} className="grid grid-cols-3 gap-2">
-                    <Input
-                      placeholder="Servings"
-                      value={row.servings}
-                      onChange={(e) =>
-                        setAddForm((p) => {
-                          const next = p.servingOptions.slice()
-                          next[idx] = { ...next[idx], servings: e.target.value }
-                          return { ...p, servingOptions: next }
-                        })
+              {/* Serving Options (temporarily hidden) */}
+              {false && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Serving Options</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        setAddForm((p) => ({
+                          ...p,
+                          servingOptions: [...p.servingOptions, { servings: "", label: "", price: "" }],
+                        }))
                       }
-                    />
-                    <Input
-                      placeholder="Label"
-                      value={row.label}
-                      onChange={(e) =>
-                        setAddForm((p) => {
-                          const next = p.servingOptions.slice()
-                          next[idx] = { ...next[idx], label: e.target.value }
-                          return { ...p, servingOptions: next }
-                        })
-                      }
-                    />
-                    <div className="flex gap-2">
-                      <Input
-                        placeholder="Price"
-                        value={row.price}
-                        onChange={(e) =>
-                          setAddForm((p) => {
-                            const next = p.servingOptions.slice()
-                            next[idx] = { ...next[idx], price: e.target.value }
-                            return { ...p, servingOptions: next }
-                          })
-                        }
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={() =>
-                          setAddForm((p) => ({
-                            ...p,
-                            servingOptions: p.servingOptions.filter((_, i) => i !== idx),
-                          }))
-                        }
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    >
+                      Add Option
+                    </Button>
                   </div>
-                ))}
-              </div>
+                  {/* Hidden serving option fields */}
+                </div>
+              )}
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
                   <input
@@ -1563,94 +1510,126 @@ export default function ProductsPage() {
                 </div>
 
                 {/* Ingredients */}
-                <div>
-                  <div className="text-xs text-muted-foreground mb-1">Ingredients (Main)</div>
-                  {Array.isArray(viewProduct.ingredientsMain) && viewProduct.ingredientsMain.length > 0 ? (
-                    <div className="text-sm space-y-1">
-                      {viewProduct.ingredientsMain.map((r: any, i: number) => (
-                        <div key={i} className="leading-tight space-y-0.5">
-                          {r?.emoji ? <div className="text-base">{r.emoji}</div> : null}
-                          {r?.name ? <div className="font-medium">{r.name}</div> : null}
-                          {r?.amount ? (
-                            <div className="text-muted-foreground">{r.amount}</div>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">-</span>
-                  )}
-                </div>
-                <div>
-                  <div className="text-xs text-muted-foreground mb-1">Ingredients (Extra)</div>
-                  {Array.isArray(viewProduct.ingredientsExtra) && viewProduct.ingredientsExtra.length > 0 ? (
-                    <div className="text-sm space-y-1">
-                      {viewProduct.ingredientsExtra.map((r: any, i: number) => (
-                        <div key={i} className="leading-tight space-y-0.5">
-                          {r?.emoji ? <div className="text-base">{r.emoji}</div> : null}
-                          {r?.name ? <div className="font-medium">{r.name}</div> : null}
-                          {r?.amount ? (
-                            <div className="text-muted-foreground">{r.amount}</div>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">-</span>
-                  )}
-                </div>
-                <div>
-                  <div className="text-xs text-muted-foreground mb-1">Ingredients Not Included</div>
-                  {Array.isArray(viewProduct.ingredientsNotIncluded) && viewProduct.ingredientsNotIncluded.length > 0 ? (
-                    <div className="text-sm">{viewProduct.ingredientsNotIncluded.join(", ")}</div>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">-</span>
-                  )}
+                <div className="grid gap-3 md:grid-cols-2">
+                  {/* Main Ingredients Card */}
+                  <Card className="border shadow-sm">
+                    <CardHeader className="py-3">
+                      <CardTitle className="text-sm">Ingredients (Main)</CardTitle>
+                      <CardDescription className="text-xs">Primary required ingredients.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      {Array.isArray(viewProduct.ingredientsMain) && viewProduct.ingredientsMain.length > 0 ? (
+                        <ul className="space-y-2">
+                          {viewProduct.ingredientsMain.map((r: any, i: number) => (
+                            <li key={i} className="flex items-start gap-2 rounded border p-2 text-sm bg-muted/30">
+                              {/* Emoji */}
+                              <div className="w-6 h-6 flex items-center justify-center text-base">
+                                {r?.emoji ? r.emoji : <span className="text-muted-foreground">•</span>}
+                              </div>
+                              <div className="flex-1 leading-tight">
+                                <div className="font-medium flex items-center gap-1">
+                                  {r?.name ? r.name : <span className="text-muted-foreground">Unnamed</span>}
+                                </div>
+                                {(r?.amount) && (
+                                  <div className="text-xs text-muted-foreground mt-0.5">{r.amount}</div>
+                                )}
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <div className="text-xs text-muted-foreground">No main ingredients</div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Extra Ingredients Card */}
+                  <Card className="border shadow-sm">
+                    <CardHeader className="py-3">
+                      <CardTitle className="text-sm">Ingredients (Extra)</CardTitle>
+                      <CardDescription className="text-xs">Optional or additional ingredients.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      {Array.isArray(viewProduct.ingredientsExtra) && viewProduct.ingredientsExtra.length > 0 ? (
+                        <ul className="space-y-2">
+                          {viewProduct.ingredientsExtra.map((r: any, i: number) => (
+                            <li key={i} className="flex items-start gap-2 rounded border p-2 text-sm bg-muted/30">
+                              <div className="w-6 h-6 flex items-center justify-center text-base">
+                                {r?.emoji ? r.emoji : <span className="text-muted-foreground">•</span>}
+                              </div>
+                              <div className="flex-1 leading-tight">
+                                <div className="font-medium flex items-center gap-1">
+                                  {r?.name ? r.name : <span className="text-muted-foreground">Unnamed</span>}
+                                </div>
+                                {(r?.amount) && (
+                                  <div className="text-xs text-muted-foreground mt-0.5">{r.amount}</div>
+                                )}
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <div className="text-xs text-muted-foreground">No extra ingredients</div>
+                      )}
+                    </CardContent>
+                  </Card>
                 </div>
 
-                {/* Utensils */}
-                <div>
-                  <div className="text-xs text-muted-foreground mb-1">Utensils</div>
-                  {Array.isArray(viewProduct.utensils) && viewProduct.utensils.length > 0 ? (
-                    <div className="text-sm">{viewProduct.utensils.join(", ")}</div>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">-</span>
-                  )}
+                {/* Not Included & Utensils */}
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Card className="border shadow-sm">
+                    <CardHeader className="py-3">
+                      <CardTitle className="text-sm">Ingredients Not Included</CardTitle>
+                      <CardDescription className="text-xs">Items you'll need separately.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      {Array.isArray(viewProduct.ingredientsNotIncluded) && viewProduct.ingredientsNotIncluded.length > 0 ? (
+                        <ul className="flex flex-wrap gap-1">
+                          {viewProduct.ingredientsNotIncluded.map((val: string, i: number) => (
+                            <li key={i} className="text-[11px] px-2 py-1 rounded bg-muted/50 border">
+                              {val}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <div className="text-xs text-muted-foreground">None listed</div>
+                      )}
+                    </CardContent>
+                  </Card>
+                  <Card className="border shadow-sm">
+                    <CardHeader className="py-3">
+                      <CardTitle className="text-sm">Utensils</CardTitle>
+                      <CardDescription className="text-xs">Tools required for preparation.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      {Array.isArray(viewProduct.utensils) && viewProduct.utensils.length > 0 ? (
+                        <ul className="flex flex-wrap gap-1">
+                          {viewProduct.utensils.map((val: string, i: number) => (
+                            <li key={i} className="text-[11px] px-2 py-1 rounded bg-muted/50 border">
+                              {val}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <div className="text-xs text-muted-foreground">None listed</div>
+                      )}
+                    </CardContent>
+                  </Card>
                 </div>
 
-                {/* Dessert Suggestions */}
-                <div>
-                  <div className="text-xs text-muted-foreground mb-1">Dessert Suggestions</div>
-                  {Array.isArray(viewProduct.dessertSuggestions) && viewProduct.dessertSuggestions.length > 0 ? (
-                    <div className="flex flex-wrap gap-3">
-                      {viewProduct.dessertSuggestions.map((d: any, i: number) => (
-                        <div key={i} className="text-sm">
-                          <div className="font-medium">{d?.name ?? "-"}</div>
-                          <div className="text-xs text-muted-foreground">{d?.price ?? "-"}</div>
-                          {d?.image && (
-                            <img src={d.image} className="w-16 h-16 object-cover rounded border mt-1" />
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">-</span>
-                  )}
-                </div>
+                {/* Dessert Suggestions (hidden) */}
+                {false && (
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Dessert Suggestions</div>
+                  </div>
+                )}
 
-                {/* Serving Options */}
-                <div>
-                  <div className="text-xs text-muted-foreground mb-1">Serving Options</div>
-                  {Array.isArray(viewProduct.servingOptions) && viewProduct.servingOptions.length > 0 ? (
-                    <div className="text-sm space-y-1">
-                      {viewProduct.servingOptions.map((s: any, i: number) => (
-                        <div key={i}>{[s?.servings && `${s.servings} servings`, s?.label, s?.price && `Price: ${s.price}`].filter(Boolean).join(" • ")}</div>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">-</span>
-                  )}
-                </div>
+                {/* Serving Options (hidden) */}
+                {false && (
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Serving Options</div>
+                  </div>
+                )}
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">Tags</div>
                   {(() => {
@@ -1973,13 +1952,13 @@ export default function ProductsPage() {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => setEditForm((p) => ({ ...p, ingredientsMain: [...p.ingredientsMain, { name: "", emoji: "", amount: "" }] }))}
+                    onClick={() => setEditForm((p) => ({ ...p, ingredientsMain: [...p.ingredientsMain, { name: "", emoji: "", amount: "", imageFile: null }] }))}
                   >
                     Add Row
                   </Button>
                 </div>
                 {editForm.ingredientsMain.map((row, idx) => (
-                  <div key={idx} className="grid grid-cols-3 gap-2">
+                  <div key={idx} className="grid grid-cols-4 gap-2">
                     <Input
                       placeholder="Name"
                       value={row.name}
@@ -2000,6 +1979,14 @@ export default function ProductsPage() {
                         <X className="h-4 w-4" />
                       </Button>
                     </div>
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = (e.target.files && e.target.files[0]) || null
+                        setEditForm((p) => { const next = p.ingredientsMain.slice(); next[idx] = { ...next[idx], imageFile: file }; return { ...p, ingredientsMain: next } })
+                      }}
+                    />
                   </div>
                 ))}
               </div>
@@ -2011,13 +1998,13 @@ export default function ProductsPage() {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => setEditForm((p) => ({ ...p, ingredientsExtra: [...p.ingredientsExtra, { name: "", emoji: "", amount: "" }] }))}
+                    onClick={() => setEditForm((p) => ({ ...p, ingredientsExtra: [...p.ingredientsExtra, { name: "", emoji: "", amount: "", imageFile: null }] }))}
                   >
                     Add Row
                   </Button>
                 </div>
                 {editForm.ingredientsExtra.map((row, idx) => (
-                  <div key={idx} className="grid grid-cols-3 gap-2">
+                  <div key={idx} className="grid grid-cols-4 gap-2">
                     <Input placeholder="Name" value={row.name} onChange={(e) => setEditForm((p) => { const next = p.ingredientsExtra.slice(); next[idx] = { ...next[idx], name: e.target.value }; return { ...p, ingredientsExtra: next } })} />
                     <Input placeholder="Emoji" value={row.emoji} onChange={(e) => setEditForm((p) => { const next = p.ingredientsExtra.slice(); next[idx] = { ...next[idx], emoji: e.target.value }; return { ...p, ingredientsExtra: next } })} />
                     <div className="flex gap-2">
@@ -2026,6 +2013,7 @@ export default function ProductsPage() {
                         <X className="h-4 w-4" />
                       </Button>
                     </div>
+                    <Input type="file" accept="image/*" onChange={(e) => { const file = (e.target.files && e.target.files[0]) || null; setEditForm((p) => { const next = p.ingredientsExtra.slice(); next[idx] = { ...next[idx], imageFile: file }; return { ...p, ingredientsExtra: next } }) }} />
                   </div>
                 ))}
               </div>
@@ -2062,45 +2050,23 @@ export default function ProductsPage() {
                 ))}
               </div>
 
-              {/* Dessert Suggestions Edit */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label>Dessert Suggestions</Label>
-                  <Button type="button" variant="outline" onClick={() => setEditForm((p) => ({ ...p, dessertSuggestions: [...p.dessertSuggestions, { name: "", price: "", imageFile: null }] }))}>Add Dessert</Button>
-                </div>
-                {editForm.dessertSuggestions.map((row, idx) => (
-                  <div key={idx} className="grid grid-cols-3 gap-2 items-center">
-                    <Input placeholder="Name" value={row.name} onChange={(e) => setEditForm((p) => { const next = p.dessertSuggestions.slice(); next[idx] = { ...next[idx], name: e.target.value }; return { ...p, dessertSuggestions: next } })} />
-                    <Input placeholder="Price" value={row.price} onChange={(e) => setEditForm((p) => { const next = p.dessertSuggestions.slice(); next[idx] = { ...next[idx], price: e.target.value }; return { ...p, dessertSuggestions: next } })} />
-                    <div className="flex items-center gap-2">
-                      <Input type="file" accept="image/*" onChange={(e) => { const file = e.target.files?.[0] || null; setEditForm((p) => { const next = p.dessertSuggestions.slice(); next[idx] = { ...next[idx], imageFile: file }; return { ...p, dessertSuggestions: next } }) }} />
-                      <Button type="button" variant="ghost" onClick={() => setEditForm((p) => ({ ...p, dessertSuggestions: p.dessertSuggestions.filter((_, i) => i !== idx) }))}>
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
+              {/* Dessert Suggestions Edit (hidden) */}
+              {false && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Dessert Suggestions</Label>
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
 
-              {/* Serving Options Edit */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label>Serving Options</Label>
-                  <Button type="button" variant="outline" onClick={() => setEditForm((p) => ({ ...p, servingOptions: [...p.servingOptions, { servings: "", label: "", price: "" }] }))}>Add Option</Button>
-                </div>
-                {editForm.servingOptions.map((row, idx) => (
-                  <div key={idx} className="grid grid-cols-3 gap-2">
-                    <Input placeholder="Servings" value={row.servings} onChange={(e) => setEditForm((p) => { const next = p.servingOptions.slice(); next[idx] = { ...next[idx], servings: e.target.value }; return { ...p, servingOptions: next } })} />
-                    <Input placeholder="Label" value={row.label} onChange={(e) => setEditForm((p) => { const next = p.servingOptions.slice(); next[idx] = { ...next[idx], label: e.target.value }; return { ...p, servingOptions: next } })} />
-                    <div className="flex gap-2">
-                      <Input placeholder="Price" value={row.price} onChange={(e) => setEditForm((p) => { const next = p.servingOptions.slice(); next[idx] = { ...next[idx], price: e.target.value }; return { ...p, servingOptions: next } })} />
-                      <Button type="button" variant="ghost" onClick={() => setEditForm((p) => ({ ...p, servingOptions: p.servingOptions.filter((_, i) => i !== idx) }))}>
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
+              {/* Serving Options Edit (hidden) */}
+              {false && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Serving Options</Label>
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
                   <input
