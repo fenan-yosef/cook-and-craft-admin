@@ -10,13 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+// Per-page selector disabled temporarily
 import {
   Table,
   TableBody,
@@ -104,7 +98,8 @@ export default function PostsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [lastPage, setLastPage] = useState(1);
-  const [perPage, setPerPage] = useState(10); // default 10 to satisfy backend per_page validator
+  // Temporarily fix backend per_page validation error by hardcoding page size (no selector)
+  const perPage = 10; // removed state & UI until backend accepts per_page again
   const { toast } = useToast();
   const { user, isLoading, token } = useAuth();
   const isAdmin = user?.role === "admin";
@@ -152,19 +147,16 @@ export default function PostsPage() {
 
         if (token) apiService.setAuthToken(token);
 
-        // Build paging query: use per_page only for allowed values; avoid aliases that trigger backend validation
-        const allowed = [10, 25, 50, 100];
-        const usePer = allowed.includes(Number(perPage));
+  // per_page omitted temporarily due to backend validation issue
         let res: any;
         try {
           const url = `/posts?withLikes=true&withPolls=true&withVersions=true&page=${page}&isDeleted=${showDeleted}`
-            + `&order=desc&sort=desc&orderBy=created_at&sortBy=created_at`
-            + (usePer ? `&per_page=${perPage}` : "");
+            + `&order=desc&sort=desc&orderBy=created_at&sortBy=created_at` // per_page removed
           res = await apiService.get(url);
         } catch (primaryErr) {
           // Fallback: minimal query with page & limit only
           const fallbackUrl = `/posts?withLikes=true&withPolls=true&withVersions=true&page=${page}&isDeleted=${showDeleted}`
-            + `&order=desc&sort=desc&orderBy=created_at&sortBy=created_at&limit=${perPage}`;
+            + `&order=desc&sort=desc&orderBy=created_at&sortBy=created_at&limit=${perPage}`; // keep limit fallback
           res = await apiService.get(fallbackUrl);
         }
 
@@ -196,7 +188,7 @@ export default function PostsPage() {
         setLoading(false);
       }
     },
-    [toast, token, showDeleted, user, perPage]
+  [toast, token, showDeleted, user]
   );
   useEffect(() => {
     if (!isLoading && user) {
@@ -970,30 +962,7 @@ export default function PostsPage() {
               </Button>
             </div>
             <div className="flex items-center justify-between mb-4">
-              {/* Per page selector */}
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">Per page</span>
-                <Select
-                  value={String(perPage)}
-                  onValueChange={(val) => {
-                    const next = Number(val);
-                    setPerPage(next);
-                    setCurrentPage(1);
-                    // optional immediate fetch for snappy UX
-                    fetchPosts(1);
-                  }}
-                >
-                  <SelectTrigger className="w-[100px]">
-                    <SelectValue placeholder="10" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="25">25</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                    <SelectItem value="100">100</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Per page selector temporarily disabled (backend rejects per_page). Fixed size = 10 */}
               <div className="flex gap-2">
                 <Button
                   variant="outline"

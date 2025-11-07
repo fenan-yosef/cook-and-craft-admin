@@ -125,6 +125,10 @@ const menuItems = [
         url: "/dashboard/posts",
       },
       {
+        title: "Polls",
+        url: "/dashboard/posts/polls",
+      },
+      {
         title: "Reports",
         url: "/dashboard/reports",
       },

@@ -14,6 +14,7 @@ import OrdersPage from "./pages/dashboard/orders/OrdersPage"
 import ProductsPage from "./pages/dashboard/products/ProductsPage"
 import CouponsPage from "./pages/dashboard/coupons/CouponsPage"
 import PostsPage from "./pages/dashboard/posts/PostsPage"
+import PollsPage from "./pages/dashboard/posts/PollsPage"
 import DeliveryZonesPage from "./pages/dashboard/delivery-zones/DeliveryZonesPage"
 import MetricsPage from "./pages/dashboard/metrics/MetricsPage"
 import MealsPage from "./pages/dashboard/meals/MealsPage"
@@ -47,6 +48,7 @@ function App() {
             <Route path="coupons" element={<CouponsPage />} />
             <Route path="delivery-zones" element={<DeliveryZonesPage />} />
             <Route path="posts" element={<PostsPage />} />
+            <Route path="posts/polls" element={<PollsPage />} />
             <Route path="reports" element={<ReportsPage />} />
             <Route path="metrics" element={<MetricsPage />} />
             <Route path="recipes" element={<RecipesPage />} />
