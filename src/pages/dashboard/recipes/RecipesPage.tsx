@@ -106,7 +106,7 @@ export default function RecipesPage() {
     Prep_minutes: "" as string | number,
     Is_active: true,
     Images: [] as File[],
-    Ingredients: [{ name: "", amount: "", image: null as File | null }] as { name: string; amount: string; image?: File | null }[],
+  Ingredients: [{ name: "", amount: "", image: null as File | null, imageUrl: null as string | null }] as { name: string; amount: string; image?: File | null; imageUrl?: string | null }[],
     Nutrition_facts: [{ label: "", value: "" }] as { label: string; value: string }[],
     Utensils: [""] as string[],
     StepsText: "",
@@ -133,8 +133,8 @@ export default function RecipesPage() {
   const [newImages, setNewImages] = useState<File[]>([])
   const [newImagePreviews, setNewImagePreviews] = useState<string[]>([])
   // Edit-mode steps and previews
-  const [editSteps, setEditSteps] = useState<Array<{ instructions: string; prep: number; ingredientIndices: number[]; image: File | null }>>([
-    { instructions: "", prep: 1, ingredientIndices: [], image: null },
+  const [editSteps, setEditSteps] = useState<Array<{ instructions: string; prep: number; ingredientIndices: number[]; image: File | null; imageUrl?: string | null; imageUrls?: string[] }>>([
+    { instructions: "", prep: 1, ingredientIndices: [], image: null, imageUrl: null, imageUrls: [] },
   ])
   const [editImagePreviews, setEditImagePreviews] = useState<string[]>([])
   const [deletingId, setDeletingId] = useState<number | null>(null)
@@ -478,7 +478,7 @@ export default function RecipesPage() {
   const openEdit = (recipe: ApiRecipe) => {
     // Derive initial structured steps from detailed steps or fallback
     const detailed: any[] = (recipe as any).Recipe_steps ?? []
-    let initialEditSteps: Array<{ instructions: string; prep: number; ingredientIndices: number[]; image: File | null }> = []
+  let initialEditSteps: Array<{ instructions: string; prep: number; ingredientIndices: number[]; image: File | null; imageUrl?: string | null }> = []
     if (Array.isArray(detailed) && detailed.length > 0) {
       initialEditSteps = detailed
         .sort((a: any, b: any) => (a?.step_number ?? 0) - (b?.step_number ?? 0))
@@ -488,7 +488,17 @@ export default function RecipesPage() {
           const indices = Array.isArray(st?.ingredient_indices)
             ? st.ingredient_indices.map((n: any) => Number(n)).filter((n: any) => Number.isFinite(n))
             : []
-          return { instructions: instr, prep, ingredientIndices: indices, image: null }
+          // Collect a primary image URL and an array of image URLs when API returns arrays
+          const candidatesArray: any[] = Array.isArray(st?.image)
+            ? st.image
+            : Array.isArray(st?.images)
+              ? st.images
+              : []
+          const arrayUrls: string[] = candidatesArray
+            .map((x: any) => getImageSrc(x))
+            .filter((u: any): u is string => typeof u === 'string' && u.length > 0)
+          const stepImgUrl = (arrayUrls[0]) || getImageSrc(st?.image) || getImageSrc(st?.imageUrl) || getImageSrc(st?.img) || null
+          return { instructions: instr, prep, ingredientIndices: indices, image: null, imageUrl: stepImgUrl, imageUrls: arrayUrls }
         })
     } else {
       const steps: any = (recipe as any).Steps ?? (recipe as any).steps
@@ -498,8 +508,8 @@ export default function RecipesPage() {
           ? steps.split("\n").map((s) => s.trim()).filter(Boolean)
           : []
       initialEditSteps = stepsArr.length > 0
-        ? stepsArr.map((txt) => ({ instructions: txt, prep: 1, ingredientIndices: [], image: null }))
-        : [{ instructions: "", prep: 1, ingredientIndices: [], image: null }]
+        ? stepsArr.map((txt) => ({ instructions: txt, prep: 1, ingredientIndices: [], image: null, imageUrl: null, imageUrls: [] }))
+        : [{ instructions: "", prep: 1, ingredientIndices: [], image: null, imageUrl: null, imageUrls: [] }]
     }
 
     setEditRecipe({
@@ -515,10 +525,11 @@ export default function RecipesPage() {
         const normalized = Array.isArray(ings)
           ? ings.map((it: any) => {
               if (typeof it === "string") return { name: it, amount: "" }
-              return { name: it?.name ?? it?.ingredient ?? "", amount: it?.amount ?? it?.qty ?? "", image: null }
+              const imgUrl = getImageSrc(it?.image) || getImageSrc(it?.imageUrl) || getImageSrc(it?.img) || (typeof it?.image_url === 'string' ? it.image_url : null)
+              return { name: it?.name ?? it?.ingredient ?? "", amount: it?.amount ?? it?.qty ?? "", image: null, imageUrl: imgUrl }
             })
           : []
-        return normalized.length > 0 ? normalized : [{ name: "", amount: "", image: null }]
+  return normalized.length > 0 ? normalized : [{ name: "", amount: "", image: null, imageUrl: null }]
       })(),
       Nutrition_facts: (() => {
         const nfs: any[] = (recipe as any).Nutrition_facts ?? (recipe as any).nutrition_facts ?? []
@@ -1765,6 +1776,35 @@ export default function RecipesPage() {
                             setEditRecipe((s) => ({ ...s, Ingredients: arr }))
                           }}
                         />
+                        <div className="flex items-center gap-2 mt-1">
+                          {ing.image ? (
+                            <img
+                              src={URL.createObjectURL(ing.image)}
+                              alt={`Ingredient ${idx + 1} (new)`}
+                              className="w-12 h-12 object-cover rounded border"
+                            />
+                          ) : ing.imageUrl ? (
+                            <img
+                              src={ing.imageUrl}
+                              alt={`Ingredient ${idx + 1}`}
+                              className="w-12 h-12 object-cover rounded border"
+                            />
+                          ) : null}
+                          {ing.image ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="h-8 px-2"
+                              onClick={() => {
+                                const arr = [...(editRecipe.Ingredients || [])]
+                                arr[idx] = { ...arr[idx], image: null }
+                                setEditRecipe((s) => ({ ...s, Ingredients: arr }))
+                              }}
+                            >
+                              Clear
+                            </Button>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1886,7 +1926,7 @@ export default function RecipesPage() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => setEditSteps((prev) => [...prev, { instructions: "", prep: 1, ingredientIndices: [], image: null }])}
+                    onClick={() => setEditSteps((prev) => [...prev, { instructions: "", prep: 1, ingredientIndices: [], image: null, imageUrl: null, imageUrls: [] }])}
                   >
                     Add Step
                   </Button>
@@ -1944,6 +1984,49 @@ export default function RecipesPage() {
                               setEditSteps(arr)
                             }}
                           />
+                          <div className="flex flex-wrap items-center gap-3 mt-2">
+                            {/* Single newly selected image preview */}
+                            {st.image && (
+                              <img
+                                src={URL.createObjectURL(st.image)}
+                                alt={`Step ${i + 1} (new)`}
+                                className="w-32 h-32 object-cover rounded border"
+                              />
+                            )}
+                            {/* Existing primary image if no new image chosen */}
+                            {!st.image && st.imageUrl && (
+                              <img
+                                src={st.imageUrl}
+                                alt={`Step ${i + 1}`}
+                                className="w-32 h-32 object-cover rounded border"
+                              />
+                            )}
+                            {/* Additional existing images (if any) */}
+                            {!st.image && Array.isArray(st.imageUrls) && st.imageUrls.length > 1 && (
+                              st.imageUrls.slice(1).map((u, extraIdx) => (
+                                <img
+                                  key={extraIdx}
+                                  src={u}
+                                  alt={`Step ${i + 1} extra ${extraIdx + 2}`}
+                                  className="w-24 h-24 object-cover rounded border"
+                                />
+                              ))
+                            )}
+                            {st.image ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                className="h-8 px-2"
+                                onClick={() => {
+                                  const arr = [...editSteps]
+                                  arr[i] = { ...arr[i], image: null }
+                                  setEditSteps(arr)
+                                }}
+                              >
+                                Clear
+                              </Button>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
                       <div className="grid gap-2">
