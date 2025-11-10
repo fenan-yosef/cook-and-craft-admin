@@ -88,6 +88,7 @@ export default function RecipesPage() {
   const [tagOptions, setTagOptions] = useState<Array<{ id: number; name: string; slug?: string }>>([])
   const [tagsLoading, setTagsLoading] = useState(false)
   const [selectedEditTagIds, setSelectedEditTagIds] = useState<number[]>([])
+  const [selectedCreateTagIds, setSelectedCreateTagIds] = useState<number[]>([])
   // Mock: pending recipe requests
   // Pending requests kept in localStorage (UI section is currently commented out)
   // const [pending, setPending] = useState<PendingRecipe[]>([])
@@ -347,6 +348,7 @@ export default function RecipesPage() {
     setNewSteps([{ instructions: "", prep: 1, ingredientIndices: [], image: null }])
     setNewImages([])
     setNewImagePreviews([])
+    setSelectedCreateTagIds([])
   }
 
   const createRecipe = async () => {
@@ -409,12 +411,17 @@ export default function RecipesPage() {
       // Best choice flag
       fd.append("is_best_choice", newRecipe.isBestChoice ? "1" : "0")
 
-      // Tags: send as bracketed fields tags[i]
-      if (Array.isArray(newRecipe.Tags)) {
-        newRecipe.Tags.filter(t => t && String(t).trim()).forEach((t, i) => {
-          fd.append(`tags[${i}]`, String(t).trim())
-        })
-      }
+      // Tags on create: combine selected catalog tag NAMES with any manually entered tags
+      const selectedNames = Array.isArray(selectedCreateTagIds)
+        ? selectedCreateTagIds
+            .map((id) => tagOptions.find((t) => t.id === id)?.name)
+            .filter((n): n is string => typeof n === 'string' && n.trim().length > 0)
+        : []
+      const manualNames = Array.isArray(newRecipe.Tags)
+        ? newRecipe.Tags.filter((t) => t && String(t).trim()).map((t) => String(t).trim())
+        : []
+      const uniqueNames = Array.from(new Set([...selectedNames, ...manualNames]))
+      uniqueNames.forEach((name, i) => fd.append(`tags[${i}]`, name))
 
       const res: any = await apiService.postMultipart("/recipes", fd)
       const created = Array.isArray(res?.data) && res.data.length > 0 ? (res.data[0] as ApiRecipe) : null
@@ -853,20 +860,48 @@ export default function RecipesPage() {
               <div className="grid gap-2">
                 <div className="flex items-center justify-between">
                   <Label>Tags</Label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setNewRecipe((s) => ({ ...s, Tags: [...(s.Tags || []), ""] }))}
-                  >
-                    Add
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {tagsLoading ? (<span className="text-xs text-muted-foreground">Loading tags…</span>) : null}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setNewRecipe((s) => ({ ...s, Tags: [...(s.Tags || []), ""] }))}
+                    >
+                      Add custom
+                    </Button>
+                  </div>
                 </div>
+                {tagOptions.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">No tag catalog yet. You can add custom tags below.</div>
+                ) : (
+                  <div className="flex flex-wrap gap-3">
+                    {tagOptions.map((t) => (
+                      <label key={t.id} className="flex items-center gap-2 text-sm border rounded px-2 py-1">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4"
+                          checked={selectedCreateTagIds.includes(t.id)}
+                          onChange={(e) => {
+                            setSelectedCreateTagIds((prev) => {
+                              const set = new Set(prev)
+                              if (e.target.checked) set.add(t.id)
+                              else set.delete(t.id)
+                              return Array.from(set.values())
+                            })
+                          }}
+                        />
+                        <span>{t.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {/* Custom tags inputs */}
                 <div className="grid gap-2">
                   {(newRecipe.Tags || []).map((t, idx) => (
                     <div key={idx} className="flex gap-2">
                       <Input
-                        placeholder="e.g. 2 or summer"
+                        placeholder="Type a custom tag name"
                         value={t}
                         onChange={(e) => {
                           const arr = [...(newRecipe.Tags || [])]
@@ -886,7 +921,7 @@ export default function RecipesPage() {
                     </div>
                   ))}
                 </div>
-                <p className="text-xs text-muted-foreground">Sent as tags[0], tags[1], ...</p>
+                <p className="text-xs text-muted-foreground">Sent as tags[i] (names from catalog and custom).</p>
               </div>
 
               {/* Steps builder */}
