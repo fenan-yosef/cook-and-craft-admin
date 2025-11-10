@@ -45,7 +45,6 @@ export default function PollsPage() {
   const [polls, setPolls] = useState<ApiPoll[]>([])
   const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState("")
-  const [perPage, setPerPage] = useState(15)
   const [currentPage, setCurrentPage] = useState(1)
   const [lastPage, setLastPage] = useState(1)
   const [total, setTotal] = useState(0)
@@ -70,10 +69,11 @@ export default function PollsPage() {
     if (token) apiService.setAuthToken(token)
   }, [token])
 
-  const fetchPolls = useCallback(async (page = 1, size = perPage) => {
+  const fetchPolls = useCallback(async (page = 1) => {
     try {
       setLoading(true)
-      const res: any = await apiService.get(`/polls?page=${page}&per_page=${size}`)
+      // per_page is not supported by backend yet; don't send it
+      const res: any = await apiService.get(`/polls?page=${page}`)
       const pageObj = res?.data ?? res
       const arr: any[] = Array.isArray(pageObj?.data) ? pageObj.data : []
       setPolls(arr as ApiPoll[])
@@ -85,11 +85,11 @@ export default function PollsPage() {
     } finally {
       setLoading(false)
     }
-  }, [perPage, toast])
+  }, [toast])
 
   useEffect(() => {
-    fetchPolls(1, perPage)
-  }, [fetchPolls, perPage])
+    fetchPolls(1)
+  }, [fetchPolls])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -136,7 +136,7 @@ export default function PollsPage() {
 
   await apiService.postMultipart("/polls", fd)
       // optimistic: prepend or refetch
-      await fetchPolls(1, perPage)
+  await fetchPolls(1)
       setIsCreateOpen(false)
       resetCreate()
       toast({ title: "Success", description: "Poll created" })
@@ -175,14 +175,6 @@ export default function PollsPage() {
           <CardContent>
             <div className="flex items-center gap-2 mb-4">
               <Input placeholder="Search polls..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
-              <Select value={String(perPage)} onValueChange={(v) => { setPerPage(Number(v)); setCurrentPage(1); fetchPolls(1, Number(v)) }}>
-                <SelectTrigger className="w-[140px]"><SelectValue placeholder="Per page" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="15">15</SelectItem>
-                  <SelectItem value="25">25</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
 
             <Table>
@@ -225,8 +217,8 @@ export default function PollsPage() {
             <div className="mt-4 flex items-center justify-between">
               <div className="text-sm text-muted-foreground">Page {currentPage} of {lastPage}{total ? ` • ${total} items` : ""}</div>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" disabled={loading || currentPage<=1} onClick={() => { const p = Math.max(1, currentPage-1); setCurrentPage(p); fetchPolls(p, perPage) }}>Previous</Button>
-                <Button variant="outline" size="sm" disabled={loading || currentPage>=lastPage} onClick={() => { const p = Math.min(lastPage, currentPage+1); setCurrentPage(p); fetchPolls(p, perPage) }}>Next</Button>
+                <Button variant="outline" size="sm" disabled={loading || currentPage<=1} onClick={() => { const p = Math.max(1, currentPage-1); setCurrentPage(p); fetchPolls(p) }}>Previous</Button>
+                <Button variant="outline" size="sm" disabled={loading || currentPage>=lastPage} onClick={() => { const p = Math.min(lastPage, currentPage+1); setCurrentPage(p); fetchPolls(p) }}>Next</Button>
               </div>
             </div>
           </CardContent>
