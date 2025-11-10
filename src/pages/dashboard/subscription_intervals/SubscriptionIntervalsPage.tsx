@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -117,6 +117,27 @@ export default function SubscriptionIntervalsPage() {
     return weeks
   }
   const [weekOptions, setWeekOptions] = useState(() => generateWeeks())
+  // Filter out weeks that already exist as intervals (by identical start_date & end_date)
+  const availableWeekOptions = useMemo(() => {
+    if (!Array.isArray(weekOptions) || weekOptions.length === 0) return []
+    const taken = new Set(
+      (intervals || []).map(it => `${it.start_date}__${it.end_date}`)
+    )
+    return weekOptions.filter(w => !taken.has(`${w.start}__${w.end}`))
+  }, [weekOptions, intervals])
+
+  // Edit modal: filter out weeks taken by other intervals, but keep the current interval's week selectable
+  const editWeekOptions = useMemo(() => {
+    if (!Array.isArray(weekOptions) || weekOptions.length === 0) return []
+    const currentPair = `${editForm.start_date}__${editForm.end_date}`
+    const taken = new Set(
+      (intervals || []).map(it => `${it.start_date}__${it.end_date}`)
+    )
+    return weekOptions.filter(w => {
+      const pair = `${w.start}__${w.end}`
+      return pair === currentPair || !taken.has(pair)
+    })
+  }, [weekOptions, intervals, editForm.start_date, editForm.end_date])
   // Deletion state
   const [deletingId, setDeletingId] = useState<number | null>(null)
 
@@ -258,12 +279,40 @@ export default function SubscriptionIntervalsPage() {
 
   // Auto-select first week when opening Add modal
   useEffect(() => {
-    if (isAddOpen && weekOptions.length > 0 && !selectedWeekKey) {
-      const wk = weekOptions[0]
-      setSelectedWeekKey(wk.isoKey)
-      setAddForm(prev => ({ ...prev, start_date: wk.start, end_date: wk.end }))
+    if (isAddOpen) {
+      if (availableWeekOptions.length > 0) {
+        // Auto-select first available if current selection is empty or no longer available
+        const stillValid = availableWeekOptions.find(w => w.isoKey === selectedWeekKey)
+        if (!stillValid) {
+          const wk = availableWeekOptions[0]
+          setSelectedWeekKey(wk.isoKey)
+          setAddForm(prev => ({ ...prev, start_date: wk.start, end_date: wk.end }))
+        }
+      } else {
+        // No weeks available: clear selection so form cannot submit
+        setSelectedWeekKey("")
+        setAddForm(prev => ({ ...prev, start_date: "", end_date: "" }))
+      }
     }
-  }, [isAddOpen, weekOptions, selectedWeekKey])
+  }, [isAddOpen, availableWeekOptions, selectedWeekKey])
+
+  // Keep Edit week selection valid relative to filtered options
+  useEffect(() => {
+    if (isEditOpen) {
+      if (editWeekOptions.length > 0) {
+        const stillValid = editWeekOptions.find(w => w.isoKey === editSelectedWeekKey)
+        if (!stillValid) {
+          const wk = editWeekOptions[0]
+          setEditSelectedWeekKey(wk.isoKey)
+          setEditForm(prev => ({ ...prev, start_date: wk.start, end_date: wk.end }))
+        }
+      } else {
+        // Clear selection if nothing available (should be rare)
+        setEditSelectedWeekKey("")
+        setEditForm(prev => ({ ...prev, start_date: "", end_date: "" }))
+      }
+    }
+  }, [isEditOpen, editWeekOptions, editSelectedWeekKey])
 
   // Submit Add Product
   const handleAddProduct = async (e: React.FormEvent) => {
@@ -536,12 +585,14 @@ export default function SubscriptionIntervalsPage() {
               </div>
               <div>
                 <Label htmlFor="week_select">Week (Mon - Sun)</Label>
-                <Select value={selectedWeekKey} onValueChange={handleSelectWeek}>
+                <Select value={selectedWeekKey} onValueChange={handleSelectWeek} disabled={availableWeekOptions.length === 0}>
                   <SelectTrigger id="week_select" className="mt-1">
                     <SelectValue placeholder="Select week" />
                   </SelectTrigger>
                   <SelectContent>
-                    {weekOptions.map(w => (
+                    {availableWeekOptions.length === 0 ? (
+                      <div className="px-3 py-2 text-sm text-muted-foreground">All upcoming weeks are already created.</div>
+                    ) : availableWeekOptions.map(w => (
                       <SelectItem key={w.isoKey} value={w.isoKey}>{w.label}</SelectItem>
                     ))}
                   </SelectContent>
@@ -697,12 +748,14 @@ export default function SubscriptionIntervalsPage() {
                   if (wk) {
                     setEditForm(prev => ({ ...prev, start_date: wk.start, end_date: wk.end }))
                   }
-                }}>
+                }} disabled={editWeekOptions.length === 0}>
                   <SelectTrigger id="edit_week_select" className="mt-1">
                     <SelectValue placeholder="Select week" />
                   </SelectTrigger>
                   <SelectContent>
-                    {weekOptions.map(w => (
+                    {editWeekOptions.length === 0 ? (
+                      <div className="px-3 py-2 text-sm text-muted-foreground">No alternative weeks available.</div>
+                    ) : editWeekOptions.map(w => (
                       <SelectItem key={w.isoKey} value={w.isoKey}>{w.label}</SelectItem>
                     ))}
                   </SelectContent>
