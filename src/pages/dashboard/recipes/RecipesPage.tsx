@@ -477,6 +477,9 @@ export default function RecipesPage() {
 
   const openEdit = (recipe: ApiRecipe) => {
     // Derive initial structured steps from detailed steps or fallback
+    // Capture base ingredients length to normalize step ingredient indices (handle 1-based arrays)
+    const baseIngsRaw: any[] = (recipe as any).Ingredients ?? (recipe as any).ingredients ?? []
+    const ingLen = Array.isArray(baseIngsRaw) ? baseIngsRaw.length : 0
     const detailed: any[] = (recipe as any).Recipe_steps ?? []
   let initialEditSteps: Array<{ instructions: string; prep: number; ingredientIndices: number[]; image: File | null; imageUrl?: string | null }> = []
     if (Array.isArray(detailed) && detailed.length > 0) {
@@ -485,9 +488,25 @@ export default function RecipesPage() {
         .map((st: any) => {
           const instr = st?.instructions ? String(st.instructions) : ""
           const prep = typeof st?.prep_minutes !== 'undefined' ? Number(st.prep_minutes) || 1 : 1
-          const indices = Array.isArray(st?.ingredient_indices)
-            ? st.ingredient_indices.map((n: any) => Number(n)).filter((n: any) => Number.isFinite(n))
-            : []
+          // Normalize ingredient indices; accept arrays under ingredient_indices or ingredients
+          const rawIdx: any[] = Array.isArray(st?.ingredient_indices)
+            ? st.ingredient_indices
+            : (Array.isArray(st?.ingredients) ? st.ingredients : [])
+          const mappedIdx: number[] = rawIdx
+            .map((n: any) => Number(n))
+            .filter((n: any) => Number.isFinite(n))
+          let indices: number[] = mappedIdx.slice()
+          if (ingLen > 0 && indices.length > 0) {
+            const max = Math.max(...indices)
+            const min = Math.min(...indices)
+            // If API returns 1-based indices (min>=1 and either max===ingLen or some > ingLen-1), convert to 0-based
+            const looksOneBased = min >= 1 && !indices.includes(0) && (max === ingLen || indices.some(n => n > ingLen - 1))
+            if (looksOneBased) {
+              indices = indices.map(n => n - 1)
+            }
+            // Clamp to valid range, unique and sort
+            indices = Array.from(new Set(indices.filter(n => n >= 0 && n < ingLen))).sort((a,b)=>a-b)
+          }
           // Collect a primary image URL and an array of image URLs when API returns arrays
           const candidatesArray: any[] = Array.isArray(st?.image)
             ? st.image
@@ -647,15 +666,17 @@ export default function RecipesPage() {
   // Best choice flag
   fd.append("is_best_choice", editRecipe.isBestChoice ? "1" : "0")
 
-      // Tags for edit: send tag NAMES (not IDs). Map selected IDs back to names; fallback to existing string values.
-      if (Array.isArray(selectedEditTagIds) && selectedEditTagIds.length > 0 && Array.isArray(tagOptions) && tagOptions.length > 0) {
-        const nameList = selectedEditTagIds
-          .map(id => tagOptions.find(t => t.id === id)?.name)
-          .filter(n => typeof n === 'string' && n.trim()) as string[]
-        nameList.forEach((name, i) => fd.append(`tags[${i}]`, name.trim()))
-      } else if (Array.isArray(editRecipe.Tags)) {
-        editRecipe.Tags.filter(t => t && String(t).trim()).forEach((t, i) => fd.append(`tags[${i}]`, String(t).trim()))
-      }
+      // Tags for edit: combine selected catalog tag NAMES and any custom tag inputs
+      const selectedNames: string[] = (Array.isArray(selectedEditTagIds) && Array.isArray(tagOptions) && tagOptions.length > 0)
+        ? (selectedEditTagIds
+            .map(id => tagOptions.find(t => t.id === id)?.name)
+            .filter((n): n is string => typeof n === 'string' && n.trim().length > 0))
+        : []
+      const manualNames: string[] = Array.isArray(editRecipe.Tags)
+        ? editRecipe.Tags.filter((t) => t && String(t).trim()).map((t) => String(t).trim())
+        : []
+      const uniqueNames = Array.from(new Set([...selectedNames, ...manualNames]))
+      uniqueNames.forEach((name, i) => fd.append(`tags[${i}]`, name))
 
       // Do NOT send existing images; backend will keep them if no new images replace them.
       // Only append newly added image files.
@@ -1886,7 +1907,17 @@ export default function RecipesPage() {
               <div className="grid gap-2">
                 <div className="flex items-center justify-between">
                   <Label>Tags</Label>
-                  {tagsLoading ? (<span className="text-xs text-muted-foreground">Loading tags…</span>) : null}
+                  <div className="flex items-center gap-2">
+                    {tagsLoading ? (<span className="text-xs text-muted-foreground">Loading tags…</span>) : null}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setEditRecipe((s) => ({ ...s, Tags: [...(Array.isArray(s.Tags) ? s.Tags : []), ""] }))}
+                    >
+                      Add custom
+                    </Button>
+                  </div>
                 </div>
                 {tagOptions.length === 0 ? (
                   <div className="text-xs text-muted-foreground">No tags available.</div>
@@ -1915,7 +1946,32 @@ export default function RecipesPage() {
                     })}
                   </div>
                 )}
-                <p className="text-xs text-muted-foreground">Sent as tags[i] (IDs when available).</p>
+                {/* Custom tags inputs */}
+                <div className="grid gap-2">
+                  {(editRecipe.Tags || []).map((t, idx) => (
+                    <div key={idx} className="flex gap-2">
+                      <Input
+                        placeholder="Type a custom tag name"
+                        value={t}
+                        onChange={(e) => {
+                          const arr = [...(editRecipe.Tags || [])]
+                          arr[idx] = e.target.value
+                          setEditRecipe((s) => ({ ...s, Tags: arr }))
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="px-2 rounded border text-sm hover:bg-muted"
+                        onClick={() => setEditRecipe((s) => ({ ...s, Tags: (s.Tags || []).filter((_, i) => i !== idx) }))}
+                        aria-label="Remove tag"
+                        title="Remove"
+                      >
+                        <span className="inline-block leading-none">×</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">Sent as tags[i] (names from catalog and custom).</p>
               </div>
 
               {/* Steps builder (edit) */}
