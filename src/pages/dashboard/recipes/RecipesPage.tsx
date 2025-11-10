@@ -629,9 +629,12 @@ export default function RecipesPage() {
   // Best choice flag
   fd.append("is_best_choice", editRecipe.isBestChoice ? "1" : "0")
 
-      // Tags for edit: prefer selected IDs from catalog; fallback to existing strings
-      if (Array.isArray(selectedEditTagIds) && selectedEditTagIds.length > 0) {
-        selectedEditTagIds.forEach((id, i) => fd.append(`tags[${i}]`, String(id)))
+      // Tags for edit: send tag NAMES (not IDs). Map selected IDs back to names; fallback to existing string values.
+      if (Array.isArray(selectedEditTagIds) && selectedEditTagIds.length > 0 && Array.isArray(tagOptions) && tagOptions.length > 0) {
+        const nameList = selectedEditTagIds
+          .map(id => tagOptions.find(t => t.id === id)?.name)
+          .filter(n => typeof n === 'string' && n.trim()) as string[]
+        nameList.forEach((name, i) => fd.append(`tags[${i}]`, name.trim()))
       } else if (Array.isArray(editRecipe.Tags)) {
         editRecipe.Tags.filter(t => t && String(t).trim()).forEach((t, i) => fd.append(`tags[${i}]`, String(t).trim()))
       }
