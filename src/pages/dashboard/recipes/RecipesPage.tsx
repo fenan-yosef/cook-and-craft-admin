@@ -84,6 +84,10 @@ export default function RecipesPage() {
   const [maxCalories, setMaxCalories] = useState<string>("")
   const [minPrep, setMinPrep] = useState<string>("")
   const [maxPrep, setMaxPrep] = useState<string>("")
+  // Recipe tag catalog for selection in Edit modal
+  const [tagOptions, setTagOptions] = useState<Array<{ id: number; name: string; slug?: string }>>([])
+  const [tagsLoading, setTagsLoading] = useState(false)
+  const [selectedEditTagIds, setSelectedEditTagIds] = useState<number[]>([])
   // Mock: pending recipe requests
   // Pending requests kept in localStorage (UI section is currently commented out)
   // const [pending, setPending] = useState<PendingRecipe[]>([])
@@ -146,11 +150,41 @@ export default function RecipesPage() {
     if (token) {
       fetchRecipes(1, perPage)
       loadPending()
+      fetchAllRecipeTags()
     } else if (!authLoading) {
       setLoading(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, authLoading])
+
+  // Fetch tags for recipes (paginate best-effort)
+  const fetchAllRecipeTags = async () => {
+    try {
+      setTagsLoading(true)
+      const all: any[] = []
+      let page = 1
+      let lastPage = 1
+      for (let i = 0; i < 5; i++) { // cap safety
+        const res: any = await apiService.get(`/recipes/tags?page=${page}`)
+        const list = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : (Array.isArray(res?.data?.data) ? res.data.data : [])
+        if (Array.isArray(list)) all.push(...list)
+        const lp = Number(res?.last_page ?? res?.data?.last_page)
+        if (Number.isFinite(lp) && lp > 0) lastPage = lp
+        if (page >= lastPage) break
+        page += 1
+      }
+      const mapped = (all || [])
+        .map((t: any) => ({ id: Number(t?.id), name: String(t?.name ?? t?.slug ?? `#${t?.id}`), slug: t?.slug ? String(t.slug) : undefined }))
+        .filter((t: any) => Number.isFinite(t.id) && t.name)
+      const uniq: Record<number, { id: number; name: string; slug?: string }> = {}
+      mapped.forEach((t: any) => { uniq[t.id] = t })
+      setTagOptions(Object.values(uniq))
+    } catch {
+      setTagOptions([])
+    } finally {
+      setTagsLoading(false)
+    }
+  }
 
   // Mock loaders for pending requests
   const loadPending = () => {
@@ -494,7 +528,7 @@ export default function RecipesPage() {
       StepsText: "",
       Tags: (() => {
         const tags: any = (recipe as any).Tags ?? (recipe as any).tags ?? []
-        if (Array.isArray(tags)) return tags.map((t: any) => String(t))
+        if (Array.isArray(tags)) return tags.map((t: any) => String(t?.name ?? t?.slug ?? t))
         if (typeof tags === 'string') return tags.split(',').map((s) => s.trim()).filter(Boolean)
         return []
       })(),
@@ -505,7 +539,40 @@ export default function RecipesPage() {
     setIsEditDialogOpen(true)
     // reset new uploads for edit
   // Do not clear existingImages here; keep them until user removes explicitly
+
+    // Pre-select tags if catalog is available
+    try {
+      const recTags: any[] = (recipe as any).Tags ?? (recipe as any).tags ?? []
+      if (Array.isArray(recTags) && recTags.length > 0 && Array.isArray(tagOptions) && tagOptions.length > 0) {
+        const idSet = new Set<number>()
+        recTags.forEach((t: any) => {
+          const tid = Number(t?.id)
+          if (Number.isFinite(tid)) { idSet.add(tid); return }
+          const label = String(t?.name ?? t?.slug ?? t ?? '').toLowerCase()
+          const match = tagOptions.find(o => o.name.toLowerCase() === label || (o.slug && o.slug.toLowerCase() === label))
+          if (match) idSet.add(match.id)
+        })
+        setSelectedEditTagIds(Array.from(idSet.values()))
+      } else {
+        setSelectedEditTagIds([])
+      }
+    } catch { setSelectedEditTagIds([]) }
   }
+
+  // If tag options load while edit dialog is open, try to map from string labels
+  useEffect(() => {
+    if (!isEditDialogOpen) return
+    if (tagOptions.length === 0) return
+    const labels = Array.isArray(editRecipe.Tags) ? editRecipe.Tags : []
+    if (labels.length === 0) return
+    const idSet = new Set<number>()
+    labels.forEach((lbl: string) => {
+      const lower = String(lbl).toLowerCase()
+      const match = tagOptions.find(o => o.name.toLowerCase() === lower || (o.slug && o.slug.toLowerCase() === lower))
+      if (match) idSet.add(match.id)
+    })
+    if (idSet.size > 0) setSelectedEditTagIds(Array.from(idSet.values()))
+  }, [isEditDialogOpen, tagOptions])
 
   const submitEdit = async () => {
     try {
@@ -562,11 +629,11 @@ export default function RecipesPage() {
   // Best choice flag
   fd.append("is_best_choice", editRecipe.isBestChoice ? "1" : "0")
 
-      // Tags for edit
-      if (Array.isArray(editRecipe.Tags)) {
-        editRecipe.Tags.filter(t => t && String(t).trim()).forEach((t, i) => {
-          fd.append(`tags[${i}]`, String(t).trim())
-        })
+      // Tags for edit: prefer selected IDs from catalog; fallback to existing strings
+      if (Array.isArray(selectedEditTagIds) && selectedEditTagIds.length > 0) {
+        selectedEditTagIds.forEach((id, i) => fd.append(`tags[${i}]`, String(id)))
+      } else if (Array.isArray(editRecipe.Tags)) {
+        editRecipe.Tags.filter(t => t && String(t).trim()).forEach((t, i) => fd.append(`tags[${i}]`, String(t).trim()))
       }
 
       // Do NOT send existing images; backend will keep them if no new images replace them.
@@ -1741,40 +1808,36 @@ export default function RecipesPage() {
               <div className="grid gap-2">
                 <div className="flex items-center justify-between">
                   <Label>Tags</Label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setEditRecipe((s) => ({ ...s, Tags: [...(s.Tags || []), ""] }))}
-                  >
-                    Add
-                  </Button>
+                  {tagsLoading ? (<span className="text-xs text-muted-foreground">Loading tags…</span>) : null}
                 </div>
-                <div className="grid gap-2">
-                  {(editRecipe.Tags || []).map((t, idx) => (
-                    <div key={idx} className="flex gap-2">
-                      <Input
-                        placeholder="e.g. 2 or summer"
-                        value={t}
-                        onChange={(e) => {
-                          const arr = [...(editRecipe.Tags || [])]
-                          arr[idx] = e.target.value
-                          setEditRecipe((s) => ({ ...s, Tags: arr }))
-                        }}
-                      />
-                      <button
-                        type="button"
-                        className="px-2 rounded border text-sm hover:bg-muted"
-                        onClick={() => setEditRecipe((s) => ({ ...s, Tags: (s.Tags || []).filter((_, i) => i !== idx) }))}
-                        aria-label="Remove tag"
-                        title="Remove"
-                      >
-                        <span className="inline-block leading-none">×</span>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <p className="text-xs text-muted-foreground">Sent as tags[0], tags[1], ...</p>
+                {tagOptions.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">No tags available.</div>
+                ) : (
+                  <div className="flex flex-wrap gap-3">
+                    {tagOptions.map((t) => {
+                      const checked = selectedEditTagIds.includes(t.id)
+                      return (
+                        <label key={t.id} className="flex items-center gap-2 text-sm border rounded px-2 py-1">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4"
+                            checked={checked}
+                            onChange={(e) => {
+                              setSelectedEditTagIds((prev) => {
+                                const set = new Set(prev)
+                                if (e.target.checked) set.add(t.id)
+                                else set.delete(t.id)
+                                return Array.from(set.values())
+                              })
+                            }}
+                          />
+                          <span>{t.name}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">Sent as tags[i] (IDs when available).</p>
               </div>
 
               {/* Steps builder (edit) */}
