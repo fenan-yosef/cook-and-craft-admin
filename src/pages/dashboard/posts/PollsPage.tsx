@@ -49,6 +49,15 @@ export default function PollsPage() {
   const [lastPage, setLastPage] = useState(1)
   const [total, setTotal] = useState(0)
 
+  // View modal state (poll details and results)
+  const [isViewOpen, setIsViewOpen] = useState(false)
+  const [viewPoll, setViewPoll] = useState<ApiPoll | null>(null)
+  const [results, setResults] = useState<any[]>([])
+  const [resultsLoading, setResultsLoading] = useState(false)
+  const [resultsPage, setResultsPage] = useState(1)
+  const [resultsLastPage, setResultsLastPage] = useState(1)
+  const [resultsTotal, setResultsTotal] = useState(0)
+
   // Create dialog state
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -90,6 +99,38 @@ export default function PollsPage() {
   useEffect(() => {
     fetchPolls(1)
   }, [fetchPolls])
+
+  // Helpers
+  const getImageSrc = (img: any): string => {
+    if (!img) return ""
+    if (typeof img === "string") return img
+    return String(img?.url || img?.image_url || img?.path || "")
+  }
+
+  const openView = async (poll: ApiPoll) => {
+    setViewPoll(poll)
+    setIsViewOpen(true)
+    setResults([])
+    setResultsPage(1)
+    await fetchPollResults(poll.id, 1)
+  }
+
+  const fetchPollResults = async (pollId: number, page = 1) => {
+    try {
+      setResultsLoading(true)
+      const res: any = await apiService.get(`/polls/${pollId}/results?page=${page}`)
+      const obj = res?.data ?? res
+      const list = Array.isArray(obj?.data) ? obj.data : []
+      setResults(list)
+      setResultsPage(Number(obj?.current_page ?? 1))
+      setResultsLastPage(Number(obj?.last_page ?? 1))
+      setResultsTotal(Number(obj?.total ?? list.length ?? 0))
+    } catch (e: any) {
+      toast({ title: "Error", description: e?.message || "Failed to fetch poll results", variant: "destructive" })
+    } finally {
+      setResultsLoading(false)
+    }
+  }
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -196,7 +237,7 @@ export default function PollsPage() {
                   <TableRow><TableCell colSpan={7} className="text-center">No polls found</TableCell></TableRow>
                 ) : (
                   filtered.map((p) => (
-                    <TableRow key={p.id}>
+                    <TableRow key={p.id} className="cursor-pointer hover:bg-muted/40" onClick={() => openView(p)}>
                       <TableCell className="max-w-xs truncate">{p.question}</TableCell>
                       <TableCell className="max-w-xs truncate">{p.title || "—"}</TableCell>
                       <TableCell>{p.result_mode}</TableCell>
@@ -205,7 +246,7 @@ export default function PollsPage() {
                       <TableCell>{Array.isArray(p.poll_options) ? p.poll_options.length : 0}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button variant="outline" size="sm" onClick={() => deletePoll(p)}>Delete</Button>
+                          <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); deletePoll(p) }}>Delete</Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -223,6 +264,102 @@ export default function PollsPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* View Poll modal */}
+        <Dialog open={isViewOpen} onOpenChange={(o) => setIsViewOpen(o)}>
+          <DialogContent className="sm:max-w-[760px] max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Poll Details</DialogTitle>
+              <DialogDescription>View poll information and live results</DialogDescription>
+            </DialogHeader>
+
+            {viewPoll ? (
+              <div className="space-y-4">
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Question</Label>
+                    <div>{viewPoll.question}</div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Title</Label>
+                    <div>{viewPoll.title || "—"}</div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Description</Label>
+                    <div className="whitespace-pre-wrap">{viewPoll.description || "—"}</div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Mode</Label>
+                    <div>{viewPoll.result_mode}</div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Open at</Label>
+                    <div>{viewPoll.open_at || "—"}</div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Close at</Label>
+                    <div>{viewPoll.close_at || "—"}</div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-semibold">Results</h4>
+                    <div className="text-xs text-muted-foreground">Page {resultsPage} of {resultsLastPage}{resultsTotal ? ` • ${resultsTotal} items` : ""}</div>
+                  </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Option</TableHead>
+                        <TableHead>Order</TableHead>
+                        <TableHead>Votes</TableHead>
+                        <TableHead>Images</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {resultsLoading ? (
+                        <TableRow><TableCell colSpan={4} className="text-center">Loading…</TableCell></TableRow>
+                      ) : results.length === 0 ? (
+                        <TableRow><TableCell colSpan={4} className="text-center">No results</TableCell></TableRow>
+                      ) : (
+                        results.map((r: any) => {
+                          const imgs: any[] = Array.isArray(r?.images) ? r.images : []
+                          return (
+                            <TableRow key={r.id}>
+                              <TableCell className="max-w-xs truncate">{r.option_txt}</TableCell>
+                              <TableCell>{typeof r.order_num === 'number' ? r.order_num : '—'}</TableCell>
+                              <TableCell>{Number(r?.poll_votes_count ?? 0)}</TableCell>
+                              <TableCell>
+                                <div className="flex gap-1 flex-wrap">
+                                  {imgs.slice(0,4).map((im, i) => {
+                                    const src = getImageSrc(im)
+                                    return src ? <img key={i} src={src} className="h-8 w-8 object-cover rounded" /> : null
+                                  })}
+                                  {imgs.length > 4 ? <span className="text-xs text-muted-foreground">+{imgs.length - 4} more</span> : null}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                  <div className="mt-2 flex items-center justify-between">
+                    <div />
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" disabled={resultsLoading || resultsPage<=1} onClick={() => viewPoll && fetchPollResults(viewPoll.id, Math.max(1, resultsPage-1))}>Previous</Button>
+                      <Button variant="outline" size="sm" disabled={resultsLoading || resultsPage>=resultsLastPage} onClick={() => viewPoll && fetchPollResults(viewPoll.id, Math.min(resultsLastPage, resultsPage+1))}>Next</Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsViewOpen(false)}>Close</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={isCreateOpen} onOpenChange={(o) => { setIsCreateOpen(o); if (!o) resetCreate() }}>
           <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
