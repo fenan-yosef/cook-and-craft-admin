@@ -149,18 +149,36 @@ export default function ProductsPage() {
 
   useEffect(() => {
     fetchCategories()
+    // Enforce allowed per-page values on initial load
+    if (![15, 25, 50, 100].includes(perPage)) setPerPage(15)
     fetchProducts(1)
   }, [])
 
+  // Fetch products using backend-supported pagination param `per_page`
   const fetchProducts = async (page = 1, size = perPage) => {
     try {
       setLoading(true)
   // Ensure auth token is set for this request (if available)
   const token = localStorage.getItem("auth_token")
   if (token) apiService.setAuthToken(token)
-      const response = await apiService.get(
-        `/admins/products?page=${page}&perPage=${size}&limit=${size}&page_size=${size}&pageSize=${size}`,
-      )
+      // Build URL based on rules:
+      // - If size (perPage) === 15 and page === 1 -> send bare /admins/products (no query params)
+      // - If size === 15 and page > 1 -> send ?page=page
+      // - If size !== 15 -> send ?page=page&per_page=size (even if page=1)
+      const allowed = [15, 25, 50, 100]
+      const sizeInt = Number(size)
+      const pageInt = Number(page)
+      const effectiveSize = allowed.includes(sizeInt) ? sizeInt : 15
+      let endpoint = '/admins/products'
+      if (effectiveSize === 15) {
+        if (pageInt > 1) {
+          endpoint += `?page=${pageInt}`
+        }
+      } else {
+        endpoint += `?page=${pageInt}`
+        endpoint += `&per_page=${effectiveSize}`
+      }
+      const response = await apiService.get(endpoint)
 
       // Normalize common API shapes for items and pagination meta
       const normalize = (res: any) => {
@@ -1744,9 +1762,11 @@ export default function ProductsPage() {
                 value={String(perPage)}
                 onValueChange={(val) => {
                   const n = Number(val)
+                  const allowed = [15, 25, 50, 100]
+                  if (!allowed.includes(n)) return
                   setPerPage(n)
+                  // Reset to page 1 any time page size changes
                   setCurrentPage(1)
-                  // explicitly pass n to avoid stale state
                   fetchProducts(1, n)
                 }}
               >
@@ -1755,7 +1775,6 @@ export default function ProductsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="15">15 (default)</SelectItem>
-                  <SelectItem value="10">10</SelectItem>
                   <SelectItem value="25">25</SelectItem>
                   <SelectItem value="50">50</SelectItem>
                   <SelectItem value="100">100</SelectItem>
@@ -2173,9 +2192,10 @@ export default function ProductsPage() {
                 value={String(perPage)}
                 onValueChange={(val) => {
                   const n = Number(val)
+                  const allowed = [15, 25, 50, 100]
+                  if (!allowed.includes(n)) return
                   setPerPage(n)
                   setCurrentPage(1)
-                  // Explicitly pass n to avoid stale state issues
                   fetchProducts(1, n)
                 }}
               >
@@ -2184,7 +2204,6 @@ export default function ProductsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="15">15 (default)</SelectItem>
-                  <SelectItem value="10">10</SelectItem>
                   <SelectItem value="25">25</SelectItem>
                   <SelectItem value="50">50</SelectItem>
                   <SelectItem value="100">100</SelectItem>
