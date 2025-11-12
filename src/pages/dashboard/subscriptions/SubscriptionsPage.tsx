@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import {
   Card,
   CardContent,
@@ -126,6 +126,21 @@ export default function SubscriptionsPage() {
   const [intervalsLoading, setIntervalsLoading] = useState<boolean>(false)
   const [locationOptions, setLocationOptions] = useState<Array<{ id: number; label: string }>>([])
   const [locationsLoading, setLocationsLoading] = useState<boolean>(false)
+
+  // Meal selections shown in the View dialog
+  type MealSelection = {
+    interval_id: number
+    meal_id: number
+    qty: number
+    auto_assigned?: number
+    interval_title?: string
+    meal_label?: string
+  }
+  const [mealSelections, setMealSelections] = useState<MealSelection[]>([])
+  const [mealSelectionsLoading, setMealSelectionsLoading] = useState<boolean>(false)
+  // simple caches to avoid refetching same labels repeatedly during session
+  const intervalTitleCache = useRef<Map<number, string>>(new Map())
+  const mealLabelCache = useRef<Map<number, string>>(new Map())
 
   // State for the new subscription form with the correct payload structure
   const [newSubscriptionForm, setNewSubscriptionForm] = useState({
@@ -436,12 +451,115 @@ export default function SubscriptionsPage() {
   const openViewDialog = (subscription: Subscription) => {
     setSelectedSubscription(subscription)
     setIsViewDialogOpen(true)
+    // load this subscription's meal selections
+    fetchMealSelections(subscription.id)
   }
 
   const openEditDialog = (subscription: Subscription) => {
     setSelectedSubscription(subscription)
     fetchSubscriptionById(subscription.id)
     setIsEditDialogOpen(true)
+  }
+
+  // Fetch meal selections for a subscription and enrich with interval title and meal label
+  const fetchMealSelections = async (subscriptionId: number) => {
+    if (!token || !subscriptionId) return
+    try {
+      setMealSelectionsLoading(true)
+      setMealSelections([])
+      const res = await fetch(`${API_BASE_URL}/sub-meal-selections/subscription/${subscriptionId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error("Failed to fetch meal selections")
+      const payload = await res.json()
+      const rows: any[] = Array.isArray(payload?.data) ? payload.data : []
+
+      // Helper: resolve interval title
+      const getIntervalTitle = async (intervalId: number): Promise<string | undefined> => {
+        if (!intervalId) return undefined
+        // try cache
+        const cached = intervalTitleCache.current.get(intervalId)
+        if (cached) return cached
+        // try loaded options
+        const fromOptions = intervalOptions.find(o => o.id === intervalId)?.title
+        if (fromOptions) {
+          intervalTitleCache.current.set(intervalId, fromOptions)
+          return fromOptions
+        }
+        // fetch from API
+        try {
+          const r = await fetch(`${API_BASE_URL}/subscription_intervals/${intervalId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          if (!r.ok) throw new Error('interval fetch failed')
+          const data = await r.json()
+          const title = data?.data?.title ?? data?.title
+          if (typeof title === 'string' && title) {
+            intervalTitleCache.current.set(intervalId, title)
+            return title
+          }
+        } catch (_) {
+          // ignore, return undefined below
+        }
+        return undefined
+      }
+
+      // Helper: resolve meal label
+      const getMealLabel = async (mealId: number): Promise<string | undefined> => {
+        if (!mealId) return undefined
+        const cached = mealLabelCache.current.get(mealId)
+        if (cached) return cached
+        try {
+          const r = await fetch(`${API_BASE_URL}/meals/${mealId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          if (!r.ok) throw new Error('meal fetch failed')
+          const data = await r.json()
+          // Accept multiple possible shapes/keys from API
+          const labelCandidates = [
+            data?.data?.label,
+            data?.data?.name,
+            data?.data?.title,
+            data?.data?.meal_name,
+            data?.label,
+            data?.name,
+            data?.title,
+            data?.meal_name,
+            data?.data?.meal?.label,
+            data?.data?.meal?.name,
+            data?.data?.meal?.title,
+          ]
+          const label = labelCandidates.find((v: any) => typeof v === 'string' && v.trim().length > 0)
+          if (typeof label === 'string' && label) {
+            mealLabelCache.current.set(mealId, label)
+            return label
+          }
+        } catch (_) {
+          // ignore
+        }
+        return undefined
+      }
+
+      // Enrich in parallel
+      const enriched: MealSelection[] = await Promise.all(rows.map(async (row) => {
+        const interval_id = Number(row?.interval_id) || 0
+        const meal_id = Number(row?.meal_id) || 0
+        const qty = Number(row?.qty) || 0
+        const [interval_title, meal_label] = await Promise.all([
+          getIntervalTitle(interval_id),
+          getMealLabel(meal_id),
+        ])
+        // If API didn't return a label, fall back to row.meal_name as a last resort
+        const finalMealLabel = meal_label || (typeof row?.meal_name === 'string' ? row.meal_name : undefined)
+        return { interval_id, meal_id, qty, auto_assigned: row?.auto_assigned, interval_title, meal_label: finalMealLabel }
+      }))
+      setMealSelections(enriched)
+    } catch (e: any) {
+      setMealSelections([])
+      toast({ title: 'Error', description: e?.message || 'Failed to load meal selections', variant: 'destructive' })
+    } finally {
+      setMealSelectionsLoading(false)
+    }
   }
 
   const filteredSubscriptions = subscriptions
@@ -575,7 +693,11 @@ export default function SubscriptionsPage() {
                   </TableRow>
                 ) : (
                   filteredSubscriptions.map((sub) => (
-                    <TableRow key={sub.id}>
+                    <TableRow
+                      key={sub.id}
+                      onClick={() => openViewDialog(sub)}
+                      className="cursor-pointer hover:bg-muted/30"
+                    >
                       <TableCell>
                         <div className="font-medium">{sub.user_name ?? `User #${sub.user_id}`}</div>
                         <div className="text-sm text-muted-foreground">{sub.user_email}</div>
@@ -603,7 +725,7 @@ export default function SubscriptionsPage() {
                           ? `${sub.delivery_time_id.start_time.substring(0, 5)} - ${sub.delivery_time_id.end_time.substring(0, 5)}`
                           : "N/A"}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" className="h-8 w-8 p-0">
@@ -749,6 +871,42 @@ export default function SubscriptionsPage() {
               <div>
                 <Label>Coupon Code</Label>
                 <p>{selectedSubscription.coupon_code || "None"}</p>
+              </div>
+
+              {/* Meal Selections */}
+              <div className="pt-2 border-t">
+                <div className="flex items-center justify-between">
+                  <Label>Meal Selections</Label>
+                  {mealSelectionsLoading ? (
+                    <span className="text-xs text-muted-foreground">Loading…</span>
+                  ) : null}
+                </div>
+                {mealSelectionsLoading ? null : (
+                  mealSelections.length === 0 ? (
+                    <p className="text-sm text-muted-foreground mt-1">No meal selections for this subscription.</p>
+                  ) : (
+                    <div className="mt-2">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Interval</TableHead>
+                            <TableHead>Meal</TableHead>
+                            <TableHead>Qty</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {mealSelections.map((ms, idx) => (
+                            <TableRow key={idx}>
+                              <TableCell>{ms.interval_title ?? `#${ms.interval_id}`}</TableCell>
+                              <TableCell>{ms.meal_label ?? `#${ms.meal_id}`}</TableCell>
+                              <TableCell>{ms.qty}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )
+                )}
               </div>
             </div>
           )}
