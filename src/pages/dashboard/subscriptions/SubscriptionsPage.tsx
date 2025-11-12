@@ -50,6 +50,7 @@ import {
   Users,
   TrendingUp,
   Clock,
+  ChevronDown,
   Pencil,
   Trash2,
 } from "lucide-react"
@@ -141,6 +142,8 @@ export default function SubscriptionsPage() {
   // simple caches to avoid refetching same labels repeatedly during session
   const intervalTitleCache = useRef<Map<number, string>>(new Map())
   const mealLabelCache = useRef<Map<number, string>>(new Map())
+  // state to track which interval groups are expanded in the View dialog
+  const [openIntervalIds, setOpenIntervalIds] = useState<number[]>([])
 
   // State for the new subscription form with the correct payload structure
   const [newSubscriptionForm, setNewSubscriptionForm] = useState({
@@ -876,7 +879,7 @@ export default function SubscriptionsPage() {
               {/* Meal Selections */}
               <div className="pt-2 border-t">
                 <div className="flex items-center justify-between">
-                  <Label>Meal Selections</Label>
+                  <Label className="text-lg">Meal Selections within Intervals</Label>
                   {mealSelectionsLoading ? (
                     <span className="text-xs text-muted-foreground">Loading…</span>
                   ) : null}
@@ -887,21 +890,70 @@ export default function SubscriptionsPage() {
                   ) : (
                     <div className="mt-2">
                       <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Interval</TableHead>
-                            <TableHead>Meal</TableHead>
-                            <TableHead>Qty</TableHead>
-                          </TableRow>
-                        </TableHeader>
                         <TableBody>
-                          {mealSelections.map((ms, idx) => (
-                            <TableRow key={idx}>
-                              <TableCell>{ms.interval_title ?? `#${ms.interval_id}`}</TableCell>
-                              <TableCell>{ms.meal_label ?? `#${ms.meal_id}`}</TableCell>
-                              <TableCell>{ms.qty}</TableCell>
-                            </TableRow>
-                          ))}
+                                  {/* Group meal selections by interval to avoid duplicate interval rows */}
+                                  {(() => {
+                                    type Group = { interval_id: number; interval_title?: string; meals: MealSelection[] }
+                                    const groups = Object.values(
+                                      mealSelections.reduce((acc: Record<number, Group>, ms) => {
+                                        const id = ms.interval_id || 0
+                                        if (!acc[id]) acc[id] = { interval_id: id, interval_title: ms.interval_title, meals: [] }
+                                        acc[id].meals.push(ms)
+                                        // ensure we have a title if one was discovered later
+                                        if (!acc[id].interval_title && ms.interval_title) acc[id].interval_title = ms.interval_title
+                                        return acc
+                                      }, {} as Record<number, Group>),
+                                    ).sort((a, b) => a.interval_id - b.interval_id)
+
+                                    const toggle = (id: number) => {
+                                      setOpenIntervalIds((prev) =>
+                                        prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+                                      )
+                                    }
+
+                                    return (
+                                      <div className="space-y-2">
+                                        {groups.map((g) => {
+                                          const isOpen = openIntervalIds.includes(g.interval_id)
+                                          return (
+                                            <div key={g.interval_id} className="border rounded">
+                                              <button
+                                                type="button"
+                                                onClick={() => toggle(g.interval_id)}
+                                                className="w-full flex items-center justify-between px-4 py-2 bg-surface hover:bg-muted/50"
+                                              >
+                                                <div className="flex items-center space-x-3">
+                                                  <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? "-rotate-180" : ""}`} />
+                                                  <div className="font-medium">{g.interval_title ?? `Interval #${g.interval_id}`}</div>
+                                                  <div className="text-sm text-muted-foreground">({g.meals.length} meal{g.meals.length > 1 ? "s" : ""})</div>
+                                                </div>
+                                              </button>
+                                              {isOpen ? (
+                                                <div className="px-4 pb-3 pt-2">
+                                                  <Table>
+                                                    <TableHeader>
+                                                      <TableRow>
+                                                        <TableHead>Meal</TableHead>
+                                                        <TableHead>Qty</TableHead>
+                                                      </TableRow>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                      {g.meals.map((ms, idx) => (
+                                                        <TableRow key={idx}>
+                                                          <TableCell>{ms.meal_label ?? `#${ms.meal_id}`}</TableCell>
+                                                          <TableCell>{ms.qty}</TableCell>
+                                                        </TableRow>
+                                                      ))}
+                                                    </TableBody>
+                                                  </Table>
+                                                </div>
+                                              ) : null}
+                                            </div>
+                                          )
+                                        })}
+                                      </div>
+                                    )
+                                  })()}
                         </TableBody>
                       </Table>
                     </div>
