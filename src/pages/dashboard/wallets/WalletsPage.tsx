@@ -62,7 +62,7 @@ const WalletsPage: React.FC = () => {
 					setError("");
 					const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
 					if (token) apiService.setAuthToken(token);
-					const res = await apiService.get(`/wallets?page=${page}&per_page=${perPage}`);
+					const res = await apiService.get(`/admins/wallet-shop-items?page=${page}&per_Page=${perPage}`);
 
 					// Normalize common shapes
 					const top: any = res ?? {};
@@ -174,7 +174,6 @@ const WalletsPage: React.FC = () => {
 										<TableHead >User</TableHead>
 										<TableHead className="text-right">Points Balance</TableHead>
 										<TableHead className="text-left">Cash Balance</TableHead>
-										<TableHead>Expires</TableHead>
 										<TableHead>Description</TableHead>
 										<TableHead className="text-right">Logos</TableHead>
 									</TableRow>
