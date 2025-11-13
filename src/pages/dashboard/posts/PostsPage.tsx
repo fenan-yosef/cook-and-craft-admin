@@ -993,7 +993,6 @@ export default function PostsPage() {
                   <TableHead>Title</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Likes</TableHead>
-                  <TableHead>Poll</TableHead>
                   <TableHead>Images</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -1001,13 +1000,13 @@ export default function PostsPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center">
+                    <TableCell colSpan={5} className="text-center">
                       Loading...
                     </TableCell>
                   </TableRow>
                 ) : filteredPosts.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center">
+                    <TableCell colSpan={5} className="text-center">
                       No posts found
                     </TableCell>
                   </TableRow>
@@ -1040,13 +1039,6 @@ export default function PostsPage() {
                       </TableCell>
                       <TableCell>{post.likes_count}</TableCell>
                       <TableCell>
-                        {post.post_poll && post.post_poll.question ? (
-                          <span>{post.post_poll.question}</span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">No Poll</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
                         {post.media && post.media.length > 0 ? (
                           <div className="flex gap-1">
                             {post.media.slice(0, 2).map((url, idx) => (
@@ -1064,9 +1056,7 @@ export default function PostsPage() {
                             )}
                           </div>
                         ) : (
-                          <span className="text-xs text-muted-foreground">
-                            No Image
-                          </span>
+                          <span className="text-xs text-muted-foreground">No Image</span>
                         )}
                       </TableCell>
                       <TableCell className="text-right">
@@ -1157,7 +1147,7 @@ export default function PostsPage() {
           open={isViewPostDialogOpen}
           onOpenChange={setIsViewPostDialogOpen}
         >
-          <DialogContent className="w-full max-w-[95vw] sm:max-w-screen-lg">
+          <DialogContent className="w-full sm:max-w-[600px]">
             <DialogHeader>
               <DialogTitle>View Post</DialogTitle>
               <DialogDescription>
@@ -1166,7 +1156,7 @@ export default function PostsPage() {
             </DialogHeader>
             {selectedPost && (
               <div className="py-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 gap-6">
                   {/* Left panel: Post details (no poll) */}
                   <div className="space-y-4">
                     <div className="grid grid-cols-4 items-center gap-4">
@@ -1257,37 +1247,6 @@ export default function PostsPage() {
                           </TableBody>
                         </Table>
                       </div>
-                    )}
-                  </div>
-
-                  {/* Right panel: Poll details */}
-                  <div className="space-y-3 md:pl-6 md:border-l border-t md:border-t-0 border-border pt-4 md:pt-0">
-                    <h3 className="text-lg font-bold">Poll</h3>
-                    {selectedPost.post_poll && selectedPost.post_poll.question ? (
-                      <>
-                        <Button
-                          variant="ghost"
-                          onClick={() => setShowPollOptions(!showPollOptions)}
-                          className="justify-start px-0"
-                        >
-                          {selectedPost.post_poll.question}
-                        </Button>
-                        {showPollOptions && (
-                          <div className="grid gap-1 pl-4">
-                            {selectedPost.post_poll?.poll_options?.length ? (
-                              selectedPost.post_poll.poll_options.map((option: { option_txt: string }, index: number) => (
-                                <div key={index} className="flex items-center space-x-2">
-                                  <Badge>{option.option_txt}</Badge>
-                                </div>
-                              ))
-                            ) : (
-                              <span className="text-sm text-muted-foreground">No options</span>
-                            )}
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">No Poll</span>
                     )}
                   </div>
                 </div>
