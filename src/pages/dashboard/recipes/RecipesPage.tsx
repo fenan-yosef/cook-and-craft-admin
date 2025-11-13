@@ -20,7 +20,6 @@ import { apiService } from "@/lib/api-service"
 import { useAuth } from "@/contexts/auth-context"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { Checkbox } from "@/components/ui/checkbox"
 
 type ApiRecipe = {
   Recipe_ID: number
@@ -97,6 +96,9 @@ export default function RecipesPage() {
   const [showCreateDropdown, setShowCreateDropdown] = useState<boolean>(false)
   const [showEditDropdown, setShowEditDropdown] = useState<boolean>(false)
   const [showFilterDropdown, setShowFilterDropdown] = useState<boolean>(false)
+  // Per-ingredient expansion (open details for a single ingredient at a time)
+  const [expandedCreateIngredientIndex, setExpandedCreateIngredientIndex] = useState<number | null>(null)
+  const [expandedEditIngredientIndex, setExpandedEditIngredientIndex] = useState<number | null>(null)
   // Mock: pending recipe requests
   // Pending requests kept in localStorage (UI section is currently commented out)
   // const [pending, setPending] = useState<PendingRecipe[]>([])
@@ -769,60 +771,121 @@ export default function RecipesPage() {
                   <Input id="prep" type="number" value={newRecipe.Prep_minutes} onChange={(e) => setNewRecipe((s) => ({ ...s, Prep_minutes: e.target.value }))} placeholder="e.g. 20" />
                 </div>
               </div>
-              {/* Ingredients */}
-              <div className="grid gap-2">
+              {/* Ingredients: compact panel to avoid long modal scroll */}
+              <div className="grid gap-2 relative">
                 <div className="flex items-center justify-between">
                   <Label>Ingredients</Label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setNewRecipe((s) => ({ ...s, Ingredients: [...(s.Ingredients || []), { name: "", amount: "", image: null }] }))}
-                  >
-                    Add
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setNewRecipe((s) => ({ ...s, Ingredients: [...(s.Ingredients || []), { name: "", amount: "", image: null }] }))}
+                    >
+                      Add
+                    </Button>
+                  </div>
                 </div>
-                <div className="grid gap-2">
-                  {(newRecipe.Ingredients || []).map((ing, idx) => (
-                    <div key={idx} className="space-y-2">
-                      <div className="grid grid-cols-5 gap-2">
-                        <Input
-                          placeholder="Name"
-                          value={ing.name}
-                          onChange={(e) => {
-                            const arr = [...(newRecipe.Ingredients || [])]
-                            arr[idx] = { ...arr[idx], name: e.target.value }
-                            setNewRecipe((s) => ({ ...s, Ingredients: arr }))
-                          }}
-                          className="col-span-3"
-                        />
-                        <Input
-                          placeholder="Amount (e.g. 200 g)"
-                          value={ing.amount}
-                          onChange={(e) => {
-                            const arr = [...(newRecipe.Ingredients || [])]
-                            arr[idx] = { ...arr[idx], amount: e.target.value }
-                            setNewRecipe((s) => ({ ...s, Ingredients: arr }))
-                          }}
-                          className="col-span-2"
-                        />
-                      </div>
-                      <div className="grid gap-1">
-                        <Label className="text-xs text-muted-foreground">Ingredient image (optional)</Label>
-                        <Input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => {
-                            const file = (e.target.files && e.target.files[0]) || null
-                            const arr = [...(newRecipe.Ingredients || [])]
-                            arr[idx] = { ...arr[idx], image: file }
-                            setNewRecipe((s) => ({ ...s, Ingredients: arr }))
-                          }}
-                        />
-                      </div>
-                    </div>
+
+                {/* Small summary */}
+                <div className="flex flex-wrap gap-2">
+                  {(newRecipe.Ingredients || []).slice(0, 3).map((ing, i) => (
+                    <Badge key={i} variant="secondary" className="inline-flex items-center gap-2">
+                      <span className="text-sm">{ing.name || `#${i + 1}`}</span>
+                    </Badge>
                   ))}
+                  {(newRecipe.Ingredients || []).length > 3 ? (
+                    <span className="text-xs text-muted-foreground">+{(newRecipe.Ingredients || []).length - 3} more</span>
+                  ) : null}
                 </div>
+
+                {(newRecipe.Ingredients || []).length > 0 && (
+                  <div className="mt-2 w-full bg-popover border rounded p-3 grid gap-3">
+                    {(newRecipe.Ingredients || []).map((ing, idx) => (
+                      <div key={idx} className="border rounded">
+                        <div className="flex items-center justify-between p-2">
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded overflow-hidden bg-muted border flex-shrink-0">
+                              {ing.image ? (
+                                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                                <img src={URL.createObjectURL(ing.image!)} alt={`Ingredient ${idx + 1}`} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full bg-muted" />
+                              )}
+                            </div>
+                            <div className="text-sm">{ing.name || `#${idx + 1}`}</div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="h-8 px-2"
+                              onClick={() => {
+                                const arr = [...(newRecipe.Ingredients || [])]
+                                arr.splice(idx, 1)
+                                setNewRecipe((s) => ({ ...s, Ingredients: arr }))
+                                setExpandedCreateIngredientIndex(null)
+                              }}
+                            >
+                              Remove
+                            </Button>
+                            <button
+                              type="button"
+                              aria-label={`Toggle ingredient ${idx + 1}`}
+                              onClick={() => setExpandedCreateIngredientIndex((cur) => (cur === idx ? null : idx))}
+                              className="p-2 rounded hover:bg-muted"
+                            >
+                              <ChevronDown className={`h-4 w-4 transform transition ${expandedCreateIngredientIndex === idx ? 'rotate-180' : ''}`} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {expandedCreateIngredientIndex === idx && (
+                          <div className="p-3 border-t grid gap-2">
+                            <div className="grid grid-cols-3 gap-2">
+                              <Input
+                                placeholder="Name"
+                                value={ing.name}
+                                onChange={(e) => {
+                                  const arr = [...(newRecipe.Ingredients || [])]
+                                  arr[idx] = { ...arr[idx], name: e.target.value }
+                                  setNewRecipe((s) => ({ ...s, Ingredients: arr }))
+                                }}
+                                className="col-span-2"
+                              />
+                              <Input
+                                placeholder="Amount (e.g. 200 g)"
+                                value={ing.amount}
+                                onChange={(e) => {
+                                  const arr = [...(newRecipe.Ingredients || [])]
+                                  arr[idx] = { ...arr[idx], amount: e.target.value }
+                                  setNewRecipe((s) => ({ ...s, Ingredients: arr }))
+                                }}
+                                className="col-span-1"
+                              />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const file = (e.target.files && e.target.files[0]) || null
+                                  const arr = [...(newRecipe.Ingredients || [])]
+                                  arr[idx] = { ...arr[idx], image: file }
+                                  setNewRecipe((s) => ({ ...s, Ingredients: arr }))
+                                }}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    <div className="flex justify-end">
+                      <Button type="button" variant="secondary" size="sm" onClick={() => setExpandedCreateIngredientIndex(null)}>Done</Button>
+                    </div>
+                  </div>
+                )}
+
                 <p className="text-xs text-muted-foreground">Tip: Use common units like g (grams), kg, ml, tbsp, tsp.</p>
               </div>
 
@@ -1890,89 +1953,137 @@ export default function RecipesPage() {
                   <Input id="eprep" type="number" value={editRecipe.Prep_minutes} onChange={(e) => setEditRecipe((s) => ({ ...s, Prep_minutes: e.target.value }))} />
                 </div>
               </div>
-              {/* Ingredients (edit) */}
-              <div className="grid gap-2">
+              {/* Ingredients (edit): compact panel to avoid long modal scroll */}
+              <div className="grid gap-2 relative">
                 <div className="flex items-center justify-between">
                   <Label>Ingredients</Label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setEditRecipe((s) => ({ ...s, Ingredients: [...(s.Ingredients || []), { name: "", amount: "", image: null }] }))}
-                  >
-                    Add
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setEditRecipe((s) => ({ ...s, Ingredients: [...(s.Ingredients || []), { name: "", amount: "", image: null }] }))}
+                    >
+                      Add
+                    </Button>
+                  </div>
                 </div>
-                <div className="grid gap-2">
-                  {(editRecipe.Ingredients || []).map((ing, idx) => (
-                    <div key={idx} className="space-y-2">
-                      <div className="grid grid-cols-5 gap-2">
-                        <Input
-                          placeholder="Name"
-                          value={ing.name}
-                          onChange={(e) => {
-                            const arr = [...(editRecipe.Ingredients || [])]
-                            arr[idx] = { ...arr[idx], name: e.target.value }
-                            setEditRecipe((s) => ({ ...s, Ingredients: arr }))
-                          }}
-                          className="col-span-3"
-                        />
-                        <Input
-                          placeholder="Amount (e.g. 200 g)"
-                          value={ing.amount}
-                          onChange={(e) => {
-                            const arr = [...(editRecipe.Ingredients || [])]
-                            arr[idx] = { ...arr[idx], amount: e.target.value }
-                            setEditRecipe((s) => ({ ...s, Ingredients: arr }))
-                          }}
-                          className="col-span-2"
-                        />
-                      </div>
-                      <div className="grid gap-1">
-                        <Label className="text-xs text-muted-foreground">Ingredient image (optional)</Label>
-                        <Input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => {
-                            const file = (e.target.files && e.target.files[0]) || null
-                            const arr = [...(editRecipe.Ingredients || [])]
-                            arr[idx] = { ...arr[idx], image: file }
-                            setEditRecipe((s) => ({ ...s, Ingredients: arr }))
-                          }}
-                        />
-                        <div className="flex items-center gap-2 mt-1">
-                          {ing.image ? (
-                            <img
-                              src={URL.createObjectURL(ing.image)}
-                              alt={`Ingredient ${idx + 1} (new)`}
-                              className="w-12 h-12 object-cover rounded border"
-                            />
-                          ) : ing.imageUrl ? (
-                            <img
-                              src={ing.imageUrl}
-                              alt={`Ingredient ${idx + 1}`}
-                              className="w-12 h-12 object-cover rounded border"
-                            />
-                          ) : null}
-                          {ing.image ? (
+
+                {/* Small summary */}
+                <div className="flex flex-wrap gap-2">
+                  {(editRecipe.Ingredients || []).slice(0, 3).map((ing, i) => (
+                    <Badge key={i} variant="secondary" className="inline-flex items-center gap-2">
+                      <span className="text-sm">{ing.name || `#${i + 1}`}</span>
+                    </Badge>
+                  ))}
+                  {(editRecipe.Ingredients || []).length > 3 ? (
+                    <span className="text-xs text-muted-foreground">+{(editRecipe.Ingredients || []).length - 3} more</span>
+                  ) : null}
+                </div>
+
+                {(editRecipe.Ingredients || []).length > 0 && (
+                  <div className="mt-2 w-full bg-popover border rounded p-3 grid gap-3">
+                    {(editRecipe.Ingredients || []).map((ing, idx) => (
+                      <div key={idx} className="border rounded">
+                        <div className="flex items-center justify-between p-2">
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded overflow-hidden bg-muted border flex-shrink-0">
+                              {ing.image ? (
+                                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                                <img src={URL.createObjectURL(ing.image!)} alt={`Ingredient ${idx + 1}`} className="w-full h-full object-cover" />
+                              ) : ing.imageUrl ? (
+                                <img src={ing.imageUrl} alt={`Ingredient ${idx + 1}`} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full bg-muted" />
+                              )}
+                            </div>
+                            <div className="text-sm">{ing.name || `#${idx + 1}`}</div>
+                          </div>
+                          <div className="flex items-center gap-2">
                             <Button
                               type="button"
                               variant="ghost"
                               className="h-8 px-2"
                               onClick={() => {
                                 const arr = [...(editRecipe.Ingredients || [])]
-                                arr[idx] = { ...arr[idx], image: null }
+                                arr.splice(idx, 1)
                                 setEditRecipe((s) => ({ ...s, Ingredients: arr }))
+                                setExpandedEditIngredientIndex(null)
                               }}
                             >
-                              Clear
+                              Remove
                             </Button>
-                          ) : null}
+                            <button
+                              type="button"
+                              aria-label={`Toggle ingredient ${idx + 1}`}
+                              onClick={() => setExpandedEditIngredientIndex((cur) => (cur === idx ? null : idx))}
+                              className="p-2 rounded hover:bg-muted"
+                            >
+                              <ChevronDown className={`h-4 w-4 transform transition ${expandedEditIngredientIndex === idx ? 'rotate-180' : ''}`} />
+                            </button>
+                          </div>
                         </div>
+
+                        {expandedEditIngredientIndex === idx && (
+                          <div className="p-3 border-t grid gap-2">
+                            <div className="grid grid-cols-3 gap-2">
+                              <Input
+                                placeholder="Name"
+                                value={ing.name}
+                                onChange={(e) => {
+                                  const arr = [...(editRecipe.Ingredients || [])]
+                                  arr[idx] = { ...arr[idx], name: e.target.value }
+                                  setEditRecipe((s) => ({ ...s, Ingredients: arr }))
+                                }}
+                                className="col-span-2"
+                              />
+                              <Input
+                                placeholder="Amount (e.g. 200 g)"
+                                value={ing.amount}
+                                onChange={(e) => {
+                                  const arr = [...(editRecipe.Ingredients || [])]
+                                  arr[idx] = { ...arr[idx], amount: e.target.value }
+                                  setEditRecipe((s) => ({ ...s, Ingredients: arr }))
+                                }}
+                                className="col-span-1"
+                              />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const file = (e.target.files && e.target.files[0]) || null
+                                  const arr = [...(editRecipe.Ingredients || [])]
+                                  arr[idx] = { ...arr[idx], image: file }
+                                  setEditRecipe((s) => ({ ...s, Ingredients: arr }))
+                                }}
+                              />
+                              {ing.image ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  className="h-8 px-2"
+                                  onClick={() => {
+                                    const arr = [...(editRecipe.Ingredients || [])]
+                                    arr[idx] = { ...arr[idx], image: null }
+                                    setEditRecipe((s) => ({ ...s, Ingredients: arr }))
+                                  }}
+                                >
+                                  Clear
+                                </Button>
+                              ) : null}
+                            </div>
+                          </div>
+                        )}
                       </div>
+                    ))}
+                    <div className="flex justify-end">
+                      <Button type="button" variant="secondary" size="sm" onClick={() => setExpandedEditIngredientIndex(null)}>Done</Button>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                )}
+
                 <p className="text-xs text-muted-foreground">Tip: Use common units like g (grams), kg, ml, tbsp, tsp.</p>
               </div>
 
