@@ -62,6 +62,9 @@ export default function ReportsPage() {
   const [selectedReport, setSelectedReport] = useState<PostReport | null>(null)
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
   const [resolutionNote, setResolutionNote] = useState("")
+  const [viewPost, setViewPost] = useState<any | null>(null)
+  const [isViewPostDialogOpen, setIsViewPostDialogOpen] = useState(false)
+  const [isFetchingPost, setIsFetchingPost] = useState(false)
   const { toast } = useToast()
   const { token } = useAuth();
   const [userNameMap, setUserNameMap] = useState<Record<number, string>>({})
@@ -262,6 +265,50 @@ export default function ReportsPage() {
   }
 }
 
+// Minimal post fetcher for the inline "View Post" modal in ReportsPage
+async function fetchPostByIdForReports(id: number): Promise<any | null> {
+  try {
+    if (token) apiService.setAuthToken(token);
+    const res = await apiService.get(`/posts/${id}?withLikes=true&withPolls=true&withVersions=true`);
+    const raw = res?.data ?? res;
+    const rawPost = raw?.id ? raw : raw?.post ?? raw;
+    if (!rawPost?.id) return null;
+
+    // derive latest version (if any) and media
+    const versions = Array.isArray(rawPost.post_versions) ? rawPost.post_versions : [];
+    const sortedVersions = [...versions].sort((a: any, b: any) => {
+      return new Date(b.created_at || b.updated_at || 0).getTime() - new Date(a.created_at || a.updated_at || 0).getTime();
+    });
+    const latest = sortedVersions[0] || rawPost;
+
+    const media = (latest?.images || []).map((img: any) => img?.image || img?.imageUrl || img?.url || img?.path || img?.storage_path || img).filter(Boolean);
+
+    return {
+      id: rawPost.id,
+      title: rawPost.title || latest?.title || `Post #${rawPost.id}`,
+      content: latest?.description ?? rawPost?.content ?? "",
+      created_at: rawPost.created_at,
+      media,
+      user: rawPost.user || null,
+    };
+  } catch (e) {
+    console.error("Failed to fetch post", e);
+    return null;
+  }
+}
+
+async function openPostViewById(postId: number) {
+  setIsFetchingPost(true);
+  const p = await fetchPostByIdForReports(postId);
+  setIsFetchingPost(false);
+  if (p) {
+    setViewPost(p);
+    setIsViewPostDialogOpen(true);
+  } else {
+    toast({ title: "Error", description: "Failed to load post", variant: "destructive" });
+  }
+}
+
   const filteredReports = reports.filter((report) => {
     const matchesSearch =
       report.post_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -388,7 +435,7 @@ export default function ReportsPage() {
                           <div className="font-medium truncate">
                             <Link
                               to={`/dashboard/posts?viewPostId=${report.post_id}`}
-                              onClick={(e) => e.stopPropagation()}
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); openPostViewById(report.post_id); }}
                               className="underline hover:no-underline"
                             >
                               {report.post_title}
@@ -573,6 +620,41 @@ export default function ReportsPage() {
                   Close
                 </Button>
               )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        {/* View Post Dialog (inline, opened from the post link in the reports list) */}
+        <Dialog open={isViewPostDialogOpen} onOpenChange={setIsViewPostDialogOpen}>
+          <DialogContent className="w-full max-w-[95vw] sm:max-w-screen-lg">
+            <DialogHeader>
+              <DialogTitle>View Post</DialogTitle>
+              <DialogDescription>Details of the selected post.</DialogDescription>
+            </DialogHeader>
+            {isFetchingPost ? (
+              <div className="p-4">Loading post...</div>
+            ) : viewPost ? (
+              <div className="py-4">
+                <h3 className="text-lg font-semibold">{viewPost.title}</h3>
+                <p className="text-sm text-muted-foreground mt-2">{viewPost.content}</p>
+
+                {viewPost.media && viewPost.media.length > 0 && (
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    {viewPost.media.map((src: string, idx: number) => (
+                      <img key={idx} src={src} className="w-full h-24 object-cover rounded" alt={`media-${idx}`} />
+                    ))}
+                  </div>
+                )}
+
+                <div className="mt-4 text-sm text-muted-foreground">
+                  {viewPost.created_at && <div>Posted: {new Date(viewPost.created_at).toLocaleString()}</div>}
+                  {viewPost.user && <div>By: {viewPost.user.full_name || viewPost.user.id}</div>}
+                </div>
+              </div>
+            ) : (
+              <div className="p-4">No post data</div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsViewPostDialogOpen(false)}>Close</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
