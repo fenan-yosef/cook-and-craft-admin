@@ -92,8 +92,9 @@ export default function ProductsPage() {
     // Add modal always uses SAR and the input is removed from the UI
     currency: "SAR",
     nutritionFacts: { calories: "", fat: "", protein: "" },
-    ingredientsMain: [{ name: "", emoji: "", amount: "", imageFile: null as File | null }] as Array<{ name: string; emoji: string; amount: string; imageFile: File | null }> ,
-    ingredientsExtra: [] as Array<{ name: string; emoji: string; amount: string; imageFile: File | null }> ,
+  // include imageUrl/imagePreview on ingredient entries so existing server images can be shown in Edit modal
+  ingredientsMain: [{ name: "", emoji: "", amount: "", imageFile: null as File | null, imageUrl: "" }] as Array<{ name: string; emoji: string; amount: string; imageFile: File | null; imageUrl?: string; imagePreview?: string }>,
+  ingredientsExtra: [] as Array<{ name: string; emoji: string; amount: string; imageFile: File | null; imageUrl?: string; imagePreview?: string }> ,
     ingredientsNotIncluded: [] as string[],
     utensils: [] as string[],
     dessertSuggestions: [] as Array<{ name: string; price: string; imageFile: File | null; imagePreview?: string }>,
@@ -122,9 +123,10 @@ export default function ProductsPage() {
     is_on_sale: false,
     // Edit starts empty and is populated when opening the modal from product data
     currency: "",
-    nutritionFacts: { calories: "", fat: "", protein: "" },
-    ingredientsMain: [{ name: "", emoji: "", amount: "", imageFile: null as File | null }] as Array<{ name: string; emoji: string; amount: string; imageFile: File | null }>,
-    ingredientsExtra: [] as Array<{ name: string; emoji: string; amount: string; imageFile: File | null }>,
+  nutritionFacts: { calories: "", fat: "", protein: "" },
+  // include imageUrl/imagePreview in editForm ingredient shapes to match runtime use
+  ingredientsMain: [{ name: "", emoji: "", amount: "", imageFile: null as File | null, imageUrl: "" }] as Array<{ name: string; emoji: string; amount: string; imageFile: File | null; imageUrl?: string; imagePreview?: string }> ,
+  ingredientsExtra: [] as Array<{ name: string; emoji: string; amount: string; imageFile: File | null; imageUrl?: string; imagePreview?: string }> ,
     ingredientsNotIncluded: [] as string[],
     utensils: [] as string[],
     dessertSuggestions: [] as Array<{ name: string; price: string; imageFile: File | null; imagePreview?: string }>,
@@ -365,6 +367,12 @@ export default function ProductsPage() {
     }
   }
 
+  // Helper to extract an image URL from ingredient shapes returned by backend
+  const getIngredientImageSrc = (it: any): string | null => {
+    if (!it) return null
+    return (it?.image_url) || (it?.image) || (it?.url) || (it?.path) || (it?.src) || null
+  }
+
   // Handle Add Product Form Changes
   const handleAddChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const target = e.target as HTMLInputElement
@@ -425,7 +433,7 @@ export default function ProductsPage() {
   // Always default to SAR for new products
   currency: "SAR",
   nutritionFacts: { calories: "", fat: "", protein: "" },
-  ingredientsMain: [{ name: "", emoji: "", amount: "", imageFile: null }],
+  ingredientsMain: [{ name: "", emoji: "", amount: "", imageFile: null, imageUrl: "" }],
   ingredientsExtra: [],
   ingredientsNotIncluded: [],
   utensils: [],
@@ -611,6 +619,8 @@ export default function ProductsPage() {
         emoji: String(r?.emoji ?? ""),
         amount: String(r?.amount ?? ""),
         imageFile: null,
+        // capture existing image URL (if backend provided one)
+        imageUrl: getIngredientImageSrc(r) ?? "",
       }))
     : [{ name: "", emoji: "", amount: "", imageFile: null }],
   ingredientsExtra: Array.isArray(raw?.ingredientsExtra)
@@ -619,6 +629,7 @@ export default function ProductsPage() {
         emoji: String(r?.emoji ?? ""),
         amount: String(r?.amount ?? ""),
         imageFile: null,
+        imageUrl: getIngredientImageSrc(r) ?? "",
       }))
     : [],
   ingredientsNotIncluded: Array.isArray(raw?.ingredientsNotIncluded)
@@ -715,7 +726,7 @@ export default function ProductsPage() {
   is_on_sale: false,
   currency: "",
   nutritionFacts: { calories: "", fat: "", protein: "" },
-  ingredientsMain: [{ name: "", emoji: "", amount: "", imageFile: null }],
+  ingredientsMain: [{ name: "", emoji: "", amount: "", imageFile: null, imageUrl: "" }],
   ingredientsExtra: [],
   ingredientsNotIncluded: [],
   utensils: [],
@@ -1531,28 +1542,41 @@ export default function ProductsPage() {
                       <CardDescription className="text-xs">Primary required ingredients.</CardDescription>
                     </CardHeader>
                     <CardContent className="pt-0">
-                      {Array.isArray(viewProduct.ingredientsMain) && viewProduct.ingredientsMain.length > 0 ? (
-                        <ul className="space-y-2">
-                          {viewProduct.ingredientsMain.map((r: any, i: number) => (
-                            <li key={i} className="flex items-start gap-2 rounded border p-2 text-sm bg-muted/30">
-                              {/* Emoji */}
-                              <div className="w-6 h-6 flex items-center justify-center text-base">
-                                {r?.emoji ? r.emoji : <span className="text-muted-foreground">•</span>}
-                              </div>
-                              <div className="flex-1 leading-tight">
-                                <div className="font-medium flex items-center gap-1">
-                                  {r?.name ? r.name : <span className="text-muted-foreground">Unnamed</span>}
-                                </div>
-                                {(r?.amount) && (
-                                  <div className="text-xs text-muted-foreground mt-0.5">{r.amount}</div>
-                                )}
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <div className="text-xs text-muted-foreground">No main ingredients</div>
-                      )}
+                      <div className="flex gap-4 items-start">
+                        <div className="flex-1">
+                          {Array.isArray(viewProduct.ingredientsMain) && viewProduct.ingredientsMain.length > 0 ? (
+                            <ul className="space-y-2">
+                              {viewProduct.ingredientsMain.map((r: any, i: number) => (
+                                <li key={i} className="flex items-start gap-2 rounded border p-2 text-sm bg-muted/30">
+                                  {/* Emoji */}
+                                  <div className="w-6 h-6 flex items-center justify-center text-base">
+                                    {r?.emoji ? r.emoji : <span className="text-muted-foreground">•</span>}
+                                  </div>
+                                  <div className="flex-1 leading-tight">
+                                    <div className="flex items-center justify-between gap-3">
+                                      <div>
+                                        <div className="font-medium flex items-center gap-1">
+                                          {r?.name ? r.name : <span className="text-muted-foreground">Unnamed</span>}
+                                        </div>
+                                        {(r?.amount) && (
+                                          <div className="text-xs text-muted-foreground mt-0.5">{r.amount}</div>
+                                        )}
+                                      </div>
+                                      {getIngredientImageSrc(r) ? (
+                                        <div className="w-20 h-12 flex-shrink-0 overflow-hidden rounded border bg-muted">
+                                          <img src={getIngredientImageSrc(r) as string} alt={r?.name ?? `ingredient-${i}`} className="w-full h-full object-cover" />
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <div className="text-xs text-muted-foreground">No main ingredients</div>
+                          )}
+                        </div>
+                      </div>
                     </CardContent>
                   </Card>
 
@@ -1571,12 +1595,21 @@ export default function ProductsPage() {
                                 {r?.emoji ? r.emoji : <span className="text-muted-foreground">•</span>}
                               </div>
                               <div className="flex-1 leading-tight">
-                                <div className="font-medium flex items-center gap-1">
-                                  {r?.name ? r.name : <span className="text-muted-foreground">Unnamed</span>}
+                                <div className="flex items-center justify-between gap-3">
+                                  <div>
+                                    <div className="font-medium flex items-center gap-1">
+                                      {r?.name ? r.name : <span className="text-muted-foreground">Unnamed</span>}
+                                    </div>
+                                    {(r?.amount) && (
+                                      <div className="text-xs text-muted-foreground mt-0.5">{r.amount}</div>
+                                    )}
+                                  </div>
+                                  {getIngredientImageSrc(r) ? (
+                                    <div className="w-20 h-12 flex-shrink-0 overflow-hidden rounded border bg-muted">
+                                      <img src={getIngredientImageSrc(r) as string} alt={r?.name ?? `extra-${i}`} className="w-full h-full object-cover" />
+                                    </div>
+                                  ) : null}
                                 </div>
-                                {(r?.amount) && (
-                                  <div className="text-xs text-muted-foreground mt-0.5">{r.amount}</div>
-                                )}
                               </div>
                             </li>
                           ))}
@@ -1993,14 +2026,21 @@ export default function ProductsPage() {
                         <X className="h-4 w-4" />
                       </Button>
                     </div>
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => {
-                        const file = (e.target.files && e.target.files[0]) || null
-                        setEditForm((p) => { const next = p.ingredientsMain.slice(); next[idx] = { ...next[idx], imageFile: file }; return { ...p, ingredientsMain: next } })
-                      }}
-                    />
+                    <div>
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = (e.target.files && e.target.files[0]) || null
+                          setEditForm((p) => { const next = p.ingredientsMain.slice(); next[idx] = { ...next[idx], imageFile: file, imagePreview: file ? URL.createObjectURL(file) : undefined, imageUrl: file ? "" : (next[idx].imageUrl ?? "") }; return { ...p, ingredientsMain: next } })
+                        }}
+                      />
+                      {(row.imagePreview || row.imageUrl) ? (
+                        <div className="w-20 h-12 mt-2 overflow-hidden rounded border bg-muted">
+                          <img src={(row.imagePreview ?? row.imageUrl) as string} alt={row?.name ?? `ingredient-${idx}`} className="w-full h-full object-cover" />
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -2027,7 +2067,14 @@ export default function ProductsPage() {
                         <X className="h-4 w-4" />
                       </Button>
                     </div>
-                    <Input type="file" accept="image/*" onChange={(e) => { const file = (e.target.files && e.target.files[0]) || null; setEditForm((p) => { const next = p.ingredientsExtra.slice(); next[idx] = { ...next[idx], imageFile: file }; return { ...p, ingredientsExtra: next } }) }} />
+                    <div>
+                      <Input type="file" accept="image/*" onChange={(e) => { const file = (e.target.files && e.target.files[0]) || null; setEditForm((p) => { const next = p.ingredientsExtra.slice(); next[idx] = { ...next[idx], imageFile: file, imagePreview: file ? URL.createObjectURL(file) : undefined, imageUrl: file ? "" : (next[idx].imageUrl ?? "") }; return { ...p, ingredientsExtra: next } }) }} />
+                      {(row.imagePreview || row.imageUrl) ? (
+                        <div className="w-20 h-12 mt-2 overflow-hidden rounded border bg-muted">
+                          <img src={(row.imagePreview ?? row.imageUrl) as string} alt={row?.name ?? `extra-${idx}`} className="w-full h-full object-cover" />
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 ))}
               </div>
