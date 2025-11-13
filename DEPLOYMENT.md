@@ -130,5 +130,3 @@ Optional improvements
 Contact / ownership
 - If you need me to create the Vercel project, add environment variables, or replace the hardcoded `API_BASE_URL` with `import.meta.env.VITE_API_BASE_URL`, say so and I can update the repo.
 
----
-Commit this file to the repository so your team has a canonical deployment playbook.
