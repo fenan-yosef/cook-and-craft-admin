@@ -153,6 +153,22 @@ export default function OrdersPage() {
     return (name || combined || user.email || user.userEmail || null) || null;
   }
 
+  // Robust helper to get an image URL from a product shape or its images array
+  function getProductImageSrc(product: any): string | null {
+    if (!product) return null
+    // If product has an images array, prefer its first item
+    const imgs = product.images
+    if (Array.isArray(imgs) && imgs.length > 0) {
+      const first = imgs[0]
+      if (!first) return null
+      if (typeof first === "string") return first
+      // object shapes: try common fields
+      return first.imageUrl ?? first.url ?? first.path ?? first.src ?? first.image ?? null
+    }
+    // fallback to direct fields on the product
+    return product.imageUrl ?? product.url ?? product.path ?? product.src ?? product.image ?? null
+  }
+
   // Fetch and cache user names for orders on the current page
   async function hydrateUserNames(list: Order[]) {
     const ids = Array.from(new Set(list.map(o => o.userId).filter((v): v is number => typeof v === 'number' && !isNaN(v))));
@@ -547,13 +563,16 @@ export default function OrdersPage() {
                     <div className="space-y-3">
                       {selectedOrder.orderItems.map((item) => (
                         <div key={item.id} className="flex items-center gap-3">
-                          {item.product?.images && item.product.images.length > 0 ? (
-                            <img src={item.product.images[0]} alt={item.product.name} className="h-14 w-14 rounded object-cover border" />
-                          ) : (
-                            <div className="h-14 w-14 rounded bg-slate-100 flex items-center justify-center text-sm text-muted-foreground border">
-                              {String(item.product.name || "").slice(0, 1).toUpperCase()}
-                            </div>
-                          )}
+                          {(() => {
+                            const src = getProductImageSrc(item.product)
+                            return src ? (
+                              <img src={src} alt={item.product.name} className="h-14 w-14 rounded object-cover border" />
+                            ) : (
+                              <div className="h-14 w-14 rounded bg-slate-100 flex items-center justify-center text-sm text-muted-foreground border">
+                                {String(item.product.name || "").slice(0, 1).toUpperCase()}
+                              </div>
+                            )
+                          })()}
                           <div className="flex-1">
                             <div className="flex items-center justify-between">
                               <span className="text-sm font-medium">{item.product.name}</span>
@@ -585,13 +604,16 @@ export default function OrdersPage() {
                       <div className="space-y-3">
                         {selectedOrder.orderItems.map((item) => (
                           <div key={item.id} className="flex items-center gap-3">
-                            {item.product?.images && item.product.images.length > 0 ? (
-                              <img src={item.product.images[0]} alt={item.product.name} className="h-12 w-12 rounded object-cover border" />
-                            ) : (
-                              <div className="h-12 w-12 rounded bg-slate-100 flex items-center justify-center text-sm text-muted-foreground border">
-                                {String(item.product.name || "").slice(0, 1).toUpperCase()}
-                              </div>
-                            )}
+                            {(() => {
+                              const src = getProductImageSrc(item.product)
+                              return src ? (
+                                <img src={src} alt={item.product.name} className="h-12 w-12 rounded object-cover border" />
+                              ) : (
+                                <div className="h-12 w-12 rounded bg-slate-100 flex items-center justify-center text-sm text-muted-foreground border">
+                                  {String(item.product.name || "").slice(0, 1).toUpperCase()}
+                                </div>
+                              )
+                            })()}
                             <div className="flex-1">
                               <div className="text-sm font-medium">{item.product.name}</div>
                               <div className="text-xs text-muted-foreground">{item.product.sku}</div>
