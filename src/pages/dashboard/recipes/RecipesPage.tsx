@@ -297,13 +297,22 @@ export default function RecipesPage() {
           filterParts.push(`tags[${i}]=${encodeURIComponent(String(id))}`)
         })
       }
-      // Always include these, even if empty, to satisfy backend parameter expectations
-      filterParts.push(`min_calories=${encodeURIComponent(minCalories ?? "")}`)
-      filterParts.push(`max_calories=${encodeURIComponent(maxCalories ?? "")}`)
-      filterParts.push(`min_prep_time=${encodeURIComponent(minPrep ?? "")}`)
-      filterParts.push(`max_prep_time=${encodeURIComponent(maxPrep ?? "")}`)
+      // Only include these filters when the admin actually set a value.
+      // This keeps the URL clean so applying only tags won't include empty params.
+      if (typeof minCalories !== 'undefined' && String(minCalories).trim() !== "") {
+        filterParts.push(`min_calories=${encodeURIComponent(minCalories)}`)
+      }
+      if (typeof maxCalories !== 'undefined' && String(maxCalories).trim() !== "") {
+        filterParts.push(`max_calories=${encodeURIComponent(maxCalories)}`)
+      }
+      if (typeof minPrep !== 'undefined' && String(minPrep).trim() !== "") {
+        filterParts.push(`min_prep_time=${encodeURIComponent(minPrep)}`)
+      }
+      if (typeof maxPrep !== 'undefined' && String(maxPrep).trim() !== "") {
+        filterParts.push(`max_prep_time=${encodeURIComponent(maxPrep)}`)
+      }
 
-      const query = [`page=${page}`, `per_page=${size}`, ...filterParts].join("&")
+      const query = [`page=${page}`, `per_Page=${size}`, ...filterParts].join("&")
       const res = await apiService.get(`/recipes?${query}`)
       const items: ApiRecipe[] = Array.isArray(res?.data) ? res.data : []
       setRecipes(items)
