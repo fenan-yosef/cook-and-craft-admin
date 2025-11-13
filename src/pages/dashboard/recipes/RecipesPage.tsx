@@ -99,6 +99,9 @@ export default function RecipesPage() {
   // Per-ingredient expansion (open details for a single ingredient at a time)
   const [expandedCreateIngredientIndex, setExpandedCreateIngredientIndex] = useState<number | null>(null)
   const [expandedEditIngredientIndex, setExpandedEditIngredientIndex] = useState<number | null>(null)
+  // Per-step expansion for steps builder (create & edit)
+  const [expandedCreateStepIndex, setExpandedCreateStepIndex] = useState<number | null>(null)
+  const [expandedEditStepIndex, setExpandedEditStepIndex] = useState<number | null>(null)
   // Mock: pending recipe requests
   // Pending requests kept in localStorage (UI section is currently commented out)
   // const [pending, setPending] = useState<PendingRecipe[]>([])
@@ -1118,82 +1121,131 @@ export default function RecipesPage() {
                 </div>
                 <div className="grid gap-3">
                   {newSteps.map((st, i) => (
-                    <div key={i} className="rounded border p-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm font-medium">Step {i + 1}</div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setNewSteps((prev) => prev.filter((_, idx) => idx !== i))}
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                      <div className="grid gap-2">
-                        <Label className="text-sm">Instructions</Label>
-                        <textarea
-                          className="min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm"
-                          placeholder="Describe the step"
-                          value={st.instructions}
-                          onChange={(e) => {
-                            const arr = [...newSteps]
-                            arr[i] = { ...arr[i], instructions: e.target.value }
-                            setNewSteps(arr)
-                          }}
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="grid gap-1">
-                          <Label className="text-sm">Prep minutes</Label>
-                          <Input
-                            type="number"
-                            value={st.prep}
-                            onChange={(e) => {
-                              const val = Number(e.target.value || 1)
-                              const arr = [...newSteps]
-                              arr[i] = { ...arr[i], prep: val }
-                              setNewSteps(arr)
-                            }}
-                          />
+                    <div key={i} className="border rounded">
+                      <div className="flex items-center justify-between p-2">
+                        <div className="flex items-center gap-3">
+                          <div className="text-sm font-medium">Step {i + 1}</div>
+                          {typeof st.prep !== 'undefined' && (
+                            <span className="text-xs text-muted-foreground">{st.prep} min</span>
+                          )}
                         </div>
-                        <div className="grid gap-1">
-                          <Label className="text-sm">Step image (optional)</Label>
-                          <Input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => {
-                              const file = (e.target.files && e.target.files[0]) || null
-                              const arr = [...newSteps]
-                              arr[i] = { ...arr[i], image: file }
-                              setNewSteps(arr)
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setNewSteps((prev) => prev.filter((_, idx) => idx !== i))
+                              setExpandedCreateStepIndex(null)
                             }}
-                          />
+                          >
+                            Remove
+                          </Button>
+                          <button
+                            type="button"
+                            aria-label={`Toggle step ${i + 1}`}
+                            onClick={() => setExpandedCreateStepIndex((cur) => (cur === i ? null : i))}
+                            className="p-2 rounded hover:bg-muted"
+                          >
+                            <ChevronDown className={`h-4 w-4 transform transition ${expandedCreateStepIndex === i ? 'rotate-180' : ''}`} />
+                          </button>
                         </div>
                       </div>
-                      <div className="grid gap-2">
-                        <Label className="text-sm">Ingredient indices for this step</Label>
-                        <div className="flex flex-wrap gap-3 text-sm">
-                          {(newRecipe.Ingredients || []).map((ing, idx) => (
-                            <label key={idx} className="flex items-center gap-1">
-                              <input
-                                type="checkbox"
-                                className="h-4 w-4"
-                                checked={st.ingredientIndices.includes(idx)}
+
+                      {expandedCreateStepIndex === i && (
+                        <div className="p-3 border-t grid gap-2">
+                          <div className="flex gap-3">
+                            <div className="flex-1 grid gap-2">
+                              <Label className="text-sm">Instructions</Label>
+                              <textarea
+                                className="min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                placeholder="Describe the step"
+                                value={st.instructions}
                                 onChange={(e) => {
                                   const arr = [...newSteps]
-                                  const set = new Set(arr[i].ingredientIndices)
-                                  if (e.target.checked) set.add(idx)
-                                  else set.delete(idx)
-                                  arr[i] = { ...arr[i], ingredientIndices: Array.from(set.values()).sort((a,b)=>a-b) }
+                                  arr[i] = { ...arr[i], instructions: e.target.value }
                                   setNewSteps(arr)
                                 }}
                               />
-                              <span>{ing.name || `#${idx+1}`}</span>
-                            </label>
-                          ))}
+                            </div>
+                            <div className="w-36 grid gap-1">
+                              <Label className="text-sm">Prep minutes</Label>
+                              <Input
+                                type="number"
+                                value={st.prep}
+                                onChange={(e) => {
+                                  const val = Number(e.target.value || 1)
+                                  const arr = [...newSteps]
+                                  arr[i] = { ...arr[i], prep: val }
+                                  setNewSteps(arr)
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex items-start gap-4 mt-2">
+                            <div className="w-32 h-32 bg-muted rounded border overflow-hidden flex items-center justify-center">
+                              {st.image ? (
+                                <img src={URL.createObjectURL(st.image)} alt={`Step ${i + 1} (new)`} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="text-xs text-muted-foreground">No image</div>
+                              )}
+                            </div>
+                            <div className="flex-1 grid gap-1">
+                              <Label className="text-sm">Step image (optional)</Label>
+                              <Input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const file = (e.target.files && e.target.files[0]) || null
+                                  const arr = [...newSteps]
+                                  arr[i] = { ...arr[i], image: file }
+                                  setNewSteps(arr)
+                                }}
+                              />
+                              <div className="flex items-center gap-2 mt-2">
+                                {st.image ? (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="h-8 px-2"
+                                    onClick={() => {
+                                      const arr = [...newSteps]
+                                      arr[i] = { ...arr[i], image: null }
+                                      setNewSteps(arr)
+                                    }}
+                                  >
+                                    Clear
+                                  </Button>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="grid gap-2">
+                            <Label className="text-sm">Ingredient indices for this step</Label>
+                            <div className="flex flex-wrap gap-3 text-sm">
+                              {(newRecipe.Ingredients || []).map((ing, idx) => (
+                                <label key={idx} className="flex items-center gap-1">
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4"
+                                    checked={st.ingredientIndices.includes(idx)}
+                                    onChange={(e) => {
+                                      const arr = [...newSteps]
+                                      const set = new Set(arr[i].ingredientIndices)
+                                      if (e.target.checked) set.add(idx)
+                                      else set.delete(idx)
+                                      arr[i] = { ...arr[i], ingredientIndices: Array.from(set.values()).sort((a,b)=>a-b) }
+                                      setNewSteps(arr)
+                                    }}
+                                  />
+                                  <span>{ing.name || `#${idx+1}`}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -2314,125 +2366,143 @@ export default function RecipesPage() {
                 </div>
                 <div className="grid gap-3">
                   {editSteps.map((st, i) => (
-                    <div key={i} className="rounded border p-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm font-medium">Step {i + 1}</div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setEditSteps((prev) => prev.filter((_, idx) => idx !== i))}
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                      <div className="grid gap-2">
-                        <Label className="text-sm">Instructions</Label>
-                        <textarea
-                          className="min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm"
-                          placeholder="Describe the step"
-                          value={st.instructions}
-                          onChange={(e) => {
-                            const arr = [...editSteps]
-                            arr[i] = { ...arr[i], instructions: e.target.value }
-                            setEditSteps(arr)
-                          }}
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="grid gap-1">
-                          <Label className="text-sm">Prep minutes</Label>
-                          <Input
-                            type="number"
-                            value={st.prep}
-                            onChange={(e) => {
-                              const val = Number(e.target.value || 1)
-                              const arr = [...editSteps]
-                              arr[i] = { ...arr[i], prep: val }
-                              setEditSteps(arr)
-                            }}
-                          />
+                    <div key={i} className="border rounded">
+                      <div className="flex items-center justify-between p-2">
+                        <div className="flex items-center gap-3">
+                          <div className="text-sm font-medium">Step {i + 1}</div>
+                          {typeof st.prep !== 'undefined' && (
+                            <span className="text-xs text-muted-foreground">{st.prep} min</span>
+                          )}
                         </div>
-                        <div className="grid gap-1">
-                          <Label className="text-sm">Step image (optional)</Label>
-                          <Input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => {
-                              const file = (e.target.files && e.target.files[0]) || null
-                              const arr = [...editSteps]
-                              arr[i] = { ...arr[i], image: file }
-                              setEditSteps(arr)
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setEditSteps((prev) => prev.filter((_, idx) => idx !== i))
+                              setExpandedEditStepIndex(null)
                             }}
-                          />
-                          <div className="flex flex-wrap items-center gap-3 mt-2">
-                            {/* Single newly selected image preview */}
-                            {st.image && (
-                              <img
-                                src={URL.createObjectURL(st.image)}
-                                alt={`Step ${i + 1} (new)`}
-                                className="w-32 h-32 object-cover rounded border"
-                              />
-                            )}
-                            {/* Existing primary image if no new image chosen */}
-                            {!st.image && st.imageUrl && (
-                              <img
-                                src={st.imageUrl}
-                                alt={`Step ${i + 1}`}
-                                className="w-32 h-32 object-cover rounded border"
-                              />
-                            )}
-                            {/* Additional existing images (if any) */}
-                            {!st.image && Array.isArray(st.imageUrls) && st.imageUrls.length > 1 && (
-                              st.imageUrls.slice(1).map((u, extraIdx) => (
-                                <img
-                                  key={extraIdx}
-                                  src={u}
-                                  alt={`Step ${i + 1} extra ${extraIdx + 2}`}
-                                  className="w-24 h-24 object-cover rounded border"
-                                />
-                              ))
-                            )}
-                            {st.image ? (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                className="h-8 px-2"
-                                onClick={() => {
-                                  const arr = [...editSteps]
-                                  arr[i] = { ...arr[i], image: null }
-                                  setEditSteps(arr)
-                                }}
-                              >
-                                Clear
-                              </Button>
-                            ) : null}
-                          </div>
+                          >
+                            Remove
+                          </Button>
+                          <button
+                            type="button"
+                            aria-label={`Toggle step ${i + 1}`}
+                            onClick={() => setExpandedEditStepIndex((cur) => (cur === i ? null : i))}
+                            className="p-2 rounded hover:bg-muted"
+                          >
+                            <ChevronDown className={`h-4 w-4 transform transition ${expandedEditStepIndex === i ? 'rotate-180' : ''}`} />
+                          </button>
                         </div>
                       </div>
-                      <div className="grid gap-2">
-                        <Label className="text-sm">Ingredient indices for this step</Label>
-                        <div className="flex flex-wrap gap-3 text-sm">
-                          {(editRecipe.Ingredients || []).map((ing, idx) => (
-                            <label key={idx} className="flex items-center gap-1">
-                              <input
-                                type="checkbox"
-                                className="h-4 w-4"
-                                checked={st.ingredientIndices.includes(idx)}
+
+                      {expandedEditStepIndex === i && (
+                        <div className="p-3 border-t grid gap-2">
+                          <div className="flex gap-3">
+                            <div className="flex-1 grid gap-2">
+                              <Label className="text-sm">Instructions</Label>
+                              <textarea
+                                className="min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                placeholder="Describe the step"
+                                value={st.instructions}
                                 onChange={(e) => {
                                   const arr = [...editSteps]
-                                  const set = new Set(arr[i].ingredientIndices)
-                                  if (e.target.checked) set.add(idx)
-                                  else set.delete(idx)
-                                  arr[i] = { ...arr[i], ingredientIndices: Array.from(set.values()).sort((a,b)=>a-b) }
+                                  arr[i] = { ...arr[i], instructions: e.target.value }
                                   setEditSteps(arr)
                                 }}
                               />
-                              <span>{ing.name || `#${idx+1}`}</span>
-                            </label>
-                          ))}
+                            </div>
+                            
+                          </div>
+                          <div className="w-36 grid gap-1">
+                              <Label className="text-sm">Prep minutes</Label>
+                              <Input
+                                type="number"
+                                value={st.prep}
+                                onChange={(e) => {
+                                  const val = Number(e.target.value || 1)
+                                  const arr = [...editSteps]
+                                  arr[i] = { ...arr[i], prep: val }
+                                  setEditSteps(arr)
+                                }}
+                              />
+                            </div>
+                          <div className="flex items-start gap-4 mt-2">
+                            <div className="w-32 h-32 bg-muted rounded border overflow-hidden flex items-center justify-center">
+                              {st.image ? (
+                                <img src={URL.createObjectURL(st.image)} alt={`Step ${i + 1} (new)`} className="w-full h-full object-cover" />
+                              ) : st.imageUrl ? (
+                                <img src={st.imageUrl} alt={`Step ${i + 1}`} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="text-xs text-muted-foreground">No image</div>
+                              )}
+                            </div>
+                            <div className="flex-1 grid gap-1">
+                              <Label className="text-sm">Step image (optional)</Label>
+                              <Input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  const file = (e.target.files && e.target.files[0]) || null
+                                  const arr = [...editSteps]
+                                  arr[i] = { ...arr[i], image: file }
+                                  setEditSteps(arr)
+                                }}
+                              />
+                              <div className="flex items-center gap-3 mt-2">
+                                {!st.image && Array.isArray(st.imageUrls) && st.imageUrls.length > 1 && (
+                                  st.imageUrls.slice(1).map((u, extraIdx) => (
+                                    <img
+                                      key={extraIdx}
+                                      src={u}
+                                      alt={`Step ${i + 1} extra ${extraIdx + 2}`}
+                                      className="w-24 h-24 object-cover rounded border"
+                                    />
+                                  ))
+                                )}
+                                {st.image ? (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    className="h-8 px-2"
+                                    onClick={() => {
+                                      const arr = [...editSteps]
+                                      arr[i] = { ...arr[i], image: null }
+                                      setEditSteps(arr)
+                                    }}
+                                  >
+                                    Clear
+                                  </Button>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="grid gap-2">
+                            <Label className="text-sm">Ingredient indices for this step</Label>
+                            <div className="flex flex-wrap gap-3 text-sm">
+                              {(editRecipe.Ingredients || []).map((ing, idx) => (
+                                <label key={idx} className="flex items-center gap-1">
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4"
+                                    checked={st.ingredientIndices.includes(idx)}
+                                    onChange={(e) => {
+                                      const arr = [...editSteps]
+                                      const set = new Set(arr[i].ingredientIndices)
+                                      if (e.target.checked) set.add(idx)
+                                      else set.delete(idx)
+                                      arr[i] = { ...arr[i], ingredientIndices: Array.from(set.values()).sort((a,b)=>a-b) }
+                                      setEditSteps(arr)
+                                    }}
+                                  />
+                                  <span>{ing.name || `#${idx+1}`}</span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   ))}
                 </div>
