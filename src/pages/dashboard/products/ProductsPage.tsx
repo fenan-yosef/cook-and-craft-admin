@@ -89,10 +89,11 @@ export default function ProductsPage() {
     original_price: "",
     discount_price: "",
     is_on_sale: false,
-    currency: "",
+    // Add modal always uses SAR and the input is removed from the UI
+    currency: "SAR",
     nutritionFacts: { calories: "", fat: "", protein: "" },
-  ingredientsMain: [{ name: "", emoji: "", amount: "", imageFile: null as File | null }] as Array<{ name: string; emoji: string; amount: string; imageFile: File | null }>,
-  ingredientsExtra: [] as Array<{ name: string; emoji: string; amount: string; imageFile: File | null }>,
+    ingredientsMain: [{ name: "", emoji: "", amount: "", imageFile: null as File | null }] as Array<{ name: string; emoji: string; amount: string; imageFile: File | null }> ,
+    ingredientsExtra: [] as Array<{ name: string; emoji: string; amount: string; imageFile: File | null }> ,
     ingredientsNotIncluded: [] as string[],
     utensils: [] as string[],
     dessertSuggestions: [] as Array<{ name: string; price: string; imageFile: File | null; imagePreview?: string }>,
@@ -119,10 +120,11 @@ export default function ProductsPage() {
     original_price: "",
     discount_price: "",
     is_on_sale: false,
+    // Edit starts empty and is populated when opening the modal from product data
     currency: "",
     nutritionFacts: { calories: "", fat: "", protein: "" },
-  ingredientsMain: [{ name: "", emoji: "", amount: "", imageFile: null as File | null }] as Array<{ name: string; emoji: string; amount: string; imageFile: File | null }>,
-  ingredientsExtra: [] as Array<{ name: string; emoji: string; amount: string; imageFile: File | null }>,
+    ingredientsMain: [{ name: "", emoji: "", amount: "", imageFile: null as File | null }] as Array<{ name: string; emoji: string; amount: string; imageFile: File | null }>,
+    ingredientsExtra: [] as Array<{ name: string; emoji: string; amount: string; imageFile: File | null }>,
     ingredientsNotIncluded: [] as string[],
     utensils: [] as string[],
     dessertSuggestions: [] as Array<{ name: string; price: string; imageFile: File | null; imagePreview?: string }>,
@@ -420,7 +422,8 @@ export default function ProductsPage() {
   original_price: "",
   discount_price: "",
   is_on_sale: false,
-  currency: "",
+  // Always default to SAR for new products
+  currency: "SAR",
   nutritionFacts: { calories: "", fat: "", protein: "" },
   ingredientsMain: [{ name: "", emoji: "", amount: "", imageFile: null }],
   ingredientsExtra: [],
@@ -459,7 +462,8 @@ export default function ProductsPage() {
       }
       if (addForm.discount_price !== "") formData.append("productdiscount_price", addForm.discount_price)
       formData.append("isProductOnSale", addForm.is_on_sale ? "1" : "0")
-      if (addForm.currency) formData.append("currency", addForm.currency)
+  // Always send SAR for new products
+  formData.append("currency", "SAR")
       formData.append("quantity", addForm.quantity)
   // Also include productAvailableQuantity alias
   formData.append("productAvailableQuantity", addForm.quantity)
@@ -780,7 +784,8 @@ export default function ProductsPage() {
       }
       formData.append("isProductOnSale", editForm.is_on_sale ? "1" : "0")
       formData.append("is_on_sale", editForm.is_on_sale ? "1" : "0")
-      if (editForm.currency) formData.append("currency", editForm.currency)
+  // Always include currency for edits — preserve existing or fallback to SAR
+  formData.append("currency", editForm.currency ?? "SAR")
 
       // Removed server images
       removedExistingImages.forEach((url) => {
@@ -1014,16 +1019,6 @@ export default function ProductsPage() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <div className="flex-1">
-                  <Label htmlFor="currency">Currency</Label>
-                  <Input
-                    id="currency"
-                    name="currency"
-                    value={addForm.currency}
-                    onChange={handleAddChange}
-                    placeholder="e.g., USD"
-                  />
-                </div>
                 <div className="flex items-center gap-2">
                   <input
                     id="is_on_sale"
@@ -1911,7 +1906,7 @@ export default function ProductsPage() {
                     id="edit_currency"
                     name="currency"
                     value={editForm.currency}
-                    onChange={handleEditChange}
+                    disabled
                     placeholder="e.g., USD"
                   />
                 </div>
@@ -2269,7 +2264,8 @@ export default function ProductsPage() {
                           const value = hasDiscount ? discountNum : originalNum
                           if (!Number.isFinite(value)) return "N/A"
                           const currency = (product as any).currency
-                          return (product as any).priceFormatted || (currency ? `${currency} ${value.toFixed(2)}` : `$${value.toFixed(2)}`)
+                          // Prefer formatted value, otherwise show currency (or default to SAR)
+                          return (product as any).priceFormatted || (currency ? `${currency} ${value.toFixed(2)}` : `SAR ${value.toFixed(2)}`)
                         })()}
                       </TableCell>
                       <TableCell>
