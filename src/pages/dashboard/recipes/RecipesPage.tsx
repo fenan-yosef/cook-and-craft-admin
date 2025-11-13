@@ -92,6 +92,7 @@ export default function RecipesPage() {
   // Simple search query states for tag dropdowns in Create/Edit dialogs
   const [createTagQuery, setCreateTagQuery] = useState<string>("")
   const [editTagQuery, setEditTagQuery] = useState<string>("")
+  const [filterTagQuery, setFilterTagQuery] = useState<string>("")
   // Mock: pending recipe requests
   // Pending requests kept in localStorage (UI section is currently commented out)
   // const [pending, setPending] = useState<PendingRecipe[]>([])
@@ -1196,23 +1197,64 @@ export default function RecipesPage() {
               <div className="flex flex-wrap items-center gap-4">
                 <div className="flex items-center gap-3">
                   <Label className="text-sm">Tags</Label>
-                  <div className="flex flex-wrap gap-3">
-                    {TAG_OPTIONS.map((t) => (
-                      <label key={t.id} className="flex items-center gap-2 text-sm">
-                        <Checkbox
-                          checked={tagSelections.includes(t.id)}
-                          onCheckedChange={(checked) => {
-                            setTagSelections((prev) => {
-                              const set = new Set(prev)
-                              if (checked) set.add(t.id)
-                              else set.delete(t.id)
-                              return Array.from(set)
-                            })
-                          }}
-                        />
-                        <span>{t.label}</span>
-                      </label>
-                    ))}
+                  <div className="flex flex-wrap gap-3 items-center max-w-xl">
+                    {/* Render selected tag chips (use server-provided tagOptions when available, otherwise fallback to TAG_OPTIONS) */}
+                    <div className="flex flex-wrap gap-2">
+                      {(tagOptions.length ? tagOptions : TAG_OPTIONS.map((t) => ({ id: t.id, name: t.label }))).map((opt) => opt).filter((o) => tagSelections.includes(o.id)).map((t) => (
+                        <Badge key={t.id} variant="secondary" className="inline-flex items-center gap-2">
+                          <span className="text-sm">{t.name}</span>
+                          <button
+                            type="button"
+                            aria-label="Remove tag"
+                            onClick={() => setTagSelections((prev) => prev.filter((x) => x !== t.id))}
+                            className="ml-1 text-xs leading-none"
+                          >
+                            ×
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+
+                    {/* Searchable dropdown for selecting tags */}
+                    <div className="relative flex-1 min-w-[180px]">
+                      <Input
+                        placeholder="Type to search tags"
+                        value={filterTagQuery}
+                        onChange={(e) => setFilterTagQuery(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault()
+                            const q = filterTagQuery.trim()
+                            if (!q) return
+                            const options = tagOptions.length ? tagOptions : TAG_OPTIONS.map((t) => ({ id: t.id, name: t.label }))
+                            const match = options.find((x) => x.name.toLowerCase() === q.toLowerCase())
+                            if (match) {
+                              setTagSelections((prev) => Array.from(new Set([...prev, match.id])))
+                            }
+                            setFilterTagQuery("")
+                          }
+                        }}
+                      />
+                      {filterTagQuery.trim().length > 0 && (
+                        <div className="absolute z-10 bg-popover border rounded mt-1 w-full max-h-48 overflow-auto">
+                          {(tagOptions.length ? tagOptions : TAG_OPTIONS.map((t) => ({ id: t.id, name: t.label })))
+                            .filter((t) => t.name.toLowerCase().includes(filterTagQuery.trim().toLowerCase()) && !tagSelections.includes(t.id))
+                            .slice(0, 50)
+                            .map((t) => (
+                              <div
+                                key={t.id}
+                                className="px-3 py-2 hover:bg-muted cursor-pointer text-sm"
+                                onClick={() => {
+                                  setTagSelections((prev) => Array.from(new Set([...prev, t.id])))
+                                  setFilterTagQuery("")
+                                }}
+                              >
+                                {t.name}
+                              </div>
+                            ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
