@@ -133,7 +133,7 @@ export default function SubscriptionTypesPage() {
                     <TableCell className="font-medium capitalize">{t.name === "3months" ? "3 months" : t.name}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2 max-w-xs">
-                        <span className="text-muted-foreground">$</span>
+                        <span className="text-muted-foreground">SAR</span>
                         <Input
                           type="number"
                           inputMode="decimal"

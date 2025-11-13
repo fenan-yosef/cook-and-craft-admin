@@ -164,7 +164,7 @@ export default function DashboardHomePage() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">This Month</span>
-                  <span className="text-2xl font-bold">${stats.revenue.toLocaleString()}</span>
+                  <span className="text-2xl font-bold">SAR {stats.revenue.toLocaleString()}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Growth</span>

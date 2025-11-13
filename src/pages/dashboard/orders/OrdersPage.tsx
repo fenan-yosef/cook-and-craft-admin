@@ -412,9 +412,9 @@ export default function OrdersPage() {
                       </TableCell>
                       <TableCell>{order.paymentStatus}</TableCell>
                       <TableCell>{order.orderItems?.length || 0}</TableCell>
-                      <TableCell>${order.subtotal.toFixed(2)}</TableCell>
-                      <TableCell>${order.deliveryFee.toFixed(2)}</TableCell>
-                      <TableCell>${order.total.toFixed(2)}</TableCell>
+                      <TableCell>SAR {order.subtotal.toFixed(2)}</TableCell>
+                      <TableCell>SAR {order.deliveryFee.toFixed(2)}</TableCell>
+                      <TableCell>SAR {order.total.toFixed(2)}</TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>

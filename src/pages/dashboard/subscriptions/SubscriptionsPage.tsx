@@ -616,8 +616,7 @@ export default function SubscriptionsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                $
-                {subscriptions
+                SAR {subscriptions
                   .filter((sub) => sub.status === "active")
                   .reduce((acc, sub) => acc + ((sub.total_cents ?? 0) / 100), 0)
                   .toFixed(2)}
@@ -723,7 +722,7 @@ export default function SubscriptionsPage() {
                       <TableCell>{sub.people_count}</TableCell>
                       <TableCell>{sub.meals_per_interval}</TableCell>
                       <TableCell>{sub.zone_name}</TableCell>
-                      <TableCell>${((sub.total_cents ?? 0) / 100).toFixed(2)}</TableCell>
+                      <TableCell>SAR {((sub.total_cents ?? 0) / 100).toFixed(2)}</TableCell>
                       <TableCell>
                         {sub.delivery_time_id
                           ? `${sub.delivery_time_id.start_time.substring(0, 5)} - ${sub.delivery_time_id.end_time.substring(0, 5)}`
@@ -823,7 +822,7 @@ export default function SubscriptionsPage() {
                 </div>
                 <div>
                   <Label>Total Price</Label>
-                  <p>${((selectedSubscription.total_cents ?? 0) / 100).toFixed(2)}</p>
+                  <p>SAR {((selectedSubscription.total_cents ?? 0) / 100).toFixed(2)}</p>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -865,11 +864,11 @@ export default function SubscriptionsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Bag Deposit</Label>
-                  <p>${((selectedSubscription.bag_deposit_cents ?? 0) / 100).toFixed(2)}</p>
+                  <p>SAR {((selectedSubscription.bag_deposit_cents ?? 0) / 100).toFixed(2)}</p>
                 </div>
                 <div>
                   <Label>Delivery Fee</Label>
-                  <p>${((selectedSubscription.delivery_fee_cents ?? 0) / 100).toFixed(2)}</p>
+                  <p>SAR {((selectedSubscription.delivery_fee_cents ?? 0) / 100).toFixed(2)}</p>
                 </div>
               </div>
               <div>
