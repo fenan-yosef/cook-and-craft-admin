@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Search, MoreHorizontal, Eye, Plus, Trash2 } from "lucide-react"
+import { Search, MoreHorizontal, Eye, Plus, Trash2, ChevronDown } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { apiService } from "@/lib/api-service"
 import { useAuth } from "@/contexts/auth-context"
@@ -93,6 +93,10 @@ export default function RecipesPage() {
   const [createTagQuery, setCreateTagQuery] = useState<string>("")
   const [editTagQuery, setEditTagQuery] = useState<string>("")
   const [filterTagQuery, setFilterTagQuery] = useState<string>("")
+  // Dropdown toggles to show full tag lists when admin doesn't know a tag name
+  const [showCreateDropdown, setShowCreateDropdown] = useState<boolean>(false)
+  const [showEditDropdown, setShowEditDropdown] = useState<boolean>(false)
+  const [showFilterDropdown, setShowFilterDropdown] = useState<boolean>(false)
   // Mock: pending recipe requests
   // Pending requests kept in localStorage (UI section is currently commented out)
   // const [pending, setPending] = useState<PendingRecipe[]>([])
@@ -949,30 +953,46 @@ export default function RecipesPage() {
 
                     {/* Searchable dropdown input */}
                     <div className="relative">
-                      <Input
-                        placeholder="Type to search tags or press Enter to add"
-                        value={createTagQuery}
-                        onChange={(e) => setCreateTagQuery(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault()
-                            const q = createTagQuery.trim()
-                            if (!q) return
-                            // If matches a catalog tag by name, add it; otherwise add as custom tag
-                            const match = tagOptions.find((x) => x.name.toLowerCase() === q.toLowerCase())
-                            if (match) {
-                              setSelectedCreateTagIds((prev) => Array.from(new Set([...prev, match.id])))
-                            } else {
-                              setNewRecipe((s) => ({ ...s, Tags: [...(s.Tags || []), q] }))
+                      <div className="flex items-center">
+                        <Input
+                          className="flex-1"
+                          placeholder="Type to search tags or press Enter to add"
+                          value={createTagQuery}
+                          onChange={(e) => setCreateTagQuery(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault()
+                              const q = createTagQuery.trim()
+                              if (!q) return
+                              const match = tagOptions.find((x) => x.name.toLowerCase() === q.toLowerCase())
+                              if (match) {
+                                setSelectedCreateTagIds((prev) => Array.from(new Set([...prev, match.id])))
+                              } else {
+                                setNewRecipe((s) => ({ ...s, Tags: [...(s.Tags || []), q] }))
+                              }
+                              setCreateTagQuery("")
+                              setShowCreateDropdown(false)
                             }
-                            setCreateTagQuery("")
-                          }
-                        }}
-                      />
-                      {createTagQuery.trim().length > 0 && (
+                          }}
+                        />
+                        <button
+                          type="button"
+                          aria-label="Show all tags"
+                          title="Show all tags"
+                          className="ml-2 p-2 rounded border bg-background"
+                          onClick={() => {
+                            setShowCreateDropdown((s) => !s)
+                            setShowEditDropdown(false)
+                            setShowFilterDropdown(false)
+                          }}
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </button>
+                      </div>
+                      {(createTagQuery.trim().length > 0 || showCreateDropdown) && (
                         <div className="absolute z-10 bg-popover border rounded mt-1 w-full max-h-48 overflow-auto">
-                          {tagOptions
-                            .filter((t) => t.name.toLowerCase().includes(createTagQuery.trim().toLowerCase()) && !selectedCreateTagIds.includes(t.id))
+                          {(createTagQuery.trim().length > 0 ? tagOptions.filter((t) => t.name.toLowerCase().includes(createTagQuery.trim().toLowerCase())) : tagOptions)
+                            .filter((t) => !selectedCreateTagIds.includes(t.id))
                             .slice(0, 50)
                             .map((t) => (
                               <div
@@ -981,6 +1001,7 @@ export default function RecipesPage() {
                                 onClick={() => {
                                   setSelectedCreateTagIds((prev) => Array.from(new Set([...prev, t.id])))
                                   setCreateTagQuery("")
+                                  setShowCreateDropdown(false)
                                 }}
                               >
                                 {t.name}
@@ -1217,28 +1238,45 @@ export default function RecipesPage() {
 
                     {/* Searchable dropdown for selecting tags */}
                     <div className="relative flex-1 min-w-[180px]">
-                      <Input
-                        placeholder="Type to search tags"
-                        value={filterTagQuery}
-                        onChange={(e) => setFilterTagQuery(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault()
-                            const q = filterTagQuery.trim()
-                            if (!q) return
-                            const options = tagOptions.length ? tagOptions : TAG_OPTIONS.map((t) => ({ id: t.id, name: t.label }))
-                            const match = options.find((x) => x.name.toLowerCase() === q.toLowerCase())
-                            if (match) {
-                              setTagSelections((prev) => Array.from(new Set([...prev, match.id])))
+                      <div className="flex items-center">
+                        <Input
+                          className="flex-1"
+                          placeholder="Type to search tags"
+                          value={filterTagQuery}
+                          onChange={(e) => setFilterTagQuery(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault()
+                              const q = filterTagQuery.trim()
+                              if (!q) return
+                              const options = tagOptions.length ? tagOptions : TAG_OPTIONS.map((t) => ({ id: t.id, name: t.label }))
+                              const match = options.find((x) => x.name.toLowerCase() === q.toLowerCase())
+                              if (match) {
+                                setTagSelections((prev) => Array.from(new Set([...prev, match.id])))
+                              }
+                              setFilterTagQuery("")
+                              setShowFilterDropdown(false)
                             }
-                            setFilterTagQuery("")
-                          }
-                        }}
-                      />
-                      {filterTagQuery.trim().length > 0 && (
+                          }}
+                        />
+                        <button
+                          type="button"
+                          aria-label="Show all tags"
+                          title="Show all tags"
+                          className="ml-2 p-2 rounded border bg-background"
+                          onClick={() => {
+                            setShowFilterDropdown((s) => !s)
+                            setShowCreateDropdown(false)
+                            setShowEditDropdown(false)
+                          }}
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </button>
+                      </div>
+                      {(filterTagQuery.trim().length > 0 || showFilterDropdown) && (
                         <div className="absolute z-10 bg-popover border rounded mt-1 w-full max-h-48 overflow-auto">
                           {(tagOptions.length ? tagOptions : TAG_OPTIONS.map((t) => ({ id: t.id, name: t.label })))
-                            .filter((t) => t.name.toLowerCase().includes(filterTagQuery.trim().toLowerCase()) && !tagSelections.includes(t.id))
+                            .filter((t) => (filterTagQuery.trim().length > 0 ? t.name.toLowerCase().includes(filterTagQuery.trim().toLowerCase()) : true) && !tagSelections.includes(t.id))
                             .slice(0, 50)
                             .map((t) => (
                               <div
@@ -1247,6 +1285,7 @@ export default function RecipesPage() {
                                 onClick={() => {
                                   setTagSelections((prev) => Array.from(new Set([...prev, t.id])))
                                   setFilterTagQuery("")
+                                  setShowFilterDropdown(false)
                                 }}
                               >
                                 {t.name}
@@ -2062,29 +2101,46 @@ export default function RecipesPage() {
                     </div>
 
                     <div className="relative">
-                      <Input
-                        placeholder="Type to search tags or press Enter to add"
-                        value={editTagQuery}
-                        onChange={(e) => setEditTagQuery(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault()
-                            const q = editTagQuery.trim()
-                            if (!q) return
-                            const match = tagOptions.find((x) => x.name.toLowerCase() === q.toLowerCase())
-                            if (match) {
-                              setSelectedEditTagIds((prev) => Array.from(new Set([...prev, match.id])))
-                            } else {
-                              setEditRecipe((s) => ({ ...s, Tags: [...(Array.isArray(s.Tags) ? s.Tags : []), q] }))
+                      <div className="flex items-center">
+                        <Input
+                          className="flex-1"
+                          placeholder="Type to search tags or press Enter to add"
+                          value={editTagQuery}
+                          onChange={(e) => setEditTagQuery(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault()
+                              const q = editTagQuery.trim()
+                              if (!q) return
+                              const match = tagOptions.find((x) => x.name.toLowerCase() === q.toLowerCase())
+                              if (match) {
+                                setSelectedEditTagIds((prev) => Array.from(new Set([...prev, match.id])))
+                              } else {
+                                setEditRecipe((s) => ({ ...s, Tags: [...(Array.isArray(s.Tags) ? s.Tags : []), q] }))
+                              }
+                              setEditTagQuery("")
+                              setShowEditDropdown(false)
                             }
-                            setEditTagQuery("")
-                          }
-                        }}
-                      />
-                      {editTagQuery.trim().length > 0 && (
+                          }}
+                        />
+                        <button
+                          type="button"
+                          aria-label="Show all tags"
+                          title="Show all tags"
+                          className="ml-2 p-2 rounded border bg-background"
+                          onClick={() => {
+                            setShowEditDropdown((s) => !s)
+                            setShowCreateDropdown(false)
+                            setShowFilterDropdown(false)
+                          }}
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </button>
+                      </div>
+                      {(editTagQuery.trim().length > 0 || showEditDropdown) && (
                         <div className="absolute z-10 bg-popover border rounded mt-1 w-full max-h-48 overflow-auto">
-                          {tagOptions
-                            .filter((t) => t.name.toLowerCase().includes(editTagQuery.trim().toLowerCase()) && !selectedEditTagIds.includes(t.id))
+                          {(editTagQuery.trim().length > 0 ? tagOptions.filter((t) => t.name.toLowerCase().includes(editTagQuery.trim().toLowerCase())) : tagOptions)
+                            .filter((t) => !selectedEditTagIds.includes(t.id))
                             .slice(0, 50)
                             .map((t) => (
                               <div
@@ -2093,6 +2149,7 @@ export default function RecipesPage() {
                                 onClick={() => {
                                   setSelectedEditTagIds((prev) => Array.from(new Set([...prev, t.id])))
                                   setEditTagQuery("")
+                                  setShowEditDropdown(false)
                                 }}
                               >
                                 {t.name}
