@@ -1167,8 +1167,9 @@ export default function RecipesPage() {
                                   setNewSteps(arr)
                                 }}
                               />
-                            </div>
-                            <div className="w-36 grid gap-1">
+                            </div>                         
+                          </div>
+                           <div className="w-36 grid gap-1">
                               <Label className="text-sm">Prep minutes</Label>
                               <Input
                                 type="number"
@@ -1181,8 +1182,6 @@ export default function RecipesPage() {
                                 }}
                               />
                             </div>
-                          </div>
-
                           <div className="flex items-start gap-4 mt-2">
                             <div className="w-32 h-32 bg-muted rounded border overflow-hidden flex items-center justify-center">
                               {st.image ? (
@@ -2412,8 +2411,7 @@ export default function RecipesPage() {
                                   setEditSteps(arr)
                                 }}
                               />
-                            </div>
-                            
+                            </div>                         
                           </div>
                           <div className="w-36 grid gap-1">
                               <Label className="text-sm">Prep minutes</Label>
