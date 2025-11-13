@@ -89,6 +89,9 @@ export default function RecipesPage() {
   const [tagsLoading, setTagsLoading] = useState(false)
   const [selectedEditTagIds, setSelectedEditTagIds] = useState<number[]>([])
   const [selectedCreateTagIds, setSelectedCreateTagIds] = useState<number[]>([])
+  // Simple search query states for tag dropdowns in Create/Edit dialogs
+  const [createTagQuery, setCreateTagQuery] = useState<string>("")
+  const [editTagQuery, setEditTagQuery] = useState<string>("")
   // Mock: pending recipe requests
   // Pending requests kept in localStorage (UI section is currently commented out)
   // const [pending, setPending] = useState<PendingRecipe[]>([])
@@ -907,25 +910,84 @@ export default function RecipesPage() {
                 {tagOptions.length === 0 ? (
                   <div className="text-xs text-muted-foreground">No tag catalog yet. You can add custom tags below.</div>
                 ) : (
-                  <div className="flex flex-wrap gap-3">
-                    {tagOptions.map((t) => (
-                      <label key={t.id} className="flex items-center gap-2 text-sm border rounded px-2 py-1">
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4"
-                          checked={selectedCreateTagIds.includes(t.id)}
-                          onChange={(e) => {
-                            setSelectedCreateTagIds((prev) => {
-                              const set = new Set(prev)
-                              if (e.target.checked) set.add(t.id)
-                              else set.delete(t.id)
-                              return Array.from(set.values())
-                            })
-                          }}
-                        />
-                        <span>{t.name}</span>
-                      </label>
-                    ))}
+                  <div className="space-y-2">
+                    {/* Selected tags (catalog + custom) */}
+                    <div className="flex flex-wrap gap-2">
+                      {selectedCreateTagIds.map((id) => {
+                        const t = tagOptions.find((x) => x.id === id)
+                        if (!t) return null
+                        return (
+                          <Badge key={id} variant="secondary" className="inline-flex items-center gap-2">
+                            <span className="text-sm">{t.name}</span>
+                            <button
+                              type="button"
+                              aria-label="Remove tag"
+                              onClick={() => setSelectedCreateTagIds((prev) => prev.filter((x) => x !== id))}
+                              className="ml-1 text-xs leading-none"
+                            >
+                              ×
+                            </button>
+                          </Badge>
+                        )
+                      })}
+
+                      {(newRecipe.Tags || []).map((t, idx) => (
+                        <Badge key={`custom-${idx}`} variant="outline" className="inline-flex items-center gap-2">
+                          <span className="text-sm">{t}</span>
+                          <button
+                            type="button"
+                            aria-label="Remove custom tag"
+                            onClick={() => setNewRecipe((s) => ({ ...s, Tags: (s.Tags || []).filter((_, i) => i !== idx) }))}
+                            className="ml-1 text-xs leading-none"
+                          >
+                            ×
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+
+                    {/* Searchable dropdown input */}
+                    <div className="relative">
+                      <Input
+                        placeholder="Type to search tags or press Enter to add"
+                        value={createTagQuery}
+                        onChange={(e) => setCreateTagQuery(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault()
+                            const q = createTagQuery.trim()
+                            if (!q) return
+                            // If matches a catalog tag by name, add it; otherwise add as custom tag
+                            const match = tagOptions.find((x) => x.name.toLowerCase() === q.toLowerCase())
+                            if (match) {
+                              setSelectedCreateTagIds((prev) => Array.from(new Set([...prev, match.id])))
+                            } else {
+                              setNewRecipe((s) => ({ ...s, Tags: [...(s.Tags || []), q] }))
+                            }
+                            setCreateTagQuery("")
+                          }
+                        }}
+                      />
+                      {createTagQuery.trim().length > 0 && (
+                        <div className="absolute z-10 bg-popover border rounded mt-1 w-full max-h-48 overflow-auto">
+                          {tagOptions
+                            .filter((t) => t.name.toLowerCase().includes(createTagQuery.trim().toLowerCase()) && !selectedCreateTagIds.includes(t.id))
+                            .slice(0, 50)
+                            .map((t) => (
+                              <div
+                                key={t.id}
+                                className="px-3 py-2 hover:bg-muted cursor-pointer text-sm"
+                                onClick={() => {
+                                  setSelectedCreateTagIds((prev) => Array.from(new Set([...prev, t.id])))
+                                  setCreateTagQuery("")
+                                }}
+                              >
+                                {t.name}
+                              </div>
+                            ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
                 {/* Custom tags inputs */}
@@ -1922,28 +1984,81 @@ export default function RecipesPage() {
                 {tagOptions.length === 0 ? (
                   <div className="text-xs text-muted-foreground">No tags available.</div>
                 ) : (
-                  <div className="flex flex-wrap gap-3">
-                    {tagOptions.map((t) => {
-                      const checked = selectedEditTagIds.includes(t.id)
-                      return (
-                        <label key={t.id} className="flex items-center gap-2 text-sm border rounded px-2 py-1">
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4"
-                            checked={checked}
-                            onChange={(e) => {
-                              setSelectedEditTagIds((prev) => {
-                                const set = new Set(prev)
-                                if (e.target.checked) set.add(t.id)
-                                else set.delete(t.id)
-                                return Array.from(set.values())
-                              })
-                            }}
-                          />
-                          <span>{t.name}</span>
-                        </label>
-                      )
-                    })}
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap gap-2">
+                      {selectedEditTagIds.map((id) => {
+                        const t = tagOptions.find((x) => x.id === id)
+                        if (!t) return null
+                        return (
+                          <Badge key={id} variant="secondary" className="inline-flex items-center gap-2">
+                            <span className="text-sm">{t.name}</span>
+                            <button
+                              type="button"
+                              aria-label="Remove tag"
+                              onClick={() => setSelectedEditTagIds((prev) => prev.filter((x) => x !== id))}
+                              className="ml-1 text-xs leading-none"
+                            >
+                              ×
+                            </button>
+                          </Badge>
+                        )
+                      })}
+
+                      {(Array.isArray(editRecipe.Tags) ? editRecipe.Tags : []).map((t, idx) => (
+                        <Badge key={`custom-e-${idx}`} variant="outline" className="inline-flex items-center gap-2">
+                          <span className="text-sm">{t}</span>
+                          <button
+                            type="button"
+                            aria-label="Remove custom tag"
+                            onClick={() => setEditRecipe((s) => ({ ...s, Tags: (Array.isArray(s.Tags) ? s.Tags : []).filter((_, i) => i !== idx) }))}
+                            className="ml-1 text-xs leading-none"
+                          >
+                            ×
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+
+                    <div className="relative">
+                      <Input
+                        placeholder="Type to search tags or press Enter to add"
+                        value={editTagQuery}
+                        onChange={(e) => setEditTagQuery(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault()
+                            const q = editTagQuery.trim()
+                            if (!q) return
+                            const match = tagOptions.find((x) => x.name.toLowerCase() === q.toLowerCase())
+                            if (match) {
+                              setSelectedEditTagIds((prev) => Array.from(new Set([...prev, match.id])))
+                            } else {
+                              setEditRecipe((s) => ({ ...s, Tags: [...(Array.isArray(s.Tags) ? s.Tags : []), q] }))
+                            }
+                            setEditTagQuery("")
+                          }
+                        }}
+                      />
+                      {editTagQuery.trim().length > 0 && (
+                        <div className="absolute z-10 bg-popover border rounded mt-1 w-full max-h-48 overflow-auto">
+                          {tagOptions
+                            .filter((t) => t.name.toLowerCase().includes(editTagQuery.trim().toLowerCase()) && !selectedEditTagIds.includes(t.id))
+                            .slice(0, 50)
+                            .map((t) => (
+                              <div
+                                key={t.id}
+                                className="px-3 py-2 hover:bg-muted cursor-pointer text-sm"
+                                onClick={() => {
+                                  setSelectedEditTagIds((prev) => Array.from(new Set([...prev, t.id])))
+                                  setEditTagQuery("")
+                                }}
+                              >
+                                {t.name}
+                              </div>
+                            ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
                 {/* Custom tags inputs */}
