@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
+import { apiService } from "@/lib/api-service"
 
 import {
   Card,
@@ -27,8 +28,8 @@ interface SubscriptionType {
   price: number
 }
 
-// Base URL for the API
-const API_BASE_URL = "https://cook-craft.dhcb.io/api"
+// Base URL for the API (use centralized ApiService which reads VITE_API_BASE_URL)
+const API_BASE_URL = apiService.getBaseUrl()
 
 export default function SubscriptionTypesPage() {
   const { token } = useAuth()

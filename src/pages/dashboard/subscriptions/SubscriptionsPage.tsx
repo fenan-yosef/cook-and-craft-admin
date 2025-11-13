@@ -56,6 +56,7 @@ import {
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context";
+import { apiService } from "@/lib/api-service"
 
 
 
@@ -107,8 +108,8 @@ const planTypeColors = {
   quarterly: "bg-indigo-100 text-indigo-800",
 }
 
-// Base URL for the API
-const API_BASE_URL = "https://cook-craft.dhcb.io/api"
+// Base URL for the API (use centralized ApiService which reads VITE_API_BASE_URL)
+const API_BASE_URL = apiService.getBaseUrl()
 
 export default function SubscriptionsPage() {
   const { token } = useAuth()

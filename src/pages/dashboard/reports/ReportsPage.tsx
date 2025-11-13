@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label"
 import { Search, MoreHorizontal, Eye, CheckCircle, XCircle, AlertTriangle, Calendar } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context";
+import { apiService } from "@/lib/api-service"
 
 interface PostReport {
   id: number
@@ -51,7 +52,7 @@ const reasonColors = {
   other: "bg-gray-100 text-gray-800",
 }
 
-const API_BASE_URL = "https://cook-craft.dhcb.io/api"
+const API_BASE_URL = apiService.getBaseUrl()
 
 export default function ReportsPage() {
   const [reports, setReports] = useState<PostReport[]>([])
