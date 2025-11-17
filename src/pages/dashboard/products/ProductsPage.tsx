@@ -151,6 +151,17 @@ export default function ProductsPage() {
   const [addTagLoading, setAddTagLoading] = useState(false)
   const [addTagValue, setAddTagValue] = useState("")
 
+  // Ensure image URLs are absolute; prefix with API base when backend returns relative paths
+  const toAbsoluteUrl = (u: any): string => {
+    const s = String(u ?? '').trim()
+    if (!s) return ''
+    if (s.startsWith('http://') || s.startsWith('https://') || s.startsWith('data:') || s.startsWith('blob:')) return s
+    const base = apiService.getBaseUrl ? apiService.getBaseUrl() : ''
+    if (!base) return s
+    if (s.startsWith('/')) return `${base}${s}`
+    return `${base}/${s}`
+  }
+
   useEffect(() => {
     fetchCategories()
     // Enforce allowed per-page values on initial load
@@ -247,6 +258,52 @@ export default function ProductsPage() {
           ? { id: Number(firstCategory.id), name: String(firstCategory.name ?? firstCategory.slug ?? "") }
           : undefined
 
+        // Normalize images from multiple possible shapes/keys
+        const arrCandidates = [
+          Array.isArray(item.productImages) ? item.productImages : null,
+          Array.isArray(item.images) ? item.images : null,
+          Array.isArray(item.product_images) ? item.product_images : null,
+          Array.isArray(item.productImage) ? item.productImage : null,
+        ].filter(Boolean) as any[]
+
+        let normalizedImages: string[] = []
+        for (const arr of arrCandidates) {
+          const mapped = (arr as any[]).map((img: any) => {
+            if (typeof img === 'string') return img
+            return (
+              img?.image_url ||
+              img?.imageUrl ||
+              img?.image ||
+              img?.url ||
+              img?.path ||
+              img?.src ||
+              img?.storage_path ||
+              img?.storagePath ||
+              null
+            )
+          }).filter(Boolean) as string[]
+          if (mapped.length) { normalizedImages = mapped; break }
+        }
+
+        // Fallback to single-value fields if no arrays yielded results
+        if (normalizedImages.length === 0) {
+          const single = (
+            item?.image_url ||
+            item?.imageUrl ||
+            item?.image ||
+            item?.url ||
+            item?.path ||
+            item?.src ||
+            item?.storage_path ||
+            item?.storagePath ||
+            null
+          )
+          if (single) normalizedImages = [String(single)]
+        }
+
+        // Make URLs absolute and trimmed
+        normalizedImages = normalizedImages.map(toAbsoluteUrl).filter(Boolean)
+
         return {
           id: item.productId,
           name: item.productName,
@@ -255,7 +312,7 @@ export default function ProductsPage() {
           stock: item.productAvailableQuantity,
           status: item.isProductActive ? "active" : "inactive",
           created_at: item.createdAt || new Date().toISOString(),
-          images: item.productImages?.map((img: any) => img.imageUrl || img.url || img.path || img) || [],
+          images: normalizedImages,
           sku: item.productSku,
           isPrivate: !!item.isProductPrivate,
           tags: (item.productTags || [])
@@ -2290,7 +2347,7 @@ export default function ProductsPage() {
                       <TableCell>
                         {product.images && product.images.length > 0 ? (
                           <img
-                            src={product.images[0]}
+                            src={toAbsoluteUrl(product.images[0])}
                             alt={product.name}
                             className="w-12 h-12 object-cover rounded border"
                           />
