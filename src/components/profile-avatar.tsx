@@ -25,6 +25,19 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { User, LogOut, Edit, Eye, EyeOff } from "lucide-react"
 
+const COUNTRY_CODES = [
+  "+1","+7","+20","+27","+30","+31","+32","+33","+34","+36","+39","+40","+41","+43","+44","+45","+46","+47","+48","+49",
+  "+51","+52","+53","+54","+55","+56","+57","+58","+60","+61","+62","+63","+64","+65","+66","+81","+82","+84","+86",
+  "+90","+91","+92","+93","+94","+95","+98","+212","+213","+216","+218","+220","+221","+222","+223","+224","+225","+226","+227","+228","+229",
+  "+233","+234","+235","+236","+237","+238","+239","+240","+241","+242","+243","+244","+245","+246","+248","+249","+250","+251","+252","+253",
+  "+254","+255","+256","+257","+258","+260","+261","+262","+263","+264","+265","+266","+267","+268","+269","+290","+291","+297","+298","+299",
+  "+350","+351","+352","+353","+354","+355","+356","+357","+358","+359","+370","+371","+372","+373","+374","+375","+376","+377","+378","+379",
+  "+380","+381","+382","+383","+385","+386","+387","+389","+420","+421","+423","+503","+504","+505","+506","+507","+508","+509","+590","+591",
+  "+592","+593","+594","+595","+596","+597","+598","+599","+670","+672","+674","+675","+676","+677","+678","+679","+680","+681","+682","+683",
+  "+685","+686","+687","+688","+689","+690","+691","+692","+850","+852","+853","+855","+856","+880","+886","+960","+961","+962","+963","+964",
+  "+965","+966","+967","+968","+970","+971","+972","+973","+974","+975","+976","+977","+992","+993","+994","+995","+996","+998"
+]
+
 export function ProfileAvatar() {
   const { user, logout, updateUser } = useAuth() || {}
   const { toast } = useToast()
@@ -38,6 +51,7 @@ export function ProfileAvatar() {
     last_name: "",
     email: user?.email || "",
     phone: user?.phone || "",
+    country_code: "",
     birth_date: "",
     newPassword: "",
     confirmPassword: "",
@@ -53,18 +67,42 @@ export function ProfileAvatar() {
   useEffect(() => {
     // Update profileData state when user context changes
     if (user) {
+      // use top-level COUNTRY_CODES
+
       const fullName = String(user.name || "").trim()
       const parts = fullName ? fullName.split(/\s+/) : []
       const first = parts[0] || ""
       const last = parts.length > 1 ? parts[parts.length - 1] : ""
       const middle = parts.length > 2 ? parts.slice(1, -1).join(" ") : ""
+      // Try to split phone into country code + local number
+      let initialCountry = COUNTRY_CODES.includes("+966") ? "+966" : COUNTRY_CODES[0]
+      let localPhone = String(user.phone || "")
+      if (localPhone.startsWith("+")) {
+        // find longest matching code
+        const sorted = COUNTRY_CODES.slice().sort((a,b) => b.length - a.length)
+        let found = ""
+        for (const c of sorted) {
+          if (localPhone.startsWith(c)) { found = c; break }
+        }
+        if (found) {
+          initialCountry = found
+          localPhone = localPhone.slice(found.length)
+        } else {
+          // remove leading + and keep rest
+          localPhone = localPhone.replace(/^\+/, "")
+        }
+      }
+      // strip non-digits from local phone
+      localPhone = localPhone.replace(/\D/g, "")
+
       setProfileData((prev) => ({
         ...prev,
         first_name: first,
         middle_name: middle,
         last_name: last,
         email: user.email,
-        phone: user.phone || "",
+        phone: localPhone || "",
+        country_code: String((user as any)?.country_code || initialCountry),
         birth_date: (user as any)?.birth_date || "",
       }))
     }
@@ -141,13 +179,19 @@ export function ProfileAvatar() {
         return
       }
       const phoneTrimmed = profileData.phone.trim()
-      const phoneValid = /^\+?[0-9]{7,15}$/.test(phoneTrimmed)
+      // local phone part should be digits only (without country code)
+      const phoneValid = /^\d{6,14}$/.test(phoneTrimmed)
       if (!phoneValid) {
         toast({
           title: "Invalid phone",
-          description: "Phone format must be + and digits only, 7-15 digits (e.g., +201012345678).",
+          description: "Phone format must be digits only (without country code), 6-14 digits.",
           variant: "destructive",
         })
+        return
+      }
+      // country code required when phone present
+      if (!profileData.country_code || String(profileData.country_code).trim() === "") {
+        toast({ title: "Country code required", description: "Please select a country code.", variant: "destructive" })
         return
       }
       // Build payload fields from separate name inputs
@@ -159,7 +203,9 @@ export function ProfileAvatar() {
       formData.append("last_name", String(last_name ?? ""))
       if (profileData.birth_date) formData.append("birth_date", String(profileData.birth_date))
       formData.append("email", String(profileData.email ?? ""))
+      // send phone without leading +; backend expects country_code separately
       formData.append("phone", String(phoneTrimmed))
+      formData.append("country_code", String(profileData.country_code || ""))
       if (profileData.newPassword) {
         formData.append("password", String(profileData.newPassword))
         formData.append("password_confirmation", String(profileData.confirmPassword ?? ""))
@@ -192,7 +238,7 @@ export function ProfileAvatar() {
         ...user,
         name: [profileData.first_name, profileData.middle_name, profileData.last_name].filter(Boolean).join(" "),
         email: profileData.email,
-        phone: profileData.phone,
+        phone: `${profileData.country_code || ""}${profileData.phone}`,
         avatarUrl: updatedAvatarUrl ?? user.avatarUrl,
       }
       updateUser?.(updatedUser)
@@ -383,16 +429,31 @@ export function ProfileAvatar() {
                 <Label htmlFor="phone" className="text-right">
                   Phone
                 </Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  value={profileData.phone}
-                  onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
-                  className="col-span-3"
-                  disabled={!isEditing}
-                  pattern="^\+?[0-9]{7,15}$"
-                  title="Enter phone like +201012345678 (7-15 digits)"
-                />
+                <div className="col-span-3 flex items-center">
+                  <select
+                    id="country_code"
+                    value={profileData.country_code}
+                    onChange={(e) => setProfileData({ ...profileData, country_code: e.target.value })}
+                    disabled={!isEditing}
+                    className="w-28 mr-2 rounded border px-2 py-1 bg-white text-slate-900 border-slate-300 focus:outline-none focus:ring-2 focus:ring-primary/20 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700"
+                  >
+                    <option value="" disabled>Select</option>
+                    {COUNTRY_CODES.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    value={profileData.phone}
+                    onChange={(e) => setProfileData({ ...profileData, phone: e.target.value.replace(/\D/g, "") })}
+                    className="flex-1"
+                    disabled={!isEditing}
+                    pattern="^\d{6,14}$"
+                    title="Enter local phone digits (without country code), 6-14 digits"
+                    placeholder="e.g. 501234567"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-4 items-center gap-4">
