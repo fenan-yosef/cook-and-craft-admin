@@ -99,6 +99,8 @@ export default function DeliveryZonesPage() {
   // Deletion loading trackers
   const [deletingDayIds, setDeletingDayIds] = useState<number[]>([]);
   const [deletingSlotIds, setDeletingSlotIds] = useState<number[]>([]);
+  // Toggle enable/disable loading trackers
+  const [togglingZoneIds, setTogglingZoneIds] = useState<number[]>([]);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -135,6 +137,24 @@ export default function DeliveryZonesPage() {
       toast({ title: 'Error', description: err?.message || 'Failed to delete time slot', variant: 'destructive' });
     } finally {
       setDeletingSlotIds(prev => prev.filter(id => id !== slotId));
+    }
+  };
+
+  const toggleZoneEnabled = async (zoneId: number, enable: boolean) => {
+    setTogglingZoneIds(prev => [...prev, zoneId]);
+    try {
+      await apiService.patch(`/admins/delivery-zones/${zoneId}`, { is_enabled: enable });
+      toast({ title: 'Success', description: `Zone ${enable ? 'enabled' : 'disabled'}.` });
+      // Update local list quickly
+      setZones(prev => prev.map(z => (z.id === zoneId ? { ...z, is_enabled: enable } : z)));
+      // Refresh details/views if currently open for this zone
+      if (viewZoneId === zoneId) await refreshView();
+      // Also refresh list from server for consistency
+      fetchZones();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err?.message || 'Failed to update zone', variant: 'destructive' });
+    } finally {
+      setTogglingZoneIds(prev => prev.filter(id => id !== zoneId));
     }
   };
 
@@ -826,6 +846,14 @@ export default function DeliveryZonesPage() {
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => openViewById(zone.id)}>
                               <Eye className="mr-2 h-4 w-4" /> View
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => toggleZoneEnabled(zone.id, !zone.is_enabled)}
+                              disabled={togglingZoneIds.includes(zone.id)}
+                            >
+                              {togglingZoneIds.includes(zone.id)
+                                ? (zone.is_enabled ? 'Disabling...' : 'Enabling...')
+                                : (zone.is_enabled ? 'Disable' : 'Enable')}
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => openEditModal(zone)}>
                               <Edit className="mr-2 h-4 w-4" /> Edit
