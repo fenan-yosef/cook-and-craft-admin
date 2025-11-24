@@ -124,10 +124,6 @@ export default function PostsPage() {
     title: "",
     description: "",
     media: [] as File[],
-    pollQuestion: "",
-    pollOptions: ["", ""],
-    pollOpenAt: "",
-    pollCloseAt: "",
   });
 
   // New state for post versions
@@ -137,11 +133,21 @@ export default function PostsPage() {
   const [newVersion, setNewVersion] = useState({
     description: "",
     media: [] as File[],
-    pollQuestion: "",
-    pollOptions: ["", ""],
-    pollOpenAt: "",
-    pollCloseAt: "",
   });
+
+  const [newPostPreviews, setNewPostPreviews] = useState<string[]>([]);
+  useEffect(() => {
+    const urls = newPost.media.map((f) => URL.createObjectURL(f));
+    setNewPostPreviews(urls);
+    return () => urls.forEach((u) => URL.revokeObjectURL(u));
+  }, [newPost.media]);
+
+  const [newVersionPreviews, setNewVersionPreviews] = useState<string[]>([]);
+  useEffect(() => {
+    const urls = newVersion.media.map((f) => URL.createObjectURL(f));
+    setNewVersionPreviews(urls);
+    return () => urls.forEach((u) => URL.revokeObjectURL(u));
+  }, [newVersion.media]);
 
   const fetchPosts = useCallback(
     async (page = 1) => {
@@ -335,16 +341,7 @@ export default function PostsPage() {
       return;
     }
 
-    if (
-      newPost.pollOpenAt &&
-      newPost.pollCloseAt &&
-      new Date(newPost.pollCloseAt) < new Date(newPost.pollOpenAt)
-    ) {
-      setPollDateError("Poll close date cannot be before open date.");
-      return;
-    } else {
-      setPollDateError(null);
-    }
+    // no poll fields anymore; skip poll date validation
     setIsCreatingPost(true);
 
     if (!user?.id) {
@@ -379,21 +376,7 @@ export default function PostsPage() {
         "tags[0][end_pos]",
         String(Math.max(2, newPost.description.length))
       );
-      if (newPost.pollQuestion) {
-        formData.append("poll[question]", newPost.pollQuestion);
-        formData.append("poll[result_mode]", "hidden");
-        if (newPost.pollOpenAt) {
-          formData.append("poll[open_at]", newPost.pollOpenAt);
-        }
-        if (newPost.pollCloseAt) {
-          formData.append("poll[close_at]", newPost.pollCloseAt);
-        }
-        newPost.pollOptions.forEach((option, idx) => {
-          if (option.trim()) {
-            formData.append(`poll[poll_options][${idx}][option_txt]`, option);
-          }
-        });
-      }
+      // polls removed from UI; do not append poll data
 
       const createRes: any = await apiService.postMultipart("/posts", formData);
 
@@ -482,16 +465,7 @@ export default function PostsPage() {
       return;
     }
 
-    if (
-      newVersion.pollOpenAt &&
-      newVersion.pollCloseAt &&
-      new Date(newVersion.pollCloseAt) < new Date(newVersion.pollOpenAt)
-    ) {
-      setPollDateError("Poll close date cannot be before open date.");
-      return;
-    } else {
-      setPollDateError(null);
-    }
+    // polls removed from version UI; skip poll date validation
 
     setIsCreatingVersion(true);
 
@@ -522,21 +496,7 @@ export default function PostsPage() {
         String(Math.max(2, newVersion.description.length))
       );
 
-      if (newVersion.pollQuestion) {
-        formData.append("poll[question]", newVersion.pollQuestion);
-        formData.append("poll[result_mode]", "hidden");
-        if (newVersion.pollOpenAt) {
-          formData.append("poll[open_at]", newVersion.pollOpenAt);
-        }
-        if (newVersion.pollCloseAt) {
-          formData.append("poll[close_at]", newVersion.pollCloseAt);
-        }
-        newVersion.pollOptions.forEach((option, idx) => {
-          if (option.trim()) {
-            formData.append(`poll[poll_options][${idx}][option_txt]`, option);
-          }
-        });
-      }
+      // polls removed from version submission
 
       await apiService.postMultipart("/post_versions", formData);
 
@@ -875,92 +835,25 @@ export default function PostsPage() {
                     }
                   />
                 </div>
-                {isAdmin && (
-                  <>
-                    <div className="grid gap-2">
-                      <Label htmlFor="pollQuestion">
-                        Poll Question (Optional)
-                      </Label>
-                      <Input
-                        id="pollQuestion"
-                        value={newPost.pollQuestion}
-                        onChange={(e) =>
-                          setNewPost({
-                            ...newPost,
-                            pollQuestion: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                    {newPost.pollQuestion && (
-                      <div className="grid gap-2">
-                        <Label>Poll Options</Label>
-                        {newPost.pollOptions.map((option, index) => (
-                          <Input
-                            key={index}
-                            value={option}
-                            onChange={(e) => {
-                              const newOptions = [...newPost.pollOptions];
-                              newOptions[index] = e.target.value;
-                              setNewPost({
-                                ...newPost,
-                                pollOptions: newOptions,
-                              });
-                            }}
-                            placeholder={`Option ${index + 1}`}
-                          />
-                        ))}
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() =>
-                            setNewPost({
-                              ...newPost,
-                              pollOptions: [...newPost.pollOptions, ""],
-                            })
-                          }
-                        >
-                          Add Option
-                        </Button>
-                      </div>
-                    )}
-                    <div className="grid gap-4">
-                      <div className="grid gap-2">
-                        <Label htmlFor="pollOpenAt">Poll Open At</Label>
-                        <Input
-                          id="pollOpenAt"
-                          type="datetime-local"
-                          value={newPost.pollOpenAt}
-                          onChange={(e) =>
-                            setNewPost({
-                              ...newPost,
-                              pollOpenAt: e.target.value,
-                            })
-                          }
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="pollCloseAt">Poll Close At</Label>
-                        <Input
-                          id="pollCloseAt"
-                          type="datetime-local"
-                          value={newPost.pollCloseAt}
-                          onChange={(e) =>
-                            setNewPost({
-                              ...newPost,
-                              pollCloseAt: e.target.value,
-                            })
-                          }
-                        />
-                      </div>
-                      {pollDateError && (
-                        <div className="text-red-600 text-sm">
-                          {pollDateError}
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
+                        {/* Image/Video preview for selected media */}
+                        {newPost.media.length > 0 && (
+                          <div className="grid gap-2">
+                            <Label>Media Preview</Label>
+                            <div className="flex flex-wrap gap-2">
+                              {newPost.media.map((file, idx) => (
+                                <div key={idx} className="w-28 h-28 overflow-hidden rounded border flex items-center justify-center bg-slate-50">
+                                  {file.type.startsWith("image/") ? (
+                                    <img src={newPostPreviews[idx]} alt={file.name} className="w-full h-full object-cover" />
+                                  ) : file.type.startsWith("video/") ? (
+                                    <video src={newPostPreviews[idx]} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <div className="text-xs text-center p-2">{file.name}</div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                 <Button
                   type="submit"
                   disabled={
@@ -1192,6 +1085,18 @@ export default function PostsPage() {
             </DialogHeader>
             {selectedPost && (
               <div className="py-4">
+                {/* Large media preview at top (first media item) */}
+                {Array.isArray(selectedPost.media) && selectedPost.media.length > 0 && (
+                  <div className="mb-4 w-full h-64 rounded overflow-hidden border bg-slate-50 flex items-center justify-center">
+                    {String(selectedPost.media[0]).toLowerCase().match(/\.(jpeg|jpg|png|gif|webp|bmp)$/) ? (
+                      <img src={selectedPost.media[0]} alt={selectedPost.title} className="w-full h-full object-cover" />
+                    ) : String(selectedPost.media[0]).toLowerCase().includes("video") || String(selectedPost.media[0]).toLowerCase().match(/\.(mp4|webm|ogg|mov)$/) ? (
+                      <video src={selectedPost.media[0]} className="w-full h-full object-cover" controls />
+                    ) : (
+                      <img src={selectedPost.media[0]} alt={selectedPost.title} className="w-full h-full object-cover" />
+                    )}
+                  </div>
+                )}
                 <div className="grid grid-cols-1 gap-6">
                   {/* Left panel: Post details (no poll) */}
                   <div className="space-y-4">
@@ -1378,97 +1283,24 @@ export default function PostsPage() {
                   }
                 />
               </div>
-              {isAdmin && (
-                <>
-                  <div className="grid gap-2">
-                    <Label htmlFor="version-poll-question">
-                      Poll Question (Optional)
-                    </Label>
-                    <Input
-                      id="version-poll-question"
-                      value={newVersion.pollQuestion}
-                      onChange={(e) =>
-                        setNewVersion({
-                          ...newVersion,
-                          pollQuestion: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                  {newVersion.pollQuestion && (
-                    <>
-                      <div className="grid gap-2">
-                        <Label>Poll Options</Label>
-                        {newVersion.pollOptions.map((option, index) => (
-                          <Input
-                            key={index}
-                            value={option}
-                            onChange={(e) => {
-                              const newOptions = [...newVersion.pollOptions];
-                              newOptions[index] = e.target.value;
-                              setNewVersion({
-                                ...newVersion,
-                                pollOptions: newOptions,
-                              });
-                            }}
-                            placeholder={`Option ${index + 1}`}
-                          />
-                        ))}
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() =>
-                            setNewVersion({
-                              ...newVersion,
-                              pollOptions: [...newVersion.pollOptions, ""],
-                            })
-                          }
-                        >
-                          Add Option
-                        </Button>
-                      </div>
-                      <div className="grid gap-4">
-                        <div className="grid gap-2">
-                          <Label htmlFor="version-poll-open">
-                            Poll Open At
-                          </Label>
-                          <Input
-                            id="version-poll-open"
-                            type="datetime-local"
-                            value={newVersion.pollOpenAt}
-                            onChange={(e) =>
-                              setNewVersion({
-                                ...newVersion,
-                                pollOpenAt: e.target.value,
-                              })
-                            }
-                          />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="version-poll-close">
-                            Poll Close At
-                          </Label>
-                          <Input
-                            id="version-poll-close"
-                            type="datetime-local"
-                            value={newVersion.pollCloseAt}
-                            onChange={(e) =>
-                              setNewVersion({
-                                ...newVersion,
-                                pollCloseAt: e.target.value,
-                              })
-                            }
-                          />
-                        </div>
-                        {pollDateError && (
-                          <div className="text-red-600 text-sm">
-                            {pollDateError}
-                          </div>
+              {/* Image/Video preview for selected media in version */}
+              {newVersion.media.length > 0 && (
+                <div className="grid gap-2">
+                  <Label>Media Preview</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {newVersion.media.map((file, idx) => (
+                      <div key={idx} className="w-28 h-28 overflow-hidden rounded border flex items-center justify-center bg-slate-50">
+                        {file.type.startsWith("image/") ? (
+                          <img src={newVersionPreviews[idx]} alt={file.name} className="w-full h-full object-cover" />
+                        ) : file.type.startsWith("video/") ? (
+                          <video src={newVersionPreviews[idx]} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="text-xs text-center p-2">{file.name}</div>
                         )}
                       </div>
-                    </>
-                  )}
-                </>
+                    ))}
+                  </div>
+                </div>
               )}
               <Button type="submit" disabled={isCreatingVersion}>
                 {isCreatingVersion ? "Creating..." : "Create Version"}
