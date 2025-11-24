@@ -109,6 +109,14 @@ export default function PostsPage() {
   const [isViewPostDialogOpen, setIsViewPostDialogOpen] = useState(false);
   const [isCreatingPost, setIsCreatingPost] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const [postMetrics, setPostMetrics] = useState<{
+    views_cnt: number;
+    shares_cnt: number;
+    likes_cnt: number;
+    favourites_cnt: number;
+    reports_cnt: number;
+  } | null>(null);
+  const [metricsLoading, setMetricsLoading] = useState(false);
   const [pollDateError, setPollDateError] = useState<string | null>(null);
   const [handledViewId, setHandledViewId] = useState<number | null>(null);
 
@@ -261,6 +269,32 @@ export default function PostsPage() {
       return null;
     }
   }
+
+  const fetchPostMetrics = async (postId: number) => {
+    try {
+      setMetricsLoading(true);
+      if (token) apiService.setAuthToken(token);
+      const res: any = await apiService.get(`/post_metrics`);
+      const arr = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+      const found = arr.find((m: any) => Number(m.post_id) === Number(postId));
+      if (found) {
+        setPostMetrics({
+          views_cnt: Number(found.views_cnt ?? 0),
+          shares_cnt: Number(found.shares_cnt ?? 0),
+          likes_cnt: Number(found.likes_cnt ?? 0),
+          favourites_cnt: Number(found.favourites_cnt ?? 0),
+          reports_cnt: Number(found.reports_cnt ?? 0),
+        });
+      } else {
+        setPostMetrics(null);
+      }
+    } catch (e) {
+      console.warn('Failed to fetch post metrics', e);
+      setPostMetrics(null);
+    } finally {
+      setMetricsLoading(false);
+    }
+  };
 
   // Robust deep-link handler: open by ID from query, fetch single post if not in the list
   useEffect(() => {
@@ -750,6 +784,8 @@ export default function PostsPage() {
   const handleViewPost = (post: Post) => {
     setSelectedPost(post);
     setIsViewPostDialogOpen(true);
+    // fetch metrics for this post
+    fetchPostMetrics(post.id).catch(() => {});
   };
 
   const filteredPosts = posts.filter((post) => {
@@ -1177,6 +1213,20 @@ export default function PostsPage() {
                       <span className="col-span-1 text-sm font-medium">Likes:</span>
                       <span className="col-span-3">{selectedPost.likes_count}</span>
                     </div>
+                    {/* Post metrics fetched from /post_metrics for the selected post */}
+                    {metricsLoading ? (
+                      <div className="text-sm text-muted-foreground">Loading metrics...</div>
+                    ) : postMetrics ? (
+                      <div className="grid grid-cols-2 gap-2 mt-2 text-sm">
+                        <div><span className="text-muted-foreground">Views:</span> <strong>{postMetrics.views_cnt}</strong></div>
+                        <div><span className="text-muted-foreground">Shares:</span> <strong>{postMetrics.shares_cnt}</strong></div>
+                        <div><span className="text-muted-foreground">Likes:</span> <strong>{postMetrics.likes_cnt}</strong></div>
+                        <div><span className="text-muted-foreground">Favourites:</span> <strong>{postMetrics.favourites_cnt}</strong></div>
+                        <div><span className="text-muted-foreground">Reports:</span> <strong>{postMetrics.reports_cnt}</strong></div>
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground">No metrics available for this post.</div>
+                    )}
                     <div className="grid grid-cols-4 items-center gap-4">
                       <span className="col-span-1 text-sm font-medium">Posted by:</span>
                       <span className="col-span-3">{selectedPost.user?.full_name || selectedPost.user?.display_name}</span>
