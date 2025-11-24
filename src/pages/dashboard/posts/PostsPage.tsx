@@ -419,10 +419,10 @@ export default function PostsPage() {
         title: "",
         description: "",
         media: [] as File[],
-        pollQuestion: "",
-        pollOptions: ["", ""],
-        pollOpenAt: "",
-        pollCloseAt: "",
+        // pollQuestion: "",
+        // pollOptions: ["", ""],
+        // pollOpenAt: "",
+        // pollCloseAt: "",
       });
 
   // Show newest posts at top: go to page 1 and refetch
@@ -508,10 +508,10 @@ export default function PostsPage() {
       setNewVersion({
         description: "",
         media: [] as File[],
-        pollQuestion: "",
-        pollOptions: ["", ""],
-        pollOpenAt: "",
-        pollCloseAt: "",
+        // pollQuestion: "",
+        // pollOptions: ["", ""],
+        // pollOpenAt: "",
+        // pollCloseAt: "",
       });
       fetchPosts(currentPage);
     } catch (error: any) {
