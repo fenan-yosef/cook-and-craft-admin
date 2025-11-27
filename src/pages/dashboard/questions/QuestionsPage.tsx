@@ -85,6 +85,33 @@ export default function QuestionsPage() {
     }
   }
 
+  // Load existing answers for a question using its ID (preferred for edit flow)
+  const loadExistingAnswersByQuestionId = async (questionId: number, questionText?: string) => {
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+      if (token) apiService.setAuthToken(token)
+      // Try to fetch answers filtered by question id (API expects question_id query)
+      const resp = await apiService.get(`/preference_answers?question_id=${questionId}`)
+      const raw = Array.isArray(resp?.data) ? resp.data : Array.isArray(resp) ? resp : []
+      // If API returns answers for multiple questions, and we have the question text,
+      // filter by normalized Question text similarity to avoid showing other questions' answers.
+      const norm = (s: any) => String(s ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
+      const targetQ = questionText ? norm(questionText) : null
+      const filteredRaw = targetQ ? raw.filter((it: any) => norm(it?.Question) === targetQ) : raw
+
+      const mapped = filteredRaw.map((it: any) => {
+        const logoArr = Array.isArray(it?.Logo) ? it.Logo : []
+        const logoFromArr = logoArr.find((l: any) => l?.isThumbnail) || logoArr[0]
+        const url = logoFromArr?.url || it?.logoUrl || it?.logo_url || null
+        return { id: Number(it.ID ?? it.id), text: String(it.Answer ?? it.answer ?? ''), sort: Number(it.Sort ?? it.sort ?? 1), logoUrl: url || undefined }
+      })
+      setExistingAnswers(mapped)
+    } catch (e) {
+      // If request by id fails, clear existing answers to avoid stale data
+      setExistingAnswers([])
+    }
+  }
+
   useEffect(() => {
     fetchPreferences()
   }, [])
@@ -343,18 +370,19 @@ export default function QuestionsPage() {
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() => {
-                                setEditTargetId(q.id)
-                                setEditQuestion({
-                                  question: q.question,
-                                  allow_multiple: q.multiple ? 1 : 0,
-                                  is_active: q.is_active ? 1 : 0,
-                                  sort_order: q.order_index,
-                                })
-                                setEditAnswers([])
-                                // Fetch existing answers for this question text
-                                void loadExistingAnswersByQuestionText(q.question)
-                                setIsEditDialogOpen(true)
-                              }}
+                                  setEditTargetId(q.id)
+                                  setEditQuestion({
+                                    question: q.question,
+                                    allow_multiple: q.multiple ? 1 : 0,
+                                    is_active: q.is_active ? 1 : 0,
+                                    sort_order: q.order_index,
+                                  })
+                                  setEditAnswers([])
+                                  // Fetch existing answers for this question by ID (more reliable)
+                                  // Also pass the question text so we can filter by similarity if API returns extra items
+                                  void loadExistingAnswersByQuestionId(q.id, q.question)
+                                  setIsEditDialogOpen(true)
+                                }}
                             >
                               <Pencil className="mr-2 h-4 w-4" />
                               Edit
