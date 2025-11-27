@@ -443,7 +443,13 @@ export default function MetricsPage() {
         });
         if (!res7.ok) throw new Error("Failed to fetch product performance");
         const json7 = await res7.json();
-        salesData.productPerformance = json7.data;
+        const d7 = json7.data;
+        // The endpoint may return an empty array when data is cleared. An empty
+        // array is truthy and would cause rendering code to attempt to access
+        // object fields (like `.summary`) and crash. Treat an empty array as
+        // "no data" and leave `productPerformance` undefined so the UI
+        // gracefully skips the Product Performance section.
+        salesData.productPerformance = Array.isArray(d7) && d7.length === 0 ? undefined : d7;
       }
       // Fetch new customer acquisition rate (Customer KPI)
       let customerData: CustomerKPI | null = null;
