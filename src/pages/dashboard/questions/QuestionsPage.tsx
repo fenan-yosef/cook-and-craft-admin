@@ -42,7 +42,7 @@ export default function QuestionsPage() {
     is_active: 1,
     sort_order: 1,
   })
-  const [editAnswers, setEditAnswers] = useState<string[]>([])
+  const [editAnswers, setEditAnswers] = useState<Array<{ text: string; file?: File; previewUrl?: string }>>([])
   const [existingAnswers, setExistingAnswers] = useState<Array<{
     id: number;
     text: string;
@@ -59,7 +59,7 @@ export default function QuestionsPage() {
     is_active: 1,
     sort_order: 1,
   })
-  const [newAnswers, setNewAnswers] = useState<string[]>([])
+  const [newAnswers, setNewAnswers] = useState<Array<{ text: string; file?: File; previewUrl?: string }>>([])
   const { toast } = useToast()
 
   // Load existing answers for a question using question text comparison
@@ -187,23 +187,33 @@ export default function QuestionsPage() {
         answers: Array.isArray(item.answers) ? item.answers : [],
         multiple: Boolean(item.Multiple ?? (newQuestion.allow_multiple === 1)),
       }
-      // If admin added inline answers, create them now, sequentially
-      const answersToCreate = newAnswers
-        .map((a) => (typeof a === "string" ? a.trim() : ""))
-        .filter((a) => a.length > 0)
-
+      // If admin added inline answers, create them now, sequentially.
+      // Support image uploads per-answer by using multipart when a file is present.
       let createdAnswers: any[] = []
-      if (answersToCreate.length > 0) {
-        for (let i = 0; i < answersToCreate.length; i++) {
+      if (newAnswers.length > 0) {
+        for (let i = 0; i < newAnswers.length; i++) {
           try {
-            const ar = await apiService.post("/preference_answers", {
-              question_id: created.id,
-              answer_text: answersToCreate[i],
-              sort_order: i + 1,
-            })
-            if (ar?.data) createdAnswers.push(ar.data)
+            const a = newAnswers[i]
+            const answerText = String(a?.text ?? '').trim()
+            if (!answerText) continue
+            if (a?.file) {
+              const fd = new FormData()
+              fd.append('question_id', String(created.id))
+              fd.append('answer_text', answerText)
+              fd.append('sort_order', String(i + 1))
+              fd.append('logo', a.file)
+              const ar = await apiService.postMultipart('/preference_answers', fd)
+              if (ar?.data) createdAnswers.push(ar.data)
+            } else {
+              const ar = await apiService.post('/preference_answers', {
+                question_id: created.id,
+                answer_text: answerText,
+                sort_order: i + 1,
+              })
+              if (ar?.data) createdAnswers.push(ar.data)
+            }
           } catch (e) {
-            // continue creating remaining answers, but notify user
+            // continue creating remaining answers
           }
         }
       }
@@ -219,8 +229,8 @@ export default function QuestionsPage() {
       toast({
         title: "Success",
         description:
-          answersToCreate.length > 0
-            ? `Question and ${answersToCreate.length} answer(s) created`
+          createdAnswers.length > 0
+            ? `Question and ${createdAnswers.length} answer(s) created`
             : "Question created successfully",
       })
       setIsCreateQuestionDialogOpen(false)
@@ -459,7 +469,7 @@ export default function QuestionsPage() {
             <div>
               <div className="flex items-center justify-between">
                 <Label>Answers</Label>
-                <Button type="button" size="sm" variant="secondary" onClick={() => setNewAnswers((prev) => [...prev, ""]) }>
+                <Button type="button" size="sm" variant="secondary" onClick={() => setNewAnswers((prev) => [...prev, { text: "" }]) }>
                   Add Answer
                 </Button>
               </div>
@@ -468,16 +478,30 @@ export default function QuestionsPage() {
                   <div className="text-sm text-muted-foreground">No answers added yet.</div>
                 ) : (
                   newAnswers.map((val, idx) => (
-                    <div key={idx} className="flex gap-2">
+                    <div key={idx} className="flex gap-2 items-center">
                       <Input
                         placeholder={`Answer #${idx + 1}`}
-                        value={val}
+                        value={val.text}
                         onChange={(e) => {
                           const copy = [...newAnswers]
-                          copy[idx] = e.target.value
+                          copy[idx] = { ...copy[idx], text: e.target.value }
                           setNewAnswers(copy)
                         }}
                       />
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="text-sm"
+                        onChange={(e) => {
+                          const file = e.target.files && e.target.files[0]
+                          if (!file) return
+                          const preview = URL.createObjectURL(file)
+                          setNewAnswers((prev) => prev.map((a, i) => i === idx ? { ...a, file, previewUrl: preview } : a))
+                        }}
+                      />
+                      {val.previewUrl ? (
+                        <img src={val.previewUrl} alt="preview" className="w-8 h-8 rounded object-cover border" />
+                      ) : null}
                       <Button
                         type="button"
                         variant="outline"
@@ -724,7 +748,7 @@ export default function QuestionsPage() {
             <div>
               <div className="flex items-center justify-between">
                 <Label>Add Answers</Label>
-                <Button type="button" size="sm" variant="secondary" onClick={() => setEditAnswers((prev) => [...prev, ""]) }>
+                <Button type="button" size="sm" variant="secondary" onClick={() => setEditAnswers((prev) => [...prev, { text: "" }]) }>
                   Add Answer
                 </Button>
               </div>
@@ -733,16 +757,30 @@ export default function QuestionsPage() {
                   <div className="text-sm text-muted-foreground">No new answers to add.</div>
                 ) : (
                   editAnswers.map((val, idx) => (
-                    <div key={idx} className="flex gap-2">
+                    <div key={idx} className="flex gap-2 items-center">
                       <Input
                         placeholder={`Answer #${idx + 1}`}
-                        value={val}
+                        value={val.text}
                         onChange={(e) => {
                           const copy = [...editAnswers]
-                          copy[idx] = e.target.value
+                          copy[idx] = { ...copy[idx], text: e.target.value }
                           setEditAnswers(copy)
                         }}
                       />
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="text-sm"
+                        onChange={(e) => {
+                          const file = e.target.files && e.target.files[0]
+                          if (!file) return
+                          const preview = URL.createObjectURL(file)
+                          setEditAnswers((prev) => prev.map((a, i) => i === idx ? { ...a, file, previewUrl: preview } : a))
+                        }}
+                      />
+                      {val.previewUrl ? (
+                        <img src={val.previewUrl} alt="preview" className="w-8 h-8 rounded object-cover border" />
+                      ) : null}
                       <Button
                         type="button"
                         variant="outline"
@@ -769,20 +807,30 @@ export default function QuestionsPage() {
                     sort_order: editQuestion.sort_order,
                   }
                   await apiService.post(`/preference_questions/${editTargetId}?_method=put`, payload)
-                  // Create any new answers added in the edit dialog
-                  const answersToCreate = editAnswers
-                    .map((a) => (typeof a === "string" ? a.trim() : ""))
-                    .filter((a) => a.length > 0)
+                  // Create any new answers added in the edit dialog, supporting image uploads.
                   let createdAnswers: any[] = []
-                  if (answersToCreate.length > 0) {
-                    for (let i = 0; i < answersToCreate.length; i++) {
+                  if (editAnswers.length > 0) {
+                    for (let i = 0; i < editAnswers.length; i++) {
                       try {
-                        const ar = await apiService.post("/preference_answers", {
-                          question_id: editTargetId,
-                          answer_text: answersToCreate[i],
-                          sort_order: i + 1,
-                        })
-                        if (ar?.data) createdAnswers.push(ar.data)
+                        const a = editAnswers[i]
+                        const answerText = String(a?.text ?? '').trim()
+                        if (!answerText) continue
+                        if (a?.file) {
+                          const fd = new FormData()
+                          fd.append('question_id', String(editTargetId))
+                          fd.append('answer_text', answerText)
+                          fd.append('sort_order', String(i + 1))
+                          fd.append('logo', a.file)
+                          const ar = await apiService.postMultipart('/preference_answers', fd)
+                          if (ar?.data) createdAnswers.push(ar.data)
+                        } else {
+                          const ar = await apiService.post('/preference_answers', {
+                            question_id: editTargetId,
+                            answer_text: answerText,
+                            sort_order: i + 1,
+                          })
+                          if (ar?.data) createdAnswers.push(ar.data)
+                        }
                       } catch (e) {
                         // continue
                       }
