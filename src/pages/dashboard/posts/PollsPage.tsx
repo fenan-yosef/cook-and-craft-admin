@@ -393,11 +393,11 @@ export default function PollsPage() {
                 </div>
                 <div className="grid gap-1" />
                 <div className="grid gap-1">
-                  <Label>Open at (ISO)</Label>
+                  <Label>Open at</Label>
                   <Input type="datetime-local" value={newPoll.open_at} onChange={(e) => setNewPoll(s => ({ ...s, open_at: e.target.value }))} />
                 </div>
                 <div className="grid gap-1">
-                  <Label>Close at (ISO)</Label>
+                  <Label>Close at</Label>
                   <Input type="datetime-local" value={newPoll.close_at} onChange={(e) => setNewPoll(s => ({ ...s, close_at: e.target.value }))} />
                 </div>
               </div>
