@@ -2,6 +2,7 @@ import AddonsPage from "@/pages/dashboard/addons/AddonsPage"
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom"
 import { AuthProvider } from "@/contexts/auth-context"
 import WalletsPage from "@/pages/dashboard/wallets/WalletsPage"
+import ShopRedemptionPage from "@/pages/dashboard/wallets/ShopRedemptionPage"
 import { Toaster } from "@/components/ui/toaster"
 import RecipesPage from "@/pages/dashboard/recipes/RecipesPage"
 import ReportsPage from "@/pages/dashboard/reports/ReportsPage"
@@ -61,6 +62,7 @@ function App() {
             <Route path="contact-us-messages" element={<ContactUsPage />} />
             <Route path="addons" element={<AddonsPage />} />
             <Route path="wallets" element={<WalletsPage />} />
+            <Route path="shop-redemptions" element={<ShopRedemptionPage />} />
             <Route path="subscription-intervals" element={<SubscriptionIntervalsPage />} />
             <Route path="subscription-types" element={<SubscriptionTypesPage />} />
             <Route path="subscription-meal-selections" element={<SubscriptionAndMealSelections />} />

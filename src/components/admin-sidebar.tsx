@@ -78,6 +78,10 @@ const menuItems = [
             url: "/dashboard/wallets",
           },
           {
+            title: "Shop Redemption",
+            url: "/dashboard/shop-redemptions",
+          },
+          {
             title: "Conversion Rules",
             url: "/dashboard/conversion-rules",
           },
