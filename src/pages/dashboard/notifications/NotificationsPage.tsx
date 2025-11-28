@@ -25,8 +25,8 @@ export default function NotificationsPage() {
 
   const [channel, setChannel] = useState<Channel>("push")
   const [audience, setAudience] = useState<string>("all")
-  // recipients as emails/usernames (array) and input for typing/searching
-  const [recipients, setRecipients] = useState<string[]>([])
+  // recipients as objects so we can keep user IDs when available
+  const [recipients, setRecipients] = useState<Array<{ id?: number; label: string; email?: string }>>([])
   const [recipientInput, setRecipientInput] = useState<string>("")
   const [suggestions, setSuggestions] = useState<Array<{ id: number; label: string; email?: string }>>([])
   const [subject, setSubject] = useState<string>("")
@@ -43,7 +43,8 @@ export default function NotificationsPage() {
 
   const canSend = useMemo(() => {
     if (!message.trim()) return false
-    if (channel === "email" && !subject.trim()) return false
+    // Title/subject is required for email and push according to API
+    if ((channel === "email" || channel === "push") && !subject.trim()) return false
     return true
   }, [channel, message, subject])
 
@@ -75,33 +76,48 @@ export default function NotificationsPage() {
     return () => clearTimeout(id)
   }, [recipientInput])
 
+  const mapAudienceToType = (v: string) => {
+    // Map our UI presets to API audience_type values
+    switch (v) {
+      case 'drivers': return 'driver'
+      case 'admins': return 'staff'
+      case 'active':
+      case 'inactive':
+      case 'all':
+      default: return v === 'all' ? 'all' : 'customer'
+    }
+  }
+
   const handleSend = async () => {
     try {
       setSending(true)
-      // Mock a small delay
-      await new Promise(r => setTimeout(r, 800))
 
-      // Prepare mock payload
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null
+      if (token) apiService.setAuthToken(token)
+
+      const audience_type = mapAudienceToType(audience)
+      const specific_user_ids = recipients.filter(r => typeof r.id === 'number').map(r => Number(r.id))
+
       const payload: any = {
-        channel,
-        audience,
-        recipients: recipients,
-        subject: channel === 'email' ? subject : undefined,
-        message,
+        type: channel, // email / whatsapp / push
+        title: (channel === 'email' || channel === 'push') ? subject || undefined : undefined,
+        content: message,
+        audience_type,
       }
 
-      console.log("[NotificationsPage] mock send:", payload)
-      toast({
-        title: "Sent",
-        description: `Your ${channelLabel} was queued (mock).`,
-      })
+      if (specific_user_ids.length > 0) payload.specific_user_ids = specific_user_ids
+
+      await apiService.post('/notifications', payload)
+
+      toast({ title: 'Sent', description: `Your ${channelLabel} was queued.` })
+
       // Reset minimal fields
       setMessage("")
       if (channel === 'email') setSubject("")
       setRecipients([])
       setRecipientInput("")
     } catch (e: any) {
-      toast({ title: "Error", description: e?.message || "Failed to send (mock)", variant: "destructive" })
+      toast({ title: 'Error', description: e?.message || 'Failed to send', variant: 'destructive' })
     } finally {
       setSending(false)
     }
@@ -157,7 +173,7 @@ export default function NotificationsPage() {
                     <div className="flex flex-wrap gap-2 mb-2">
                       {recipients.map((r, i) => (
                         <span key={i} className="inline-flex items-center px-2 py-1 rounded bg-slate-100 text-sm">
-                          <span className="mr-2">{r}</span>
+                          <span className="mr-2">{r.label}</span>
                           <button type="button" onClick={() => setRecipients(prev => prev.filter((_, idx) => idx !== i))} className="text-muted-foreground">×</button>
                         </span>
                       ))}
@@ -170,7 +186,11 @@ export default function NotificationsPage() {
                           e.preventDefault()
                           const v = recipientInput.trim()
                           if (v) {
-                            setRecipients(prev => Array.from(new Set([...prev, v])))
+                            setRecipients(prev => {
+                              const exists = prev.some(p => p.label === v)
+                              if (exists) return prev
+                              return [...prev, { label: v }]
+                            })
                             setRecipientInput('')
                             setSuggestions([])
                           }
@@ -185,7 +205,11 @@ export default function NotificationsPage() {
                     {suggestions.length > 0 && (
                       <div className="mt-1 border rounded bg-white shadow-sm max-h-40 overflow-auto">
                         {suggestions.map(s => (
-                          <div key={s.id} className="p-2 hover:bg-slate-50 cursor-pointer" onMouseDown={(e) => { e.preventDefault(); setRecipients(prev => Array.from(new Set([...prev, s.email || s.label]))); setRecipientInput(''); setSuggestions([]) }}>
+                          <div key={s.id} className="p-2 hover:bg-slate-50 cursor-pointer" onMouseDown={(e) => { e.preventDefault(); setRecipients(prev => {
+                              const label = s.email || s.label
+                              if (prev.some(p => p.label === label)) return prev
+                              return [...prev, { id: s.id, label, email: s.email }]
+                            }); setRecipientInput(''); setSuggestions([]) }}>
                             <div className="text-sm">{s.label}</div>
                             {s.email && <div className="text-xs text-muted-foreground">{s.email}</div>}
                           </div>
@@ -200,7 +224,7 @@ export default function NotificationsPage() {
               </div>
 
               <div className="space-y-4">
-                {channel === 'email' && (
+                {(channel === 'email' || channel === 'push') && (
                   <div>
                     <Label>Subject</Label>
                     <Input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Subject" />
