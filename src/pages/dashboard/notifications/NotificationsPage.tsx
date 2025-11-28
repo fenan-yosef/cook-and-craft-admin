@@ -203,15 +203,15 @@ export default function NotificationsPage() {
                       placeholder={examplePlaceholder}
                     />
                     {suggestions.length > 0 && (
-                      <div className="mt-1 border rounded bg-white shadow-sm max-h-40 overflow-auto">
+                      <div className="mt-1 border border-slate-700 rounded bg-slate-800 shadow-sm max-h-40 overflow-auto">
                         {suggestions.map(s => (
-                          <div key={s.id} className="p-2 hover:bg-slate-50 cursor-pointer" onMouseDown={(e) => { e.preventDefault(); setRecipients(prev => {
+                          <div key={s.id} className="p-2 hover:bg-slate-700 cursor-pointer text-white" onMouseDown={(e) => { e.preventDefault(); setRecipients(prev => {
                               const label = s.email || s.label
                               if (prev.some(p => p.label === label)) return prev
                               return [...prev, { id: s.id, label, email: s.email }]
                             }); setRecipientInput(''); setSuggestions([]) }}>
-                            <div className="text-sm">{s.label}</div>
-                            {s.email && <div className="text-xs text-muted-foreground">{s.email}</div>}
+                            <div className="text-sm text-white">{s.label}</div>
+                            {s.email && <div className="text-xs text-slate-300">{s.email}</div>}
                           </div>
                         ))}
                       </div>
