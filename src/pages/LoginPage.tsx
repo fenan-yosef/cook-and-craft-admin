@@ -14,7 +14,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("admin@cookandcraft.io")
-  const [password, setPassword] = useState("password")
+  const [password, setPassword] = useState("Password1Xx")
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -81,7 +81,7 @@ export default function LoginPage() {
               <div className="relative">
                 <Input
                   id="password"
-                  type={showPassword ? "text" : "password"}
+                  type={showPassword ? "text" : "Password1Xx"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
@@ -111,7 +111,7 @@ export default function LoginPage() {
           <div className="mt-4 text-sm text-gray-600">
             <p>Default credentials:</p>
             <p>Email: admin@cookandcraft.io</p>
-            <p>Password: password</p>
+            <p>Password: Password1Xx</p>
           </div>
         </CardContent>
       </Card>
