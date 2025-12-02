@@ -116,6 +116,42 @@ export default function UsersPage() {
   const [locLoading, setLocLoading] = useState(false)
   const [locError, setLocError] = useState<string | null>(null)
   const locReqRef = useRef(0)
+  // Mocking helper: show sample data when backend returns none
+  // Set to `false` or remove before production — kept for development/demo.
+  const USE_MOCK_LOCATIONS = true
+  const MOCK_LOCATIONS: UserLocation[] = [
+    {
+      id: 30,
+      user_id: 70,
+      first_name: "Omar",
+      last_name: "Ahmed",
+      country_code: "+20",
+      phone: "105139665",
+      location: { lat: 30.8, lng: 29.4 },
+      city: "Banha",
+      country: "Egypt",
+      zip_code: "13772",
+      street: "Abuelkhier Street",
+      apartment: "12",
+      delivery_instructions: ["221212", "21212122", "2123434545"],
+      versions: [
+        {
+          id: 43,
+          user_location_id: 30,
+          version: 1,
+          first_name: "Omar",
+          last_name: "Ahmed",
+          country_code: "+20",
+          phone: "105139665",
+          location: { lat: 30.8, lng: 29.4 },
+          city: "Banha",
+          street: "Abuelkhier Street",
+          apartment: "12",
+          delivery_instructions: ["221212", "21212122", "2123434545"],
+        },
+      ],
+    },
+  ]
   const { toast } = useToast()
 
   // Pagination state
@@ -818,8 +854,59 @@ export default function UsersPage() {
                   {!locLoading && locError && (
                     <div className="text-xs text-red-500">{locError}</div>
                   )}
-                  {!locLoading && !locError && userLocations.length === 0 && (
+                  {!locLoading && !locError && userLocations.length === 0 && !USE_MOCK_LOCATIONS && (
                     <div className="text-xs text-muted-foreground">No locations found.</div>
+                  )}
+                  {!locLoading && !locError && userLocations.length === 0 && USE_MOCK_LOCATIONS && (
+                    <div>
+                      <div className="text-xs text-muted-foreground mb-2">Showing mocked location data (development only)</div>
+                      <ul className="space-y-3 max-h-60 overflow-auto pr-1">
+                        {MOCK_LOCATIONS.map((loc) => (
+                          <li key={`mock-${loc.id}`} className="rounded-md border p-3 text-sm">
+                            <div className="flex items-center justify-between">
+                              <div className="font-medium">{(loc.first_name || '') + (loc.last_name ? ` ${loc.last_name}` : '') || 'Location'}</div>
+                              <div className="text-muted-foreground text-xs">ID: {loc.id}</div>
+                            </div>
+                            <div className="mt-1 text-muted-foreground text-xs">
+                              {loc.street ? `${loc.street}` : ''}{loc.apartment ? `, Apt ${loc.apartment}` : ''}{loc.city ? ` • ${loc.city}` : ''}{loc.country ? ` • ${loc.country}` : ''}{loc.zip_code ? ` • ${loc.zip_code}` : ''}
+                            </div>
+                            <div className="mt-1 text-xs">Phone: {loc.country_code || ''}{loc.phone || '-'}</div>
+                            {loc.location && (loc.location.lat || loc.location.lng) ? (
+                              <div className="mt-1 text-xs">Lat/Lng: {loc.location.lat ?? '-'} / {loc.location.lng ?? '-'}</div>
+                            ) : null}
+                            {Array.isArray(loc.delivery_instructions) && loc.delivery_instructions.length > 0 ? (
+                              <div className="mt-2 text-xs">
+                                <div className="font-medium text-xs">Delivery Instructions</div>
+                                <ul className="list-disc ml-4 text-xs">
+                                  {loc.delivery_instructions.map((d, i) => (
+                                    <li key={i} className="text-xs">{d}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            ) : null}
+
+                            {/* Versions */}
+                            {Array.isArray(loc.versions) && loc.versions.length > 0 ? (
+                              <div className="mt-2 border-t pt-2">
+                                <div className="text-xs font-medium mb-1">Versions</div>
+                                <ul className="space-y-1">
+                                  {loc.versions.map((v: any) => (
+                                    <li key={`mv-${v.id}`} className="text-xs rounded p-2 bg-muted/10">
+                                      <div className="flex items-center justify-between">
+                                        <div>v{v.version ?? v.id}</div>
+                                        <div className="text-muted-foreground text-[11px]">ID: {v.id}</div>
+                                      </div>
+                                      <div className="mt-1 text-xs">{v.street ?? ''}{v.apartment ? `, Apt ${v.apartment}` : ''}{v.city ? ` • ${v.city}` : ''}</div>
+                                      {v.location ? <div className="text-[11px] text-muted-foreground">Lat/Lng: {v.location.lat ?? '-'} / {v.location.lng ?? '-'}</div> : null}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
                   {!locLoading && !locError && userLocations.length > 0 && (
                     <ul className="space-y-3 max-h-60 overflow-auto pr-1">
