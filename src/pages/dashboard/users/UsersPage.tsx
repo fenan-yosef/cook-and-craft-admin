@@ -60,6 +60,23 @@ interface User {
   userWallets?: any[]
 }
 
+interface UserLocation {
+  id: number
+  user_id: number
+  first_name?: string
+  last_name?: string
+  country_code?: string
+  phone?: string
+  location?: { lat?: number; lng?: number }
+  city?: string
+  country?: string
+  zip_code?: string
+  street?: string
+  apartment?: string
+  delivery_instructions?: string[]
+  versions?: any[]
+}
+
 export default function UsersPage() {
   // Safely convert any value into a human-friendly string for rendering
   const toLabel = (v: any): string => {
@@ -94,6 +111,11 @@ export default function UsersPage() {
   // Track in-flight requests to avoid stale overwrite
   const answersReqRef = useRef(0)
   const lastAnswersUserIdRef = useRef<number | null>(null)
+  // User locations state + request guard
+  const [userLocations, setUserLocations] = useState<UserLocation[]>([])
+  const [locLoading, setLocLoading] = useState(false)
+  const [locError, setLocError] = useState<string | null>(null)
+  const locReqRef = useRef(0)
   const { toast } = useToast()
 
   // Pagination state
@@ -432,6 +454,43 @@ export default function UsersPage() {
   } finally {
     if (reqId === answersReqRef.current) setAnswersLoading(false);
   }
+
+  const fetchUserLocations = async (userId: number) => {
+    const reqId = ++locReqRef.current
+    setLocLoading(true)
+    setLocError(null)
+    setUserLocations([])
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
+      if (token) apiService.setAuthToken(token)
+      // Try passing user_id as a query param; backend may ignore and return all
+      const res = await apiService.get(`/user-locations?user_id=${userId}`)
+      const data = Array.isArray(res?.data) ? res.data : []
+      if (reqId !== locReqRef.current) return
+      const mapped: UserLocation[] = data.map((l: any) => ({
+        id: Number(l.id),
+        user_id: Number(l.user_id),
+        first_name: l.first_name,
+        last_name: l.last_name,
+        country_code: l.country_code,
+        phone: l.phone,
+        location: l.location,
+        city: l.city,
+        country: l.country,
+        zip_code: l.zip_code,
+        street: l.street,
+        apartment: l.apartment,
+        delivery_instructions: Array.isArray(l.delivery_instructions) ? l.delivery_instructions : [],
+        versions: Array.isArray(l.versions) ? l.versions : [],
+      }))
+      setUserLocations(mapped)
+    } catch (err: any) {
+      if (reqId !== locReqRef.current) return
+      setLocError(err?.message || 'Failed to load locations')
+    } finally {
+      if (reqId === locReqRef.current) setLocLoading(false)
+    }
+  }
   }
 
   const filteredUsers = users.filter(
@@ -444,6 +503,7 @@ export default function UsersPage() {
     setSelectedUser(user)
     setIsDialogOpen(true)
     fetchAndFilterUserAnswers(user.id)
+    fetchUserLocations(user.id)
   }
 
   return (
@@ -700,17 +760,21 @@ export default function UsersPage() {
           onOpenChange={(open) => {
             setIsDialogOpen(open)
             if (!open) {
-              // reset answers state when dialog closes
+              // reset answers & locations state when dialog closes
               // also invalidate any in-flight requests
               answersReqRef.current += 1
               lastAnswersUserIdRef.current = null
               setUserAnswers([])
               setAnswersError(null)
               setAnswersLoading(false)
+              locReqRef.current += 1
+              setUserLocations([])
+              setLocError(null)
+              setLocLoading(false)
             }
           }}
         >
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-3xl">
             <DialogHeader>
               <DialogTitle>User Details</DialogTitle>
               <DialogDescription>
@@ -744,6 +808,68 @@ export default function UsersPage() {
                 <div className="flex items-center justify-between"><span className="text-muted-foreground">Login Count</span><span>{selectedUser.userLoginCount ?? 0}</span></div>
                 {/* <div className="flex items-center justify-between"><span className="text-muted-foreground">Last Login</span><span>{selectedUser.last_login ? new Date(selectedUser.last_login).toLocaleString() : "Never"}</span></div> */}
                 <div className="flex items-center justify-between"><span className="text-muted-foreground">Account Created</span><span>{selectedUser.created_at ? new Date(selectedUser.created_at).toLocaleString() : "-"}</span></div>
+
+                {/* User Location Section */}
+                <div className="mt-4 border-t pt-3">
+                  <h4 className="text-sm font-semibold mb-2">Locations</h4>
+                  {locLoading && (
+                    <div className="text-xs text-muted-foreground">Loading locations...</div>
+                  )}
+                  {!locLoading && locError && (
+                    <div className="text-xs text-red-500">{locError}</div>
+                  )}
+                  {!locLoading && !locError && userLocations.length === 0 && (
+                    <div className="text-xs text-muted-foreground">No locations found.</div>
+                  )}
+                  {!locLoading && !locError && userLocations.length > 0 && (
+                    <ul className="space-y-3 max-h-60 overflow-auto pr-1">
+                      {userLocations.map((loc) => (
+                        <li key={loc.id} className="rounded-md border p-3 text-sm">
+                          <div className="flex items-center justify-between">
+                            <div className="font-medium">{(loc.first_name || '') + (loc.last_name ? ` ${loc.last_name}` : '') || 'Location'}</div>
+                            <div className="text-muted-foreground text-xs">ID: {loc.id}</div>
+                          </div>
+                          <div className="mt-1 text-muted-foreground text-xs">
+                            {loc.street ? `${loc.street}` : ''}{loc.apartment ? `, Apt ${loc.apartment}` : ''}{loc.city ? ` • ${loc.city}` : ''}{loc.country ? ` • ${loc.country}` : ''}{loc.zip_code ? ` • ${loc.zip_code}` : ''}
+                          </div>
+                          <div className="mt-1 text-xs">Phone: {loc.country_code || ''}{loc.phone || '-'}</div>
+                          {loc.location && (loc.location.lat || loc.location.lng) ? (
+                            <div className="mt-1 text-xs">Lat/Lng: {loc.location.lat ?? '-'} / {loc.location.lng ?? '-'}</div>
+                          ) : null}
+                          {Array.isArray(loc.delivery_instructions) && loc.delivery_instructions.length > 0 ? (
+                            <div className="mt-2 text-xs">
+                              <div className="font-medium text-xs">Delivery Instructions</div>
+                              <ul className="list-disc ml-4 text-xs">
+                                {loc.delivery_instructions.map((d, i) => (
+                                  <li key={i} className="text-xs">{d}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null}
+
+                          {/* Versions */}
+                          {Array.isArray(loc.versions) && loc.versions.length > 0 ? (
+                            <div className="mt-2 border-t pt-2">
+                              <div className="text-xs font-medium mb-1">Versions</div>
+                              <ul className="space-y-1">
+                                {loc.versions.map((v: any) => (
+                                  <li key={v.id} className="text-xs rounded p-2 bg-muted/10">
+                                    <div className="flex items-center justify-between">
+                                      <div>v{v.version ?? v.id}</div>
+                                      <div className="text-muted-foreground text-[11px]">ID: {v.id}</div>
+                                    </div>
+                                    <div className="mt-1 text-xs">{v.street ?? ''}{v.apartment ? `, Apt ${v.apartment}` : ''}{v.city ? ` • ${v.city}` : ''}</div>
+                                    {v.location ? <div className="text-[11px] text-muted-foreground">Lat/Lng: {v.location.lat ?? '-'} / {v.location.lng ?? '-'}</div> : null}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
 
                 {/* User Answer Section */}
                 <div className="mt-4 border-t pt-3">
