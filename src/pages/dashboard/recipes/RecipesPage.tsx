@@ -382,8 +382,9 @@ export default function RecipesPage() {
       const prepNum = typeof newRecipe.Prep_minutes === "string" ? parseInt(newRecipe.Prep_minutes) : newRecipe.Prep_minutes
       if (!nameVal) errors.push("Name is required")
       if (!descVal) errors.push("Description is required")
-      if (Number.isNaN(calNum) || calNum === undefined || calNum === null || calNum === ("" as any)) errors.push("Calories is required")
-      if (Number.isNaN(prepNum) || prepNum === undefined || prepNum === null || prepNum === ("" as any)) errors.push("Prep minutes is required")
+      // Commented out per-request: temporarily disable numeric validation for calories and prep time
+      // if (Number.isNaN(calNum) || calNum === undefined || calNum === null || calNum === ("" as any)) errors.push("Calories is required")
+      // if (Number.isNaN(prepNum) || prepNum === undefined || prepNum === null || prepNum === ("" as any)) errors.push("Prep minutes is required")
       if (errors.length) {
         toast({ title: "Validation", description: errors.join("; ") })
         return
@@ -642,8 +643,9 @@ export default function RecipesPage() {
       const prepNum = typeof editRecipe.Prep_minutes === "string" ? parseInt(editRecipe.Prep_minutes) : editRecipe.Prep_minutes
       if (!nameVal) errors.push("Name is required")
       if (!descVal) errors.push("Description is required")
-      if (Number.isNaN(calNum) || calNum === undefined || calNum === null || calNum === ("" as any)) errors.push("Calories is required")
-      if (Number.isNaN(prepNum) || prepNum === undefined || prepNum === null || prepNum === ("" as any)) errors.push("Prep minutes is required")
+      // Commented out per-request: temporarily disable numeric validation for calories and prep time
+      // if (Number.isNaN(calNum) || calNum === undefined || calNum === null || calNum === ("" as any)) errors.push("Calories is required")
+      // if (Number.isNaN(prepNum) || prepNum === undefined || prepNum === null || prepNum === ("" as any)) errors.push("Prep minutes is required")
       if (errors.length) {
         toast({ title: "Validation", description: errors.join("; ") })
         return
