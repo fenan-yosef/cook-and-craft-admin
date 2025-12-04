@@ -1079,10 +1079,10 @@ export default function ProductsPage() {
                   <Input
                     id="discount_price"
                     name="discount_price"
-                    type="number"
-                    min="0"
+                    type="text"
                     value={addForm.discount_price}
                     onChange={handleAddChange}
+                    placeholder=""
                   />
                 </div>
               </div>
@@ -1982,10 +1982,10 @@ export default function ProductsPage() {
                   <Input
                     id="edit_discount_price"
                     name="discount_price"
-                    type="number"
-                    min="0"
+                    type="text"
                     value={editForm.discount_price}
                     onChange={handleEditChange}
+                    placeholder=""
                   />
                 </div>
               </div>
