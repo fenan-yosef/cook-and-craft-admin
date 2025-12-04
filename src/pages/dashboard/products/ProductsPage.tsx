@@ -146,6 +146,10 @@ export default function ProductsPage() {
   const [rawProducts, setRawProducts] = useState<Record<number, any>>({})
   const [isViewOpen, setIsViewOpen] = useState(false)
   const [viewProduct, setViewProduct] = useState<any | null>(null)
+  // Tags state
+  const [allTags, setAllTags] = useState<Array<{ id: number; name: string; slug?: string }>>([])
+  const [selectedTagId, setSelectedTagId] = useState<string>("")
+  const [tagsLoading, setTagsLoading] = useState(false)
   // Add Tag Modal State
   const [isAddTagOpen, setIsAddTagOpen] = useState(false)
   const [addTagLoading, setAddTagLoading] = useState(false)
@@ -164,6 +168,7 @@ export default function ProductsPage() {
 
   useEffect(() => {
     fetchCategories()
+    fetchAllTags()
     // Enforce allowed per-page values on initial load
     if (![15, 25, 50, 100].includes(perPage)) setPerPage(15)
     fetchProducts(1)
@@ -391,6 +396,48 @@ export default function ProductsPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // Fetch all available product tags for selection
+  const fetchAllTags = async () => {
+    try {
+      const res = await apiService.get(`/products/product-tags`)
+      const list = (res?.data ?? res ?? []) as any[]
+      const tags: Array<{ id: number; name: string; slug?: string }> = []
+      if (Array.isArray(list)) {
+        list.forEach((t: any) => {
+          if (t?.id != null && (t?.name || t?.slug)) {
+            tags.push({ id: Number(t.id), name: String(t.name ?? t.slug ?? ""), slug: t.slug })
+          }
+        })
+      }
+      setAllTags(tags)
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  // Add new tags (POST) to a product by tag IDs
+  const addTagsToProduct = async (productId: number, tagIds: number[]) => {
+    const payload = { tags: tagIds.map((id) => String(id)) }
+    const token = localStorage.getItem("auth_token")
+    if (token) apiService.setAuthToken(token)
+    await apiService.post(`/admins/products/${productId}/product-tags`, payload)
+  }
+
+  // Replace/update tags (PATCH) for a product by tag IDs
+  const updateTagsForProduct = async (productId: number, tagIds: number[]) => {
+    const payload = { tags: tagIds.map((id) => String(id)) }
+    const token = localStorage.getItem("auth_token")
+    if (token) apiService.setAuthToken(token)
+    await apiService.patchJson(`/admins/products/${productId}/product-tags`, payload)
+  }
+
+  // Delete a specific product tag relation by product_tag_id
+  const deleteProductTag = async (productTagId: number) => {
+    const token = localStorage.getItem("auth_token")
+    if (token) apiService.setAuthToken(token)
+    await apiService.delete(`/admins/products/product-tags/${productTagId}`)
   }
 
   // Open View Modal with full raw details
@@ -1569,6 +1616,84 @@ export default function ProductsPage() {
                   <div>
                     <div className="text-xs text-muted-foreground">Private</div>
                     <div className="font-medium">{viewProduct.isProductPrivate ? "Yes" : "No"}</div>
+                  </div>
+                </div>
+                {/* Tags management */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs text-muted-foreground">Tags</div>
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        {Array.isArray(viewProduct?.productTags) && viewProduct.productTags.length > 0 ? (
+                          viewProduct.productTags.map((t: any, idx: number) => (
+                            <span key={`tag-${idx}`} className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-muted">
+                              {String(t?.name ?? t?.tagName ?? t?.slug ?? t ?? "").trim() || "-"}
+                              {t?.id != null && (
+                                <button
+                                  type="button"
+                                  className="text-red-600 hover:underline"
+                                  onClick={async () => {
+                                    try {
+                                      setTagsLoading(true)
+                                      await deleteProductTag(Number(t.id))
+                                      toast({ title: "Tag removed", description: "Tag removed from product." })
+                                      // Refresh product details in modal
+                                      await fetchProducts(currentPage)
+                                      const refreshed = rawProducts[Number(viewProduct.productId)]
+                                      setViewProduct(refreshed ?? viewProduct)
+                                    } catch (err: any) {
+                                      toast({ title: "Error", description: err?.message || "Failed to remove tag.", variant: "destructive" })
+                                    } finally {
+                                      setTagsLoading(false)
+                                    }
+                                  }}
+                                >
+                                  remove
+                                </button>
+                              )}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-xs text-muted-foreground">No tags</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Select value={selectedTagId} onValueChange={(val) => setSelectedTagId(val)}>
+                        <SelectTrigger className="w-[180px]">
+                          <SelectValue placeholder="Select a tag" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {allTags.map((t) => (
+                            <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        disabled={tagsLoading || !selectedTagId}
+                        onClick={async () => {
+                          if (!viewProduct?.productId) return
+                          try {
+                            setTagsLoading(true)
+                            // Add a single tag id to product
+                            await addTagsToProduct(Number(viewProduct.productId), [Number(selectedTagId)])
+                            toast({ title: "Tag added", description: "Tag added to product." })
+                            setSelectedTagId("")
+                            // Refresh product details
+                            await fetchProducts(currentPage)
+                            const refreshed = rawProducts[Number(viewProduct.productId)]
+                            setViewProduct(refreshed ?? viewProduct)
+                          } catch (err: any) {
+                            toast({ title: "Error", description: err?.message || "Failed to add tag.", variant: "destructive" })
+                          } finally {
+                            setTagsLoading(false)
+                          }
+                        }}
+                      >
+                        {tagsLoading ? "Saving…" : "Add Tag"}
+                      </Button>
+                    </div>
                   </div>
                 </div>
                 <div>
