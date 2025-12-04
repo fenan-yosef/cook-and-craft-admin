@@ -148,6 +148,7 @@ export default function ProductsPage() {
   const [viewProduct, setViewProduct] = useState<any | null>(null)
   // Tags state
   const [allTags, setAllTags] = useState<Array<{ id: number; name: string; slug?: string }>>([])
+  const [tagNameById, setTagNameById] = useState<Record<number, string>>({})
   const [selectedTagId, setSelectedTagId] = useState<string>("")
   const [tagsLoading, setTagsLoading] = useState(false)
   // Add Tag Modal State
@@ -404,14 +405,19 @@ export default function ProductsPage() {
       const res = await apiService.get(`/products/product-tags`)
       const list = (res?.data ?? res ?? []) as any[]
       const tags: Array<{ id: number; name: string; slug?: string }> = []
+      const map: Record<number, string> = {}
       if (Array.isArray(list)) {
         list.forEach((t: any) => {
           if (t?.id != null && (t?.name || t?.slug)) {
-            tags.push({ id: Number(t.id), name: String(t.name ?? t.slug ?? ""), slug: t.slug })
+            const idNum = Number(t.id)
+            const nameStr = String(t.name ?? t.slug ?? "")
+            tags.push({ id: idNum, name: nameStr, slug: t.slug })
+            map[idNum] = nameStr
           }
         })
       }
       setAllTags(tags)
+      setTagNameById(map)
     } catch (e) {
       // ignore
     }
@@ -1625,34 +1631,71 @@ export default function ProductsPage() {
                       <div className="text-xs text-muted-foreground">Tags</div>
                       <div className="flex flex-wrap gap-2 mt-1">
                         {Array.isArray(viewProduct?.productTags) && viewProduct.productTags.length > 0 ? (
-                          viewProduct.productTags.map((t: any, idx: number) => (
-                            <span key={`tag-${idx}`} className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-muted">
-                              {String(t?.name ?? t?.tagName ?? t?.slug ?? t ?? "").trim() || "-"}
-                              {t?.id != null && (
-                                <button
-                                  type="button"
-                                  className="text-red-600 hover:underline"
-                                  onClick={async () => {
-                                    try {
-                                      setTagsLoading(true)
-                                      await deleteProductTag(Number(t.id))
-                                      toast({ title: "Tag removed", description: "Tag removed from product." })
-                                      // Refresh product details in modal
-                                      await fetchProducts(currentPage)
-                                      const refreshed = rawProducts[Number(viewProduct.productId)]
-                                      setViewProduct(refreshed ?? viewProduct)
-                                    } catch (err: any) {
-                                      toast({ title: "Error", description: err?.message || "Failed to remove tag.", variant: "destructive" })
-                                    } finally {
-                                      setTagsLoading(false)
-                                    }
-                                  }}
-                                >
-                                  remove
-                                </button>
-                              )}
-                            </span>
-                          ))
+                          viewProduct.productTags.map((t: any, idx: number) => {
+                            const isPrimitive = typeof t === 'string' || typeof t === 'number'
+
+                            // Helper: try many possible id places that may point to the canonical tag id
+                            const tryIds = (obj: any) => {
+                              const vals = [
+                                obj == null ? undefined : obj.tag_id,
+                                obj == null ? undefined : obj.tagId,
+                                obj == null ? undefined : obj.id,
+                                obj == null ? undefined : obj.tag?.id,
+                                obj == null ? undefined : obj.tag?.tag_id,
+                              ]
+                              for (const v of vals) {
+                                if (v != null && v !== "") {
+                                  const n = Number(v)
+                                  if (Number.isFinite(n)) return n
+                                }
+                              }
+                              return undefined
+                            }
+
+                            const primitiveId = isPrimitive ? (Number.isFinite(Number(t)) ? Number(t) : undefined) : undefined
+                            const candidateId = primitiveId ?? tryIds(t)
+
+                            // Look up by id map first if available
+                            const fromMap = candidateId != null ? tagNameById[candidateId] : undefined
+
+                            // Try common name fields on the relation object or nested tag object
+                            const nameFields = (
+                              isPrimitive
+                                ? undefined
+                                : (t?.name ?? t?.tagName ?? t?.label ?? t?.title ?? t?.slug ?? t?.tag?.name)
+                            )
+
+                            const label = String((fromMap ?? nameFields ?? (isPrimitive ? t : undefined) ?? "") ?? "").trim()
+
+                            return (
+                              <span key={`tag-${idx}`} className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-muted">
+                                {label || "-"}
+                                {t?.id != null && (
+                                  <button
+                                    type="button"
+                                    className="text-red-600 hover:underline"
+                                    onClick={async () => {
+                                      try {
+                                        setTagsLoading(true)
+                                        await deleteProductTag(Number(t.id))
+                                        toast({ title: "Tag removed", description: "Tag removed from product." })
+                                        // Refresh product details in modal
+                                        await fetchProducts(currentPage)
+                                        const refreshed = rawProducts[Number(viewProduct.productId)]
+                                        setViewProduct(refreshed ?? viewProduct)
+                                      } catch (err: any) {
+                                        toast({ title: "Error", description: err?.message || "Failed to remove tag.", variant: "destructive" })
+                                      } finally {
+                                        setTagsLoading(false)
+                                      }
+                                    }}
+                                  >
+                                    remove
+                                  </button>
+                                )}
+                              </span>
+                            )
+                          })
                         ) : (
                           <span className="text-xs text-muted-foreground">No tags</span>
                         )}
@@ -1858,7 +1901,7 @@ export default function ProductsPage() {
                     <div className="text-xs text-muted-foreground mb-1">Serving Options</div>
                   </div>
                 )}
-                <div>
+                {/* <div>
                   <div className="text-xs text-muted-foreground mb-1">Tags</div>
                   {(() => {
                     const collectLabels = (arr: any[]): string[] =>
@@ -1915,7 +1958,7 @@ export default function ProductsPage() {
                       </div>
                     )
                   })()}
-                </div>
+                </div> */}
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">Images</div>
                   {Array.isArray(viewProduct.productImages) && viewProduct.productImages.length > 0 ? (
