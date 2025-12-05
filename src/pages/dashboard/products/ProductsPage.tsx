@@ -715,7 +715,8 @@ export default function ProductsPage() {
       productVersionNumber: raw?.productVersionNumber != null ? String(raw.productVersionNumber) : "",
   tagsString: "",
   original_price: rawOriginal != null && rawOriginal !== "" ? String(rawOriginal) : "",
-  discount_price: rawDiscount != null && rawDiscount !== "" ? String(rawDiscount) : "",
+  // Temporarily keep discount empty in Edit to allow manual typing
+  discount_price: "",
   is_on_sale: (raw?.isProductOnSale ?? (product.isOnSale ? 1 : 0)) === 1,
   currency: String(raw?.currency ?? product.currency ?? ""),
   nutritionFacts: {
