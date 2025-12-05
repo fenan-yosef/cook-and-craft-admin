@@ -149,6 +149,8 @@ export default function ProductsPage() {
   // Tags state
   const [allTags, setAllTags] = useState<Array<{ id: number; name: string; slug?: string }>>([])
   const [tagNameById, setTagNameById] = useState<Record<number, string>>({})
+  const [tagSlugById, setTagSlugById] = useState<Record<number, string>>({})
+  const [tagNameBySlug, setTagNameBySlug] = useState<Record<string, string>>({})
   const [selectedTagId, setSelectedTagId] = useState<string>("")
   const [tagsLoading, setTagsLoading] = useState(false)
   // Add Tag Modal State
@@ -405,19 +407,26 @@ export default function ProductsPage() {
       const res = await apiService.get(`/products/product-tags`)
       const list = (res?.data ?? res ?? []) as any[]
       const tags: Array<{ id: number; name: string; slug?: string }> = []
-      const map: Record<number, string> = {}
+      const idToName: Record<number, string> = {}
+      const idToSlug: Record<number, string> = {}
+      const slugToName: Record<string, string> = {}
       if (Array.isArray(list)) {
         list.forEach((t: any) => {
           if (t?.id != null && (t?.name || t?.slug)) {
             const idNum = Number(t.id)
             const nameStr = String(t.name ?? t.slug ?? "")
-            tags.push({ id: idNum, name: nameStr, slug: t.slug })
-            map[idNum] = nameStr
+            const slugStr = t?.slug ? String(t.slug) : nameStr.toLowerCase().replace(/\s+/g, "-")
+            tags.push({ id: idNum, name: nameStr, slug: slugStr })
+            idToName[idNum] = nameStr
+            idToSlug[idNum] = slugStr
+            slugToName[slugStr] = nameStr
           }
         })
       }
       setAllTags(tags)
-      setTagNameById(map)
+      setTagNameById(idToName)
+      setTagSlugById(idToSlug)
+      setTagNameBySlug(slugToName)
     } catch (e) {
       // ignore
     }
@@ -425,7 +434,8 @@ export default function ProductsPage() {
 
   // Add new tags (POST) to a product by tag IDs
   const addTagsToProduct = async (productId: number, tagIds: number[]) => {
-    const payload = { tags: tagIds.map((id) => String(id)) }
+    // POST with slugs to create (globally) and assign to product
+    const payload = { tags: tagIds.map((id) => String(tagSlugById[id] ?? id)) }
     const token = localStorage.getItem("auth_token")
     if (token) apiService.setAuthToken(token)
     await apiService.post(`/admins/products/${productId}/product-tags`, payload)
@@ -433,7 +443,8 @@ export default function ProductsPage() {
 
   // Replace/update tags (PATCH) for a product by tag IDs
   const updateTagsForProduct = async (productId: number, tagIds: number[]) => {
-    const payload = { tags: tagIds.map((id) => String(id)) }
+    // PATCH must send slugs list
+    const payload = { tags: tagIds.map((id) => String(tagSlugById[id] ?? id)) }
     const token = localStorage.getItem("auth_token")
     if (token) apiService.setAuthToken(token)
     await apiService.patchJson(`/admins/products/${productId}/product-tags`, payload)
@@ -444,6 +455,36 @@ export default function ProductsPage() {
     const token = localStorage.getItem("auth_token")
     if (token) apiService.setAuthToken(token)
     await apiService.delete(`/admins/products/product-tags/${productTagId}`)
+  }
+
+  // Create tags globally via slugs list, return created entries
+  const createTagsGlobal = async (slugs: string[]): Promise<Array<{ id: number; slug: string; name: string }>> => {
+    const payload = { tags: slugs }
+    const token = localStorage.getItem("auth_token")
+    if (token) apiService.setAuthToken(token)
+    const res = await apiService.post(`/products/product-tags`, payload)
+    const data = (res?.data ?? res) as any
+    const arr = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : [])
+    const created: Array<{ id: number; slug: string; name: string }> = []
+    arr.forEach((t: any) => {
+      const id = Number(t?.id ?? t?.tag_id ?? t?.tagId)
+      const slug = String(t?.slug ?? "")
+      const name = String(t?.name ?? slug)
+      if (Number.isFinite(id) && slug) {
+        created.push({ id, slug, name })
+      }
+    })
+    // update caches
+    if (created.length) {
+      setAllTags((prev) => {
+        const existingIds = new Set(prev.map((p) => p.id))
+        return [...prev, ...created.filter((c) => !existingIds.has(c.id)).map((c) => ({ id: c.id, name: c.name, slug: c.slug }))]
+      })
+      setTagNameById((prev) => ({ ...prev, ...Object.fromEntries(created.map((c) => [c.id, c.name])) }))
+      setTagSlugById((prev) => ({ ...prev, ...Object.fromEntries(created.map((c) => [c.id, c.slug])) }))
+      setTagNameBySlug((prev) => ({ ...prev, ...Object.fromEntries(created.map((c) => [c.slug, c.name])) }))
+    }
+    return created
   }
 
   // Open View Modal with full raw details
@@ -1671,16 +1712,20 @@ export default function ProductsPage() {
                             return (
                               <span key={`tag-${idx}`} className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-muted">
                                 {label || "-"}
-                                {t?.id != null && (
+                                {candidateId != null && (
                                   <button
                                     type="button"
                                     className="text-red-600 hover:underline"
                                     onClick={async () => {
                                       try {
                                         setTagsLoading(true)
-                                        await deleteProductTag(Number(t.id))
-                                        toast({ title: "Tag removed", description: "Tag removed from product." })
-                                        // Refresh product details in modal
+                                        // Recompute full set without this tag and PATCH using slugs
+                                        const currentIds = Array.isArray(viewProduct?.productTags) ? viewProduct.productTags.map((x: any) => {
+                                          return typeof x === 'number' ? x : (typeof x === 'string' ? Number(x) : (Number(x?.id ?? x?.tag_id ?? x?.tagId ?? x?.tag?.id)))
+                                        }).filter((n: any) => Number.isFinite(n)) : []
+                                        const nextIds = currentIds.filter((id: number) => id !== Number(candidateId))
+                                        await updateTagsForProduct(Number(viewProduct.productId), nextIds)
+                                        toast({ title: "Tag removed", description: "Tags updated." })
                                         await fetchProducts(currentPage)
                                         const refreshed = rawProducts[Number(viewProduct.productId)]
                                         setViewProduct(refreshed ?? viewProduct)
@@ -1720,9 +1765,13 @@ export default function ProductsPage() {
                           if (!viewProduct?.productId) return
                           try {
                             setTagsLoading(true)
-                            // Add a single tag id to product
-                            await addTagsToProduct(Number(viewProduct.productId), [Number(selectedTagId)])
-                            toast({ title: "Tag added", description: "Tag added to product." })
+                            // Add a single tag id to product using PATCH with slugs (extend full set)
+                            const currentIds = Array.isArray(viewProduct?.productTags) ? viewProduct.productTags.map((x: any) => {
+                              return typeof x === 'number' ? x : (typeof x === 'string' ? Number(x) : (Number(x?.id ?? x?.tag_id ?? x?.tagId ?? x?.tag?.id)))
+                            }).filter((n: any) => Number.isFinite(n)) : []
+                            const nextIds = Array.from(new Set([...currentIds, Number(selectedTagId)]))
+                            await updateTagsForProduct(Number(viewProduct.productId), nextIds)
+                            toast({ title: "Tag added", description: "Tags updated." })
                             setSelectedTagId("")
                             // Refresh product details
                             await fetchProducts(currentPage)
@@ -1735,8 +1784,46 @@ export default function ProductsPage() {
                           }
                         }}
                       >
-                        {tagsLoading ? "Saving…" : "Add Tag"}
+                        {tagsLoading ? "Saving…" : "Add"}
                       </Button>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          placeholder="New tag (slug or name)"
+                          value={addTagValue}
+                          onChange={(e) => setAddTagValue(e.target.value)}
+                          className="w-[180px]"
+                        />
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          disabled={tagsLoading || !addTagValue.trim()}
+                          onClick={async () => {
+                            if (!viewProduct?.productId || !addTagValue.trim()) return
+                            try {
+                              setTagsLoading(true)
+                              // Create globally (POST) then assign by PATCH full set using slugs
+                              const created = await createTagsGlobal([addTagValue.trim().toLowerCase().replace(/\s+/g, '-')])
+                              const newId = created[0]?.id
+                              const currentIds = Array.isArray(viewProduct?.productTags) ? viewProduct.productTags.map((x: any) => {
+                                return typeof x === 'number' ? x : (typeof x === 'string' ? Number(x) : (Number(x?.id ?? x?.tag_id ?? x?.tagId ?? x?.tag?.id)))
+                              }).filter((n: any) => Number.isFinite(n)) : []
+                              const nextIds = Array.from(new Set([...currentIds, newId]))
+                              await updateTagsForProduct(Number(viewProduct.productId), nextIds)
+                              toast({ title: "Tag created", description: "Tags updated." })
+                              setAddTagValue("")
+                              await fetchProducts(currentPage)
+                              const refreshed = rawProducts[Number(viewProduct.productId)]
+                              setViewProduct(refreshed ?? viewProduct)
+                            } catch (err: any) {
+                              toast({ title: "Error", description: err?.message || "Failed to create tag.", variant: "destructive" })
+                            } finally {
+                              setTagsLoading(false)
+                            }
+                          }}
+                        >
+                          {tagsLoading ? "Saving…" : "Add custom"}
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>
