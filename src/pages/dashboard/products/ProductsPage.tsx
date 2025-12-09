@@ -114,7 +114,7 @@ export default function ProductsPage() {
     is_active: false,
     is_private: false,
     images: [] as File[],
-    existingImages: [] as string[],
+    existingImages: [] as Array<{ id?: number; url: string }>,
     productCategoryId: "",
     productVersionNumber: "",
     tagsString: "",
@@ -134,7 +134,9 @@ export default function ProductsPage() {
   })
   const [editImagePreviews, setEditImagePreviews] = useState<string[]>([])
   const editFileInputRef = useRef<HTMLInputElement>(null)
-  const [removedExistingImages, setRemovedExistingImages] = useState<string[]>([])
+  const [removedExistingImages, setRemovedExistingImages] = useState<
+    Array<{ id?: number; url: string }>
+  >([])
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
@@ -751,7 +753,56 @@ export default function ProductsPage() {
       is_active: product.status === "active",
       is_private: false, // You may need to map this from API if available
       images: [],
-      existingImages: product.images || [],
+      existingImages: (() => {
+        const media: Array<{ id?: number; url: string }> = []
+        const rawArrays = [
+          Array.isArray(raw?.productImages) ? raw.productImages : null,
+          Array.isArray(raw?.images) ? raw.images : null,
+          Array.isArray(raw?.product_images) ? raw.product_images : null,
+          Array.isArray(raw?.productImage) ? raw.productImage : null,
+        ].filter(Boolean) as any[]
+
+        for (const arr of rawArrays) {
+          for (const img of arr as any[]) {
+            if (!img) continue
+            if (typeof img === "string") {
+              media.push({ url: toAbsoluteUrl(img) })
+            } else {
+              const mid =
+                img?.id ??
+                img?.media_id ??
+                img?.mediaId ??
+                img?.image_id ??
+                img?.imageId
+              const url =
+                img?.image_url ||
+                img?.imageUrl ||
+                img?.image ||
+                img?.url ||
+                img?.path ||
+                img?.src ||
+                img?.storage_path ||
+                img?.storagePath ||
+                null
+              if (url) {
+                media.push({
+                  id: mid != null ? Number(mid) : undefined,
+                  url: toAbsoluteUrl(url),
+                })
+              }
+            }
+          }
+          if (media.length) break
+        }
+
+        if (!media.length && Array.isArray(product.images)) {
+          product.images.forEach((u) => {
+            media.push({ url: u })
+          })
+        }
+
+        return media
+      })(),
       productCategoryId: product.categoryId != null ? String(product.categoryId) : "",
       productVersionNumber: raw?.productVersionNumber != null ? String(raw.productVersionNumber) : "",
   tagsString: "",
@@ -951,10 +1002,11 @@ export default function ProductsPage() {
   formData.append("currency", editForm.currency ?? "SAR")
 
       // Removed server images
-      removedExistingImages.forEach((url) => {
-        formData.append("removedImageUrls[]", url)
-        formData.append("removeImageUrls[]", url)
-        formData.append("remove_images[]", url)
+      removedExistingImages.forEach((media) => {
+        if (!media?.url) return
+        formData.append("removedImageUrls[]", media.url)
+        formData.append("removeImageUrls[]", media.url)
+        formData.append("remove_images[]", media.url)
       })
 
       // New images
@@ -1024,6 +1076,16 @@ export default function ProductsPage() {
       if (token) apiService.setAuthToken(token)
       const response = await apiService.postMultipart(`/products/${editForm.id}`, formData)
       console.log("PATCH response:", response)
+
+      // After product update, delete removed media by id (if available)
+      for (const media of removedExistingImages) {
+        if (media?.id == null) continue
+        try {
+          await apiService.delete(`/media/${media.id}`)
+        } catch (err) {
+          console.error("Failed to delete media", media.id, err)
+        }
+      }
 
       toast({
         title: "Success",
@@ -2476,10 +2538,10 @@ export default function ProductsPage() {
                 />
                 <div className="flex gap-2 mt-2 flex-wrap">
                   {/* Existing server images */}
-                  {editForm.existingImages.map((src, idx) => (
+                  {editForm.existingImages.map((media, idx) => (
                     <div key={`existing-${idx}`} className="relative w-16 h-16">
                       <img
-                        src={src}
+                        src={media.url}
                         alt={`existing-${idx}`}
                         className="w-16 h-16 object-cover rounded border"
                       />
