@@ -17,6 +17,9 @@ import {
     PaginationNext,
     PaginationPrevious,
 } from "@/components/ui/pagination";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 
 /**
  * Addons page
@@ -76,6 +79,16 @@ const AddonsPage: React.FC = () => {
         per_page: 10,
         total: 0,
     });
+
+    const [selectedAddon, setSelectedAddon] = useState<Addon | null>(null);
+    const [isViewOpen, setIsViewOpen] = useState(false);
+    const [isEditOpen, setIsEditOpen] = useState(false);
+    const [editName, setEditName] = useState("");
+    const [editDescription, setEditDescription] = useState("");
+    const [editPrice, setEditPrice] = useState("");
+    const [editActive, setEditActive] = useState(false);
+    const [editSaving, setEditSaving] = useState(false);
+    const [editError, setEditError] = useState<string>("");
 
     const canPaginate = Number(pagination?.last_page || 1) > 1;
 
@@ -256,6 +269,49 @@ const AddonsPage: React.FC = () => {
         return name.includes(q) || desc.includes(q);
     });
 
+    const openViewModal = (addon: Addon) => {
+        setSelectedAddon(addon);
+        setIsViewOpen(true);
+    };
+
+    const openEditModal = (addon: Addon) => {
+        setSelectedAddon(addon);
+        setEditName(String(addon.addonName ?? addon.name ?? ""));
+        setEditDescription(String(addon.addonDescription ?? ""));
+        setEditPrice(String(addon.addonPrice ?? ""));
+        setEditActive(Number(addon.isAddonActive) === 1 || addon.isAddonActive === true);
+        setEditError("");
+        setIsEditOpen(true);
+    };
+
+    const handleEditSave = async () => {
+        if (!selectedAddon) return;
+        const addonId = selectedAddon.addonId ?? selectedAddon.id;
+        if (!addonId) {
+            setEditError("Missing addon ID.");
+            return;
+        }
+        setEditSaving(true);
+        setEditError("");
+        try {
+            apiService.setAuthToken(token || "");
+            const body = [
+                { key: "name", value: editName, type: "text" },
+                { key: "description", value: editDescription, type: "text" },
+                { key: "price", value: editPrice, type: "text" },
+                { key: "is_active", value: editActive ? "1" : "0", type: "text" },
+                { key: "images[]", value: "", type: "text" },
+            ];
+            await apiService.patch(`/addons/${addonId}`, body);
+            setIsEditOpen(false);
+            onRefresh();
+        } catch (e: any) {
+            setEditError(e?.message || "Failed to update addon.");
+        } finally {
+            setEditSaving(false);
+        }
+    };
+
     return (
         <div className="flex flex-col">
             <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
@@ -323,10 +379,10 @@ const AddonsPage: React.FC = () => {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Name</TableHead>
-                                    <TableHead>Description</TableHead>
                                     <TableHead>Price</TableHead>
                                     <TableHead>Active</TableHead>
                                     <TableHead>Images</TableHead>
+                                    <TableHead>Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -342,9 +398,6 @@ const AddonsPage: React.FC = () => {
                                     filteredAddons.map((a, idx) => (
                                         <TableRow key={a.addonId ?? a.id ?? a.addonName ?? a.name ?? idx}>
                                             <TableCell className="font-semibold">{a.addonName ?? a.name ?? ""}</TableCell>
-                                            <TableCell className="max-w-[420px] truncate" title={String(a.addonDescription ?? "")}>
-                                                {a.addonDescription ?? ""}
-                                            </TableCell>
                                             <TableCell className="font-mono">{formatCurrency(a.addonPrice)}</TableCell>
                                             <TableCell>
                                                 <Badge variant={(Number(a.isAddonActive) === 1 || a.isAddonActive === true) ? "default" : "secondary"}>
@@ -369,6 +422,16 @@ const AddonsPage: React.FC = () => {
                                                 ) : (
                                                     <span className="text-muted-foreground">No Image</span>
                                                 )}
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex gap-2">
+                                                    <Button size="sm" variant="outline" onClick={() => openViewModal(a)}>
+                                                        View
+                                                    </Button>
+                                                    <Button size="sm" onClick={() => openEditModal(a)}>
+                                                        Edit
+                                                    </Button>
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     ))
@@ -452,6 +515,110 @@ const AddonsPage: React.FC = () => {
                         </div>
                     </CardContent>
                 </Card>
+                <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Addon Details</DialogTitle>
+                        </DialogHeader>
+                        {selectedAddon && (
+                            <div className="space-y-3 text-sm">
+                                <div>
+                                    <span className="font-semibold">Name: </span>
+                                    <span>{selectedAddon.addonName ?? selectedAddon.name ?? ""}</span>
+                                </div>
+                                <div>
+                                    <span className="font-semibold">Description: </span>
+                                    <span>{selectedAddon.addonDescription ?? ""}</span>
+                                </div>
+                                <div>
+                                    <span className="font-semibold">Price: </span>
+                                    <span>{formatCurrency(selectedAddon.addonPrice)}</span>
+                                </div>
+                                <div>
+                                    <span className="font-semibold">Active: </span>
+                                    <span>{(Number(selectedAddon.isAddonActive) === 1 || selectedAddon.isAddonActive === true) ? "Yes" : "No"}</span>
+                                </div>
+                                <div>
+                                    <span className="font-semibold">Images: </span>
+                                    {Array.isArray(selectedAddon.addonImages) && selectedAddon.addonImages.length > 0 ? (
+                                        <div className="mt-1 flex flex-wrap gap-2">
+                                            {selectedAddon.addonImages.map((img, i) => (
+                                                <img
+                                                    key={String(img) + i}
+                                                    src={img}
+                                                    alt="addon"
+                                                    className="w-12 h-12 object-cover rounded border"
+                                                />
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <span className="text-muted-foreground">No Image</span>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </DialogContent>
+                </Dialog>
+                <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Edit Addon</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                            {editError && (
+                                <Alert variant="destructive">
+                                    <AlertTitle>Error</AlertTitle>
+                                    <AlertDescription>{editError}</AlertDescription>
+                                </Alert>
+                            )}
+                            <div className="space-y-2">
+                                <Label htmlFor="addon-name">Name</Label>
+                                <Input
+                                    id="addon-name"
+                                    value={editName}
+                                    onChange={(e) => setEditName(e.target.value)}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="addon-description">Description</Label>
+                                <Input
+                                    id="addon-description"
+                                    value={editDescription}
+                                    onChange={(e) => setEditDescription(e.target.value)}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="addon-price">Price</Label>
+                                <Input
+                                    id="addon-price"
+                                    type="number"
+                                    value={editPrice}
+                                    onChange={(e) => setEditPrice(e.target.value)}
+                                />
+                            </div>
+                            <div className="flex items-center justify-between space-x-2">
+                                <Label htmlFor="addon-active">Active</Label>
+                                <Switch
+                                    id="addon-active"
+                                    checked={editActive}
+                                    onCheckedChange={(v) => setEditActive(v)}
+                                />
+                            </div>
+                            <div className="flex justify-end gap-2 pt-2">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setIsEditOpen(false)}
+                                    disabled={editSaving}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button onClick={handleEditSave} disabled={editSaving}>
+                                    {editSaving ? "Saving..." : "Save"}
+                                </Button>
+                            </div>
+                        </div>
+                    </DialogContent>
+                </Dialog>
             </div>
         </div>
     );
