@@ -150,6 +150,7 @@ export default function RecipesPage() {
     { instructions: "", prep: 1, ingredientIndices: [], image: null, imageUrl: null, imageUrls: [] },
   ])
   const [editImagePreviews, setEditImagePreviews] = useState<string[]>([])
+  const [editRemovedImageIds, setEditRemovedImageIds] = useState<number[]>([])
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const { toast } = useToast()
   const { token, isLoading: authLoading } = useAuth()
@@ -596,6 +597,7 @@ export default function RecipesPage() {
     })
   setEditExistingImages(Array.isArray(recipe.Images) ? recipe.Images : [])
     setEditSteps(initialEditSteps)
+    setEditRemovedImageIds([])
     setIsEditDialogOpen(true)
     // reset new uploads for edit
   // Do not clear existingImages here; keep them until user removes explicitly
@@ -713,6 +715,18 @@ export default function RecipesPage() {
       const res = await apiService.postMultipart(`/recipes/${editRecipe.id}`, fd)
       const updated = Array.isArray(res?.data) && res.data.length > 0 ? (res.data[0] as ApiRecipe) : null
       if (updated) {
+        // Delete any media the admin removed from the edit modal
+        if (Array.isArray(editRemovedImageIds) && editRemovedImageIds.length > 0) {
+          try {
+            await Promise.all(
+              editRemovedImageIds.map((mid) =>
+                apiService.delete(`/media/${mid}`).catch(() => undefined)
+              )
+            )
+          } catch {
+            // Best-effort; failures are ignored here. Backend validation will still control actual media state.
+          }
+        }
         setRecipes((prev) => prev.map((r) => (r.Recipe_ID === updated.Recipe_ID ? updated : r)))
         setIsEditDialogOpen(false)
         toast({ title: "Updated", description: "Recipe updated" })
@@ -2551,13 +2565,29 @@ export default function RecipesPage() {
                     <div className="grid grid-cols-3 gap-3 mt-2">
                       {editExistingImages.map((img: any, i: number) => {
                         const src = getImageSrc(img)
+                        const mediaIdRaw = (img as any)?.id ?? (img as any)?.media_id ?? (img as any)?.mediaId ?? (img as any)?.image_id ?? (img as any)?.pivot?.media_id
+                        const mediaId = Number(mediaIdRaw)
                         return (
-                          <div key={i} className="aspect-square rounded border overflow-hidden bg-muted">
+                          <div key={i} className="relative aspect-square rounded border overflow-hidden bg-muted">
                             {src ? (
                               <img src={src} alt={`Existing ${i + 1}`} className="w-full h-full object-cover" />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">No Src</div>
                             )}
+                            <button
+                              type="button"
+                              aria-label="Remove existing image"
+                              title="Remove from recipe"
+                              className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1 hover:bg-black"
+                              onClick={() => {
+                                setEditExistingImages((prev) => prev.filter((_, idx) => idx !== i))
+                                if (Number.isFinite(mediaId)) {
+                                  setEditRemovedImageIds((prev) => (prev.includes(mediaId) ? prev : [...prev, mediaId]))
+                                }
+                              }}
+                            >
+                              <span className="inline-block leading-none">×</span>
+                            </button>
                           </div>
                         )
                       })}
