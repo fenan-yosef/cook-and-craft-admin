@@ -7,7 +7,7 @@ class ApiService {
     // Prefer a Vite-provided environment variable, fall back to the existing hardcoded URL.
     // `import.meta.env` is available at build/runtime in Vite; cast to `any` to avoid TS issues here.
     const envBase = (import.meta as any)?.env?.VITE_API_BASE_URL as string | undefined
-    this.baseURL = envBase ?? "https://api.cookandcraft.io/api";
+    this.baseURL = envBase ?? "https://cook-craft.dhcb.io/api";
   }
 
   // Public getter for baseURL so other modules can compose full URLs when needed
