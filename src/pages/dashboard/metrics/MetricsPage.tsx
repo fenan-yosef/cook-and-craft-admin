@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/auth-context";
+import { apiService } from "@/lib/api-service";
 
 // Example KPI types (replace with real fields as needed)
 interface SalesRevenueKPI {
@@ -319,7 +320,7 @@ export default function MetricsPage() {
     setLoading(true);
     try {
       // Fetch Sales/Revenue KPI
-      const baseUrl = "https://cook-craft.dhcb.io/api";
+      const baseUrl = apiService.getBaseUrl();
       let salesData: SalesRevenueKPI | null = null;
       if (token) {
         // Fetch total revenue
