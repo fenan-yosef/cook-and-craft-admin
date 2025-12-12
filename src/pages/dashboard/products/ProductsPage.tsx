@@ -137,6 +137,7 @@ export default function ProductsPage() {
   const [removedExistingImages, setRemovedExistingImages] = useState<
     Array<{ id?: number; url: string }>
   >([])
+  const [imageIdByUrl, setImageIdByUrl] = useState<Record<string, number>>({})
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
@@ -256,6 +257,8 @@ export default function ProductsPage() {
 
       const { items, meta } = normalize(response)
 
+      const imgIdMap: Record<string, number> = {}
+
       const mappedProducts: Product[] = items.map((item: any) => {
         const firstCategory = Array.isArray(item.productCategories) && item.productCategories.length > 0
           ? item.productCategories[0]
@@ -279,8 +282,12 @@ export default function ProductsPage() {
         let normalizedImages: string[] = []
         for (const arr of arrCandidates) {
           const mapped = (arr as any[]).map((img: any) => {
-            if (typeof img === 'string') return img
-            return (
+            if (!img) return null
+            if (typeof img === 'string') {
+              const abs = toAbsoluteUrl(img)
+              return abs
+            }
+            const urlRaw =
               img?.image_url ||
               img?.imageUrl ||
               img?.image ||
@@ -290,7 +297,21 @@ export default function ProductsPage() {
               img?.storage_path ||
               img?.storagePath ||
               null
-            )
+            if (!urlRaw) return null
+            const abs = toAbsoluteUrl(urlRaw)
+            const mid =
+              img?.id ??
+              img?.media_id ??
+              img?.mediaId ??
+              img?.image_id ??
+              img?.imageId ??
+              img?.media?.id ??
+              img?.file?.id
+            if (mid != null) {
+              const idNum = Number(mid)
+              if (Number.isFinite(idNum)) imgIdMap[abs] = idNum
+            }
+            return abs
           }).filter(Boolean) as string[]
           if (mapped.length) { normalizedImages = mapped; break }
         }
@@ -308,11 +329,21 @@ export default function ProductsPage() {
             item?.storagePath ||
             null
           )
-          if (single) normalizedImages = [String(single)]
+          if (single) {
+            const abs = toAbsoluteUrl(single)
+            const mid =
+              item?.image_id ??
+              item?.imageId ??
+              item?.media_id ??
+              item?.mediaId ??
+              item?.media?.id
+            if (mid != null) {
+              const idNum = Number(mid)
+              if (Number.isFinite(idNum)) imgIdMap[abs] = idNum
+            }
+            normalizedImages = [abs]
+          }
         }
-
-        // Make URLs absolute and trimmed
-        normalizedImages = normalizedImages.map(toAbsoluteUrl).filter(Boolean)
 
         return {
           id: item.productId,
@@ -354,6 +385,7 @@ export default function ProductsPage() {
         if (it?.productId != null) rawMap[Number(it.productId)] = it
       })
       setRawProducts(rawMap)
+      setImageIdByUrl(imgIdMap)
       // pagination meta (robust fallbacks if not present)
       const current = Number(meta.current_page ?? page) || 1
   const per = Number((meta.per_page ?? items.length) || 15)
@@ -766,14 +798,18 @@ export default function ProductsPage() {
           for (const img of arr as any[]) {
             if (!img) continue
             if (typeof img === "string") {
-              media.push({ url: toAbsoluteUrl(img) })
+              const abs = toAbsoluteUrl(img)
+              const known = imageIdByUrl[abs]
+              media.push({ id: known, url: abs })
             } else {
               const mid =
                 img?.id ??
                 img?.media_id ??
                 img?.mediaId ??
                 img?.image_id ??
-                img?.imageId
+                img?.imageId ??
+                img?.media?.id ??
+                img?.file?.id
               const url =
                 img?.image_url ||
                 img?.imageUrl ||
@@ -785,9 +821,11 @@ export default function ProductsPage() {
                 img?.storagePath ||
                 null
               if (url) {
+                const abs = toAbsoluteUrl(url)
+                const known = imageIdByUrl[abs]
                 media.push({
-                  id: mid != null ? Number(mid) : undefined,
-                  url: toAbsoluteUrl(url),
+                  id: mid != null ? Number(mid) : known,
+                  url: abs,
                 })
               }
             }
@@ -797,7 +835,9 @@ export default function ProductsPage() {
 
         if (!media.length && Array.isArray(product.images)) {
           product.images.forEach((u) => {
-            media.push({ url: u })
+            const abs = toAbsoluteUrl(u)
+            const known = imageIdByUrl[abs]
+            media.push({ id: known, url: abs })
           })
         }
 
@@ -1078,6 +1118,8 @@ export default function ProductsPage() {
       console.log("PATCH response:", response)
 
       // After product update, delete removed media by id (if available)
+      const delToken = localStorage.getItem("auth_token")
+      if (delToken) apiService.setAuthToken(delToken)
       for (const media of removedExistingImages) {
         if (media?.id == null) continue
         try {
