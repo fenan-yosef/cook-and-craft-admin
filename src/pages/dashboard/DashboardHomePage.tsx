@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react"
 import { apiService } from "@/lib/api-service"
+import { toast } from "@/hooks/use-toast"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Users, ShoppingCart, MessageSquare, Calendar } from "lucide-react"
 
@@ -23,6 +25,8 @@ export default function DashboardHomePage() {
     revenue: 0,
     growth: 0,
   })
+  const [isProcessingRecurring, setIsProcessingRecurring] = useState(false)
+  const [isSendingIntervals, setIsSendingIntervals] = useState(false)
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -61,6 +65,46 @@ export default function DashboardHomePage() {
     }
     fetchStats()
   }, [])
+
+  const handleProcessRecurringSubscriptions = async () => {
+    setIsProcessingRecurring(true)
+    try {
+      await apiService.post("/test/process-recurring-subscriptions", {})
+      toast({
+        title: "Recurring subscriptions job started",
+        description: "Backend is processing recurring subscriptions.",
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unexpected error"
+      toast({
+        title: "Failed to trigger recurring processing",
+        description: message,
+        variant: "destructive",
+      })
+    } finally {
+      setIsProcessingRecurring(false)
+    }
+  }
+
+  const handleSendIntervalsToFoodics = async () => {
+    setIsSendingIntervals(true)
+    try {
+      await apiService.post("/test/send-intervals-to-foodics", {})
+      toast({
+        title: "Intervals sent to Foodics",
+        description: "Manual sync request submitted successfully.",
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unexpected error"
+      toast({
+        title: "Failed to send intervals",
+        description: message,
+        variant: "destructive",
+      })
+    } finally {
+      setIsSendingIntervals(false)
+    }
+  }
 
   return (
     <div className="flex flex-col">
@@ -180,6 +224,32 @@ export default function DashboardHomePage() {
             </CardContent>
           </Card>
         </div>
+      </div>
+
+      <div className="px-8 mb-8 grid gap-4 lg:grid-cols-2">
+        <Card className="col-span-1">
+          <CardHeader>
+            <CardTitle>Foodics Integration (Admin Tools)</CardTitle>
+            <CardDescription>Testing & manual triggers</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Button
+                onClick={handleProcessRecurringSubscriptions}
+                disabled={isProcessingRecurring}
+              >
+                {isProcessingRecurring ? "Processing..." : "Process Recurring Subscriptions"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleSendIntervalsToFoodics}
+                disabled={isSendingIntervals}
+              >
+                {isSendingIntervals ? "Sending..." : "Send Intervals to Foodics"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )
