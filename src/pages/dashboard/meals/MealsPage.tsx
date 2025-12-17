@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { Search, MoreHorizontal, Eye, Utensils, Pen, Trash2 } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Search, MoreHorizontal, Eye, Utensils, Pen, Trash2, Crown } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { apiService } from "@/lib/api-service"
 import { useAuth } from "@/contexts/auth-context"
@@ -21,15 +22,20 @@ type ApiRecipe = {
   CaloriesKCal?: number
   PrepMinutes?: number
   Ingredients?: Array<{ name: string; amount?: string }>
-  NutritionFacts?: Array<{ label: string; value: string }>
+  // Can be array or object depending on endpoint
+  NutritionFacts?: Array<{ label: string; value: string }> | Record<string, any>
   Utensils?: string[]
   Steps?: string[]
+  RecipeSteps?: Array<{ id?: number; step_number?: number; instructions?: string; prep_minutes?: number; image?: Array<{ id: number; url: string; isThumbnail?: boolean }> }>
   IsActive?: number
+  IsBestChoice?: number
+  Tags?: Array<{ id: number; name: string; slug?: string }>
   Images?: Array<{ ID: number; URL: string; IsThumbnail?: boolean }>
 }
 
-type ApiMeal = { ID: number; Label: string; Recipe: any; Available: number }
-type Meal = { id: number; label: string; recipe: any; available: boolean }
+type ApiAddonLink = { id: number; max_free_quantity?: number; addon?: { id: number; name: string; description?: string; price?: number; is_active?: number; images?: Array<{ id: number; url: string; is_thumbnail?: boolean }> } }
+type ApiMeal = { ID: number; Label: string; Recipe: any; Available: number; IsDefault?: number; Addons?: ApiAddonLink[] }
+type Meal = { id: number; label: string; recipe: any; available: boolean; isDefault?: boolean; addons?: ApiAddonLink[] }
 
 export default function MealsPage() {
   const [meals, setMeals] = useState<Meal[]>([])
@@ -37,6 +43,7 @@ export default function MealsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedMeal, setSelectedMeal] = useState<Meal | null>(null)
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
+  const [viewLoading, setViewLoading] = useState(false)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [recipesOptions, setRecipesOptions] = useState<{ id: number; name: string }[]>([])
@@ -54,6 +61,7 @@ export default function MealsPage() {
     label: "",
     is_active: true,
   })
+  const [viewBaseMeal, setViewBaseMeal] = useState<Meal | null>(null)
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const { toast } = useToast()
   const { token, isLoading: authLoading } = useAuth()
@@ -78,8 +86,16 @@ export default function MealsPage() {
     try {
       setLoading(true)
       const res = await apiService.get("/meals")
-      const items: ApiMeal[] = Array.isArray(res?.data) ? res.data : []
-      const mapped: Meal[] = items.map((m) => ({ id: m.ID, label: m.Label, recipe: m.Recipe ?? "", available: m.Available === 1 }))
+      const raw = res?.data
+      const arr: ApiMeal[] = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : [])
+      const mapped: Meal[] = arr.map((m) => ({
+        id: m.ID,
+        label: m.Label,
+        recipe: m.Recipe ?? "",
+        available: m.Available === 1,
+        isDefault: (m.IsDefault ?? 0) === 1,
+        addons: Array.isArray(m.Addons) ? m.Addons : [],
+      }))
       setMeals(mapped)
     } catch (error) {
       toast({
@@ -234,9 +250,39 @@ export default function MealsPage() {
     }
   }
 
-  const viewMeal = (meal: Meal) => {
-    setSelectedMeal(meal)
+  const viewMeal = async (meal: Meal) => {
+    setViewBaseMeal(meal)
+    setSelectedMeal(null)
     setIsViewDialogOpen(true)
+    setViewLoading(true)
+    try {
+      const res = await apiService.get(`/meals/${meal.id}`)
+      const raw = res?.data
+      const obj: any = raw && !Array.isArray(raw) ? (raw.data ?? raw) : null
+      if (obj) {
+        // Merge all fields from both sources, preferring detail API but falling back to list data
+        const detailed: Meal = {
+          ...meal, // fallback fields
+          ...{
+            id: obj.ID ?? meal.id,
+            label: obj.Label ?? meal.label,
+            recipe: obj.Recipe ?? meal.recipe,
+            available: (obj.Available ?? (meal.available ? 1 : 0)) === 1,
+            isDefault: (obj.IsDefault ?? (meal.isDefault ? 1 : 0)) === 1,
+            addons: Array.isArray(obj.Addons) ? obj.Addons : meal.addons ?? [],
+          },
+        }
+        // Attach all other fields from obj (e.g., Recipe fields, tags, etc.)
+        setSelectedMeal({ ...detailed, ...obj })
+      } else {
+        setSelectedMeal(meal)
+      }
+    } catch (error: any) {
+      toast({ title: "Error", description: error?.message || "Failed to load meal details", variant: "destructive" })
+      setSelectedMeal(meal)
+    } finally {
+      setViewLoading(false)
+    }
   }
 
   const deleteMeal = async (meal: Meal) => {
@@ -246,7 +292,12 @@ export default function MealsPage() {
     try {
       await apiService.delete(`/meals/${meal.id}`)
       setMeals(prev => prev.filter(m => m.id !== meal.id))
-      if (selectedMeal?.id === meal.id) setIsViewDialogOpen(false)
+      if ((selectedMeal?.id ?? viewBaseMeal?.id) === meal.id) {
+        setIsViewDialogOpen(false)
+        setSelectedMeal(null)
+        setViewBaseMeal(null)
+        setViewLoading(false)
+      }
       toast({ title: 'Deleted', description: 'Meal removed.' })
     } catch (error: any) {
       toast({ title: 'Error', description: error?.message || 'Failed to delete meal', variant: 'destructive' })
@@ -277,6 +328,24 @@ export default function MealsPage() {
     return null
   }
 
+  const normalizeNutritionFacts = (nf: ApiRecipe["NutritionFacts"]): Array<{ label: string; value: string }> => {
+    if (!nf) return []
+    if (Array.isArray(nf)) return nf as Array<{ label: string; value: string }>
+    const obj = nf as Record<string, any>
+    return Object.entries(obj).map(([k, v]) => ({ label: k.replace(/_/g, " "), value: String(v) }))
+  }
+
+  const getRecipeSteps = (rec: ApiRecipe | null): Array<{ step_number?: number; instructions?: string; image?: Array<{ id: number; url: string; isThumbnail?: boolean }> }> => {
+    if (!rec) return []
+    if (Array.isArray(rec.RecipeSteps) && rec.RecipeSteps.length > 0) {
+      return rec.RecipeSteps.map(s => ({ step_number: s.step_number, instructions: s.instructions, image: s.image }))
+    }
+    if (Array.isArray(rec.Steps) && rec.Steps.length > 0) {
+      return (rec.Steps as any[]).map((txt, idx) => ({ step_number: idx + 1, instructions: String(txt) }))
+    }
+    return []
+  }
+
   // Filter using recipe name safely (supports object/id/string)
   const filteredMeals = meals.filter((meal) => {
     const q = searchTerm.toLowerCase()
@@ -287,6 +356,8 @@ export default function MealsPage() {
       (meal.available ? "available" : "unavailable").includes(q)
     )
   })
+
+  const displayMeal = selectedMeal ?? viewBaseMeal
 
   return (
     <div className="flex flex-col">
@@ -319,8 +390,11 @@ export default function MealsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Image</TableHead>
                   <TableHead>Meal Label</TableHead>
                   <TableHead>Recipe Name</TableHead>
+                  <TableHead>Default</TableHead>
+                  <TableHead>Addons</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -328,13 +402,13 @@ export default function MealsPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center">
+                    <TableCell colSpan={7} className="text-center">
                       Loading...
                     </TableCell>
                   </TableRow>
                 ) : filteredMeals.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center">
+                    <TableCell colSpan={7} className="text-center">
                       No meals found
                     </TableCell>
                   </TableRow>
@@ -345,6 +419,17 @@ export default function MealsPage() {
                       onClick={() => viewMeal(meal)}
                       className="cursor-pointer hover:bg-muted/30"
                     >
+                      <TableCell className="w-[64px]">
+                        {(() => {
+                          const rec = getRecipeObject(meal.recipe)
+                          const thumb = rec?.Images?.find((i) => i.IsThumbnail)?.URL || rec?.Images?.[0]?.URL
+                          return thumb ? (
+                            <img src={thumb} alt={getRecipeName(meal.recipe)} className="h-10 w-10 object-cover rounded" />
+                          ) : (
+                            <div className="h-10 w-10 rounded bg-muted" />
+                          )
+                        })()}
+                      </TableCell>
                       <TableCell>
                         <div className="max-w-xs">
                           <div className="font-medium flex items-center">
@@ -353,9 +438,39 @@ export default function MealsPage() {
                           </div>
                         </div>
                       </TableCell>
-               <TableCell>
-                 <div className="text-sm text-muted-foreground truncate">{getRecipeName(meal.recipe)}</div>
-               </TableCell>
+                      <TableCell>
+                        {(() => {
+                          const rec = getRecipeObject(meal.recipe)
+                          const name = getRecipeName(meal.recipe)
+                          const tagsCount = Array.isArray(rec?.Tags) ? rec!.Tags!.length : 0
+                          const isBest = (rec?.IsBestChoice ?? 0) === 1
+                          return (
+                            <div className="flex items-center gap-2 max-w-xs">
+                              <div className="text-sm text-muted-foreground truncate">{name}</div>
+                              {isBest && (
+                                <Badge variant="secondary" className="text-[10px] px-2 py-0.5 flex items-center gap-1 bg-yellow-100 text-yellow-800">
+                                  <Crown className="h-3 w-3" /> Best
+                                </Badge>
+                              )}
+                              {tagsCount > 0 && (
+                                <Badge variant="outline" className="text-[10px] px-2 py-0.5">
+                                  {tagsCount} tags
+                                </Badge>
+                              )}
+                            </div>
+                          )
+                        })()}
+                      </TableCell>
+                      <TableCell>
+                        {meal.isDefault ? (
+                          <Badge variant="secondary" className="text-xs">Default</Badge>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm">{Array.isArray(meal.addons) ? meal.addons.length : 0}</span>
+                      </TableCell>
                       <TableCell>
                         <div>
                           <Badge variant={meal.available ? "default" : "secondary"} className={meal.available ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>
@@ -399,7 +514,7 @@ export default function MealsPage() {
 
         {/* Create Meal Dialog */}
         <Dialog open={isCreateDialogOpen} onOpenChange={(o) => { setIsCreateDialogOpen(o); if (!o) resetNewMeal() }}>
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent className="sm:max-w-[500px] animate-in fade-in-0 zoom-in-95 duration-200">
             <DialogHeader>
               <DialogTitle>Add Meal</DialogTitle>
               <DialogDescription>Create a new meal.</DialogDescription>
@@ -444,7 +559,7 @@ export default function MealsPage() {
 
         {/* Edit Meal Dialog */}
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent className="sm:max-w-[500px] animate-in fade-in-0 zoom-in-95 duration-200">
             <DialogHeader>
               <DialogTitle>Edit Meal</DialogTitle>
               <DialogDescription>Update meal details.</DialogDescription>
@@ -488,16 +603,46 @@ export default function MealsPage() {
         </Dialog>
 
         {/* View Meal Dialog */}
-        <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-          <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
+        <Dialog
+          open={isViewDialogOpen}
+          onOpenChange={(open) => {
+            setIsViewDialogOpen(open)
+            if (!open) {
+              setSelectedMeal(null)
+              setViewBaseMeal(null)
+              setViewLoading(false)
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-[900px] max-h-[80vh] overflow-y-auto nice-scrollbar animate-in fade-in-0 zoom-in-95 duration-200">
             <DialogHeader>
               <DialogTitle className="flex items-center">
                 <Utensils className="mr-2 h-5 w-5" />
-                {selectedMeal?.label}
+                {displayMeal?.label ?? "Meal"}
               </DialogTitle>
-              <DialogDescription>Meal ID: {selectedMeal?.id}</DialogDescription>
+              <DialogDescription>Meal ID: {displayMeal?.id ?? "—"}</DialogDescription>
             </DialogHeader>
-            {selectedMeal && (
+            {viewLoading ? (
+              <div className="space-y-6" aria-live="polite">
+                <div className="space-y-3">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-4 w-1/2" />
+                  <Skeleton className="h-24 w-full" />
+                </div>
+                <div className="space-y-3">
+                  <Skeleton className="h-4 w-20" />
+                  <div className="flex gap-3">
+                    <Skeleton className="h-6 w-24" />
+                    <Skeleton className="h-6 w-20" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+              </div>
+            ) : selectedMeal ? (
               <div className="space-y-6">
                 <div>
                   <h4 className="font-semibold mb-2">Recipe</h4>
@@ -510,7 +655,7 @@ export default function MealsPage() {
                         <div className="flex items-center justify-between gap-3">
                           <div className="text-sm font-medium">{name}</div>
                           {rec?.Images && rec.Images.length > 0 && (
-                            <img src={rec.Images.find(i => i.IsThumbnail)?.URL || rec.Images[0].URL} alt={name} className="h-14 w-14 object-cover rounded" />
+                            <img src={rec.Images.find((i) => i.IsThumbnail)?.URL || rec.Images[0].URL} alt={name} className="h-14 w-14 object-cover rounded" />
                           )}
                         </div>
                         {rec?.Description && (
@@ -535,11 +680,11 @@ export default function MealsPage() {
                             </ul>
                           </div>
                         )}
-                        {Array.isArray(rec?.NutritionFacts) && rec!.NutritionFacts!.length > 0 && (
+                        {normalizeNutritionFacts(rec?.NutritionFacts).length > 0 && (
                           <div>
                             <div className="text-xs uppercase text-muted-foreground mb-1">Nutrition Facts</div>
                             <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
-                              {rec!.NutritionFacts!.map((nf, idx) => (
+                              {normalizeNutritionFacts(rec!.NutritionFacts!).map((nf, idx) => (
                                 <div key={idx} className="flex items-center justify-between">
                                   <span className="text-muted-foreground">{nf.label}</span>
                                   <span>{nf.value}</span>
@@ -552,18 +697,34 @@ export default function MealsPage() {
                           <div>
                             <div className="text-xs uppercase text-muted-foreground mb-1">Utensils</div>
                             <ul className="list-disc pl-5 text-sm">
-                              {rec.Utensils.flatMap(u => String(u).split(",")).map((u, idx) => (<li key={idx}>{u.trim()}</li>))}
+                              {rec.Utensils.flatMap((u) => String(u).split(",")).map((u, idx) => (<li key={idx}>{u.trim()}</li>))}
                             </ul>
                           </div>
                         )}
-                        {rec?.Steps && rec.Steps.length > 0 && (
+                        {(() => {
+                          const steps = getRecipeSteps(rec)
+                          if (steps.length === 0) return null
+                          return (
+                            <div>
+                              <div className="text-xs uppercase text-muted-foreground mb-1">Steps</div>
+                              <ol className="list-decimal pl-5 space-y-2 text-sm">
+                                {steps.map((s, idx) => (
+                                  <li key={idx}>
+                                    <div>{s.instructions}</div>
+                                  </li>
+                                ))}
+                              </ol>
+                            </div>
+                          )
+                        })()}
+                        {rec?.Tags && rec.Tags.length > 0 && (
                           <div>
-                            <div className="text-xs uppercase text-muted-foreground mb-1">Steps</div>
-                            <ol className="list-decimal pl-5 space-y-1 text-sm">
-                              {rec.Steps.map((s, idx) => (
-                                <li key={idx}>{s}</li>
+                            <div className="text-xs uppercase text-muted-foreground mb-1">Tags</div>
+                            <div className="flex flex-wrap gap-2">
+                              {rec.Tags.map((t) => (
+                                <Badge key={t.id} variant="secondary">{t.name}</Badge>
                               ))}
-                            </ol>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -576,14 +737,41 @@ export default function MealsPage() {
                   <Badge variant={selectedMeal.available ? "default" : "secondary"} className={selectedMeal.available ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>
                     {selectedMeal.available ? "available" : "unavailable"}
                   </Badge>
+                  {selectedMeal.isDefault ? (
+                    <span className="ml-2 text-xs text-muted-foreground">Default</span>
+                  ) : null}
                 </div>
+
+                {Array.isArray(selectedMeal.addons) && selectedMeal.addons.length > 0 && (
+                  <div>
+                    <h4 className="font-semibold mb-2">Addons</h4>
+                    <div className="space-y-2">
+                      {selectedMeal.addons.map((a) => (
+                        <div key={a.id} className="flex items-center justify-between text-sm">
+                          <div className="flex-1">
+                            <div className="font-medium">{a.addon?.name}</div>
+                            {a.addon?.description ? (
+                              <div className="text-muted-foreground">{a.addon.description}</div>
+                            ) : null}
+                          </div>
+                          <div className="text-right">
+                            {typeof a.max_free_quantity === "number" ? <div className="text-xs text-muted-foreground">Free qty: {a.max_free_quantity}</div> : null}
+                            {typeof a.addon?.price === "number" ? <div className="font-medium">{a.addon.price}</div> : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between pt-4 border-t">
                   <div className="text-sm text-muted-foreground">ID: {selectedMeal.id}</div>
                   <div className="text-sm text-muted-foreground">Label: {selectedMeal.label}</div>
                 </div>
               </div>
-            )}
+            ) : displayMeal ? (
+              <div className="text-sm text-muted-foreground">No additional details available.</div>
+            ) : null}
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>
                 Close

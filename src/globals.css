@@ -91,3 +91,23 @@
     font-family: "Inter", sans-serif;
   }
 }
+
+/* Scoped nice scrollbar for scrollable containers */
+.nice-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground)) transparent;
+}
+.nice-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.nice-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.nice-scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.35);
+  border-radius: 8px;
+}
+.nice-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.6);
+}
