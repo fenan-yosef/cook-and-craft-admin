@@ -5,6 +5,7 @@ import { apiService } from "@/lib/api-service"
 import { toast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { Users, ShoppingCart, MessageSquare, Calendar } from "lucide-react"
 
 interface DashboardStats {
@@ -27,6 +28,25 @@ export default function DashboardHomePage() {
   })
   const [isProcessingRecurring, setIsProcessingRecurring] = useState(false)
   const [isSendingIntervals, setIsSendingIntervals] = useState(false)
+  const [isSyncingProducts, setIsSyncingProducts] = useState(false)
+  const [isSyncingRecipes, setIsSyncingRecipes] = useState(false)
+  const [isSyncingAddons, setIsSyncingAddons] = useState(false)
+  const [foodicsAuthCode, setFoodicsAuthCode] = useState("")
+  const [isAuthorizingFoodics, setIsAuthorizingFoodics] = useState(false)
+
+  const ensureAuthToken = () => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
+    if (token) {
+      apiService.setAuthToken(token)
+      return true
+    }
+    toast({
+      title: "Auth required",
+      description: "Please log in first.",
+      variant: "destructive",
+    })
+    return false
+  }
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -67,6 +87,7 @@ export default function DashboardHomePage() {
   }, [])
 
   const handleProcessRecurringSubscriptions = async () => {
+    if (!ensureAuthToken()) return
     setIsProcessingRecurring(true)
     try {
       await apiService.post("/test/process-recurring-subscriptions", {})
@@ -87,6 +108,7 @@ export default function DashboardHomePage() {
   }
 
   const handleSendIntervalsToFoodics = async () => {
+    if (!ensureAuthToken()) return
     setIsSendingIntervals(true)
     try {
       await apiService.post("/test/send-intervals-to-foodics", {})
@@ -103,6 +125,112 @@ export default function DashboardHomePage() {
       })
     } finally {
       setIsSendingIntervals(false)
+    }
+  }
+
+  const requireFoodicsCode = () => {
+    const code = foodicsAuthCode.trim()
+    if (!code) {
+      toast({
+        title: "Foodics code required",
+        description: "Paste the authorization code first.",
+        variant: "destructive",
+      })
+      return null
+    }
+    return code
+  }
+
+  const handleAuthorizeFoodics = async () => {
+    if (!ensureAuthToken()) return
+    const code = requireFoodicsCode()
+    if (!code) return
+
+    setIsAuthorizingFoodics(true)
+    try {
+      await apiService.post("/authorize", { code })
+      toast({
+        title: "Authorization submitted",
+        description: "Foodics authorization request sent successfully.",
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unexpected error"
+      toast({
+        title: "Failed to authorize",
+        description: message,
+        variant: "destructive",
+      })
+    } finally {
+      setIsAuthorizingFoodics(false)
+    }
+  }
+
+  const handleSyncProducts = async () => {
+    if (!ensureAuthToken()) return
+    const code = requireFoodicsCode()
+    if (!code) return
+    setIsSyncingProducts(true)
+    try {
+      await apiService.post("/sync-products", { code })
+      toast({
+        title: "Products sync started",
+        description: "Backend job queued successfully.",
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unexpected error"
+      toast({
+        title: "Failed to sync products",
+        description: message,
+        variant: "destructive",
+      })
+    } finally {
+      setIsSyncingProducts(false)
+    }
+  }
+
+  const handleSyncRecipes = async () => {
+    if (!ensureAuthToken()) return
+    const code = requireFoodicsCode()
+    if (!code) return
+    setIsSyncingRecipes(true)
+    try {
+      await apiService.post("/sync-recipes", { code })
+      toast({
+        title: "Recipes sync started",
+        description: "Backend job queued successfully.",
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unexpected error"
+      toast({
+        title: "Failed to sync recipes",
+        description: message,
+        variant: "destructive",
+      })
+    } finally {
+      setIsSyncingRecipes(false)
+    }
+  }
+
+  const handleSyncAddons = async () => {
+    if (!ensureAuthToken()) return
+    const code = requireFoodicsCode()
+    if (!code) return
+    setIsSyncingAddons(true)
+    try {
+      await apiService.post("/sync-addons", { code })
+      toast({
+        title: "Add-ons sync started",
+        description: "Backend job queued successfully.",
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unexpected error"
+      toast({
+        title: "Failed to sync add-ons",
+        description: message,
+        variant: "destructive",
+      })
+    } finally {
+      setIsSyncingAddons(false)
     }
   }
 
@@ -233,7 +361,18 @@ export default function DashboardHomePage() {
             <CardDescription>Testing & manual triggers</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Input
+                  placeholder="Paste Foodics authorization code"
+                  value={foodicsAuthCode}
+                  onChange={(e) => setFoodicsAuthCode(e.target.value)}
+                />
+                <Button onClick={handleAuthorizeFoodics} disabled={isAuthorizingFoodics}>
+                  {isAuthorizingFoodics ? "Authorizing..." : "Authorize"}
+                </Button>
+              </div>
+
               <Button
                 onClick={handleProcessRecurringSubscriptions}
                 disabled={isProcessingRecurring}
@@ -247,6 +386,18 @@ export default function DashboardHomePage() {
               >
                 {isSendingIntervals ? "Sending..." : "Send Intervals to Foodics"}
               </Button>
+
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Button onClick={handleSyncProducts} disabled={isSyncingProducts}>
+                  {isSyncingProducts ? "Syncing..." : "Sync Products"}
+                </Button>
+                <Button variant="outline" onClick={handleSyncRecipes} disabled={isSyncingRecipes}>
+                  {isSyncingRecipes ? "Syncing..." : "Sync Recipes"}
+                </Button>
+                <Button variant="outline" onClick={handleSyncAddons} disabled={isSyncingAddons}>
+                  {isSyncingAddons ? "Syncing..." : "Sync Add-ons"}
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
