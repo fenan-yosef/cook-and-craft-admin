@@ -128,30 +128,37 @@ export default function DashboardHomePage() {
     }
   }
 
-  const requireFoodicsCode = () => {
-    const code = foodicsAuthCode.trim()
-    if (!code) {
-      toast({
-        title: "Foodics code required",
-        description: "Paste the authorization code first.",
-        variant: "destructive",
-      })
-      return null
+  const normalizeFoodicsCode = () => {
+    const raw = foodicsAuthCode.trim()
+    if (!raw) return null
+    // Allow pasting the full redirect URL; extract ?code=... if present.
+    try {
+      const maybeUrl = new URL(raw)
+      const fromQuery = maybeUrl.searchParams.get("code")
+      return (fromQuery || raw).trim() || null
+    } catch {
+      return raw
     }
-    return code
   }
 
   const handleAuthorizeFoodics = async () => {
     if (!ensureAuthToken()) return
-    const code = requireFoodicsCode()
-    if (!code) return
+    const code = normalizeFoodicsCode()
+    if (!code) {
+      toast({
+        title: "Foodics code required",
+        description: "Paste the authorization code or redirect URL first.",
+        variant: "destructive",
+      })
+      return
+    }
 
     setIsAuthorizingFoodics(true)
     try {
       await apiService.post("/authorize", { code })
       toast({
         title: "Authorization submitted",
-        description: "Foodics authorization request sent successfully.",
+        description: "Backend will store the Foodics token for future syncs.",
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unexpected error"
@@ -167,11 +174,9 @@ export default function DashboardHomePage() {
 
   const handleSyncProducts = async () => {
     if (!ensureAuthToken()) return
-    const code = requireFoodicsCode()
-    if (!code) return
     setIsSyncingProducts(true)
     try {
-      await apiService.post("/sync-products", { code })
+      await apiService.post("/sync-products", {})
       toast({
         title: "Products sync started",
         description: "Backend job queued successfully.",
@@ -190,11 +195,9 @@ export default function DashboardHomePage() {
 
   const handleSyncRecipes = async () => {
     if (!ensureAuthToken()) return
-    const code = requireFoodicsCode()
-    if (!code) return
     setIsSyncingRecipes(true)
     try {
-      await apiService.post("/sync-recipes", { code })
+      await apiService.post("/sync-recipes", {})
       toast({
         title: "Recipes sync started",
         description: "Backend job queued successfully.",
@@ -213,11 +216,9 @@ export default function DashboardHomePage() {
 
   const handleSyncAddons = async () => {
     if (!ensureAuthToken()) return
-    const code = requireFoodicsCode()
-    if (!code) return
     setIsSyncingAddons(true)
     try {
-      await apiService.post("/sync-addons", { code })
+      await apiService.post("/sync-addons", {})
       toast({
         title: "Add-ons sync started",
         description: "Backend job queued successfully.",
