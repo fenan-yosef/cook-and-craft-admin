@@ -64,6 +64,11 @@ function getImageSrc(img: any): string | null {
   return null
 }
 
+function safeTrim(val: unknown): string {
+  if (val === null || typeof val === "undefined") return ""
+  return String(val).trim()
+}
+
 export default function RecipesPage() {
   const [recipes, setRecipes] = useState<ApiRecipe[]>([])
   const [loading, setLoading] = useState(true)
@@ -400,10 +405,14 @@ export default function RecipesPage() {
       fd.append("is_active", newRecipe.Is_active ? "1" : "0")
 
       // Ingredients: use ingredients[i][name] and ingredients[i][amount]
-      const ingredientsClean = (newRecipe.Ingredients || []).filter((x) => (x.name?.trim() || x.amount?.trim() || x.image))
+      const ingredientsClean = (newRecipe.Ingredients || []).filter(
+        (x) => (safeTrim((x as any).name) || safeTrim((x as any).amount) || (x as any).image)
+      )
       ingredientsClean.forEach((ing, i) => {
-        if (ing.name?.trim()) fd.append(`ingredients[${i}][name]`, ing.name.trim())
-        if (ing.amount?.trim()) fd.append(`ingredients[${i}][amount]`, ing.amount.trim())
+        const ingName = safeTrim((ing as any).name)
+        const ingAmount = safeTrim((ing as any).amount)
+        if (ingName) fd.append(`ingredients[${i}][name]`, ingName)
+        if (ingAmount) fd.append(`ingredients[${i}][amount]`, ingAmount)
         if (ing.image) fd.append(`ingredients[${i}][image]`, ing.image)
       })
 
@@ -567,9 +576,14 @@ export default function RecipesPage() {
         const ings: any[] = (recipe as any).Ingredients ?? (recipe as any).ingredients ?? []
         const normalized = Array.isArray(ings)
           ? ings.map((it: any) => {
-              if (typeof it === "string") return { name: it, amount: "" }
+              if (typeof it === "string") return { name: safeTrim(it), amount: "" }
               const imgUrl = getImageSrc(it?.image) || getImageSrc(it?.imageUrl) || getImageSrc(it?.img) || (typeof it?.image_url === 'string' ? it.image_url : null)
-              return { name: it?.name ?? it?.ingredient ?? "", amount: it?.amount ?? it?.qty ?? "", image: null, imageUrl: imgUrl }
+              return {
+                name: safeTrim(it?.name ?? it?.ingredient ?? ""),
+                amount: safeTrim(it?.amount ?? it?.qty ?? ""),
+                image: null,
+                imageUrl: imgUrl,
+              }
             })
           : []
   return normalized.length > 0 ? normalized : [{ name: "", amount: "", image: null, imageUrl: null }]
@@ -663,10 +677,14 @@ export default function RecipesPage() {
       fd.append("is_active", editRecipe.Is_active ? "1" : "0")
 
       // Ingredients: ingredients[i][name]/[amount]/[image]
-      const ingredientsClean = (editRecipe.Ingredients || []).filter((x) => (x.name?.trim() || x.amount?.trim() || x.image))
+      const ingredientsClean = (editRecipe.Ingredients || []).filter(
+        (x) => (safeTrim((x as any).name) || safeTrim((x as any).amount) || (x as any).image)
+      )
       ingredientsClean.forEach((ing, i) => {
-        if (ing.name?.trim()) fd.append(`ingredients[${i}][name]`, ing.name.trim())
-        if (ing.amount?.trim()) fd.append(`ingredients[${i}][amount]`, ing.amount.trim())
+        const ingName = safeTrim((ing as any).name)
+        const ingAmount = safeTrim((ing as any).amount)
+        if (ingName) fd.append(`ingredients[${i}][name]`, ingName)
+        if (ingAmount) fd.append(`ingredients[${i}][amount]`, ingAmount)
         if (ing.image) fd.append(`ingredients[${i}][image]`, ing.image)
       })
 
