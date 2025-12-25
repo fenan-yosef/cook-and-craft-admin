@@ -372,54 +372,57 @@ export function AdminSidebar() {
         className="border-r"
       >
       <SidebarHeader>
-        <div className="flex items-center justify-between w-full">
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                size="lg"
-                className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-              >
-                <div className="flex h-8 w-10 items-center justify-center rounded-lg text-sidebar-primary-foreground">
-                  <img
-                    src="/assets/photo_2025-08-21_11-16-40.jpg"
-                    alt="Logo"
-                    className=" rounded object-cover"
-                  />
-                </div>
-                <div className="flex flex-col gap-0.5 leading-none">
-                  <span className="font-semibold">Cook And Crafts</span>
-                  <span className="text-xs">Admin Panel</span>
-                </div>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Expand all sections"
-              onClick={expandAll}
-              title="Expand all"
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              size="lg"
+              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
-              <Maximize2 className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Collapse all sections"
-              onClick={collapseAll}
-              title="Collapse all"
-            >
-              <Minimize2 className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+              <div className="flex h-8 w-10 items-center justify-center rounded-lg text-sidebar-primary-foreground">
+                <img
+                  src="/assets/photo_2025-08-21_11-16-40.jpg"
+                  alt="Logo"
+                  className=" rounded object-cover"
+                />
+              </div>
+              <div className="flex flex-col gap-0.5 leading-none">
+                <span className="font-semibold">Cook And Crafts</span>
+                <span className="text-xs">Admin Panel</span>
+              </div>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarHeader>
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+          <SidebarGroupLabel>
+            <div className="relative w-full">
+              <span className="pr-12">Navigation</span>
+              <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center space-x-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 p-0.5"
+                  aria-label="Expand all sections"
+                  onClick={expandAll}
+                  title="Expand all"
+                >
+                  <Maximize2 className="h-3 w-3" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 p-0.5"
+                  aria-label="Collapse all sections"
+                  onClick={collapseAll}
+                  title="Collapse all"
+                >
+                  <Minimize2 className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map((item) => (
