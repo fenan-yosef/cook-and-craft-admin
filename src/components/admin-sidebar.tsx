@@ -8,6 +8,8 @@ import {
   Settings,
   LogOut,
   ChevronRight,
+  Minimize2,
+  Maximize2,
   Wallet,
   CookieIcon,
   Cookie,
@@ -236,6 +238,37 @@ export function AdminSidebar() {
     })
   }, [])
 
+  const getAllCollapsibleKeys = useCallback(() => {
+    const keys: string[] = []
+    for (const item of menuItems) {
+      if (item.items) {
+        keys.push(collapsibleKey([item.title]))
+        for (const subItem of item.items) {
+          if (subItem.items) keys.push(collapsibleKey([item.title, subItem.title]))
+        }
+      }
+    }
+    return keys
+  }, [collapsibleKey])
+
+  const expandAll = useCallback(() => {
+    const keys = getAllCollapsibleKeys()
+    setCollapsibleState(prev => {
+      const next = { ...prev }
+      for (const k of keys) next[k] = true
+      return next
+    })
+  }, [getAllCollapsibleKeys])
+
+  const collapseAll = useCallback(() => {
+    const keys = getAllCollapsibleKeys()
+    setCollapsibleState(prev => {
+      const next = { ...prev }
+      for (const k of keys) next[k] = false
+      return next
+    })
+  }, [getAllCollapsibleKeys])
+
   useEffect(() => {
     if (typeof window === 'undefined') return
     try {
@@ -295,6 +328,40 @@ export function AdminSidebar() {
   // Allow text wrapping for long titles
   const longTitleClass = "whitespace-normal break-words"
 
+  // If the sidebar is fully collapsed (no open sections), auto-open the group(s)
+  // that contain the current route so the active item is visible.
+  useEffect(() => {
+    const path = location.pathname
+    const hasAnyOpen = Object.values(collapsibleState).some(Boolean)
+    if (hasAnyOpen) return
+
+    const matchUrl = (url?: string) => {
+      if (!url) return false
+      return path === url || path.startsWith(url + "/")
+    }
+
+    for (const item of menuItems) {
+      if (item.items) {
+        for (const subItem of item.items) {
+          if (matchUrl(subItem.url)) {
+            // open top-level group so the sub item is visible
+            setSectionOpen(collapsibleKey([item.title]), true)
+            return
+          }
+          if (subItem.items) {
+            for (const nested of subItem.items) {
+              if (matchUrl(nested.url)) {
+                setSectionOpen(collapsibleKey([item.title]), true)
+                setSectionOpen(collapsibleKey([item.title, subItem.title]), true)
+                return
+              }
+            }
+          }
+        }
+      }
+    }
+  }, [location.pathname, collapsibleState, collapsibleKey, setSectionOpen])
+
   return (
     <div
       className="relative flex h-full select-none"
@@ -305,26 +372,49 @@ export function AdminSidebar() {
         className="border-r"
       >
       <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+        <div className="flex items-center justify-between w-full">
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                size="lg"
+                className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+              >
+                <div className="flex h-8 w-10 items-center justify-center rounded-lg text-sidebar-primary-foreground">
+                  <img
+                    src="/assets/photo_2025-08-21_11-16-40.jpg"
+                    alt="Logo"
+                    className=" rounded object-cover"
+                  />
+                </div>
+                <div className="flex flex-col gap-0.5 leading-none">
+                  <span className="font-semibold">Cook And Crafts</span>
+                  <span className="text-xs">Admin Panel</span>
+                </div>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Expand all sections"
+              onClick={expandAll}
+              title="Expand all"
             >
-              <div className="flex h-8 w-10 items-center justify-center rounded-lg text-sidebar-primary-foreground">
-                <img
-                  src="/assets/photo_2025-08-21_11-16-40.jpg"
-                  alt="Logo"
-                  className=" rounded object-cover"
-                />
-              </div>
-              <div className="flex flex-col gap-0.5 leading-none">
-                <span className="font-semibold">Cook And Crafts</span>
-                <span className="text-xs">Admin Panel</span>
-              </div>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+              <Maximize2 className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Collapse all sections"
+              onClick={collapseAll}
+              title="Collapse all"
+            >
+              <Minimize2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
       </SidebarHeader>
 
       <SidebarContent>
