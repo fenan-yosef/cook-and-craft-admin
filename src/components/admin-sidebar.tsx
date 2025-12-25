@@ -176,6 +176,10 @@ const menuItems = [
         title: "Subscriptions",
         url: "/dashboard/subscriptions",
       },
+      {
+        title: "Meal Selections",
+        url: "/dashboard/subscription-meal-selections",
+      },
     
     
     ],
