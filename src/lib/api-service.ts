@@ -3,6 +3,27 @@ class ApiService {
   private baseURL: string;
   private authToken: string | null = null;
 
+  private handleUnauthorized() {
+    this.authToken = null
+    if (typeof window === "undefined") return
+    try {
+      // Current keys used by AuthProvider
+      localStorage.removeItem("auth_token")
+      localStorage.removeItem("auth_user")
+      // Legacy keys (safe to remove if present)
+      localStorage.removeItem("token")
+      localStorage.removeItem("user")
+    } catch {
+      // ignore storage errors
+    }
+
+    try {
+      window.dispatchEvent(new CustomEvent("auth:unauthorized"))
+    } catch {
+      // ignore event errors
+    }
+  }
+
   constructor() {
     // Prefer a Vite-provided environment variable, fall back to the existing hardcoded URL.
     // `import.meta.env` is available at build/runtime in Vite; cast to `any` to avoid TS issues here.
@@ -46,6 +67,7 @@ class ApiService {
       },
       body: new URLSearchParams(data),
     });
+    if (response.status === 401) this.handleUnauthorized();
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(errorText || `HTTP error! status: ${response.status}`);
@@ -63,6 +85,7 @@ class ApiService {
       },
       body: new URLSearchParams(data),
     });
+    if (response.status === 401) this.handleUnauthorized();
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(errorText || `HTTP error! status: ${response.status}`);
@@ -75,6 +98,7 @@ class ApiService {
       method: "GET",
       headers: this.getHeaders(),
     });
+    if (response.status === 401) this.handleUnauthorized();
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(errorText || `HTTP error! status: ${response.status}`);
@@ -88,6 +112,7 @@ class ApiService {
       headers: this.getHeaders(),
       body: JSON.stringify(data),
     });
+    if (response.status === 401) this.handleUnauthorized();
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(errorText || `HTTP error! status: ${response.status}`);
@@ -104,6 +129,7 @@ class ApiService {
       }, // no Content-Type here; browser sets boundary
       body: formData,
     });
+    if (response.status === 401) this.handleUnauthorized();
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(errorText || `HTTP error! status: ${response.status}`);
@@ -117,6 +143,7 @@ class ApiService {
       headers: this.getHeaders(),
       body: data ? JSON.stringify(data) : undefined,
     });
+    if (response.status === 401) this.handleUnauthorized();
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     return response.json();
   }
@@ -131,6 +158,7 @@ class ApiService {
       },
       body: JSON.stringify(data),
     });
+    if (response.status === 401) this.handleUnauthorized();
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(errorText || `HTTP error! status: ${response.status}`);
@@ -144,6 +172,7 @@ class ApiService {
       headers: this.getHeaders(),
       body: data ? JSON.stringify(data) : undefined,
     });
+    if (response.status === 401) this.handleUnauthorized();
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     // Some APIs return empty body for PUT
     const text = await response.text();
@@ -157,6 +186,7 @@ class ApiService {
       headers: this.getHeaders(),
       body: data ? JSON.stringify(data) : undefined,
     });
+    if (response.status === 401) this.handleUnauthorized();
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     const text = await response.text();
     return text ? JSON.parse(text) : {};

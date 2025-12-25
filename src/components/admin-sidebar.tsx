@@ -207,6 +207,44 @@ export function AdminSidebar() {
   const user = auth?.user
   const logout = auth?.logout
 
+  // Persisted open/closed state for collapsible menu sections
+  const COLLAPSIBLE_STATE_KEY = 'admin_sidebar_collapsible_state'
+  type CollapsibleState = Record<string, boolean>
+  const [collapsibleState, setCollapsibleState] = useState<CollapsibleState>(() => {
+    if (typeof window === 'undefined') return {}
+    try {
+      const raw = localStorage.getItem(COLLAPSIBLE_STATE_KEY)
+      if (!raw) return {}
+      const parsed = JSON.parse(raw)
+      if (!parsed || typeof parsed !== 'object') return {}
+
+      const sanitized: CollapsibleState = {}
+      for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+        if (typeof value === 'boolean') sanitized[key] = value
+      }
+      return sanitized
+    } catch {
+      return {}
+    }
+  })
+
+  const collapsibleKey = useCallback((parts: string[]) => ['admin_sidebar', ...parts].join('::'), [])
+  const setSectionOpen = useCallback((key: string, open: boolean) => {
+    setCollapsibleState(prev => {
+      if (prev[key] === open) return prev
+      return { ...prev, [key]: open }
+    })
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      localStorage.setItem(COLLAPSIBLE_STATE_KEY, JSON.stringify(collapsibleState))
+    } catch {
+      // ignore storage errors (private mode / quota)
+    }
+  }, [collapsibleState])
+
   // Resizable width state (persisted)
   const DEFAULT_WIDTH = 260
   const MIN_WIDTH = 200
@@ -297,7 +335,11 @@ export function AdminSidebar() {
               {menuItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   {item.items ? (
-                    <Collapsible defaultOpen className="group/collapsible">
+                    <Collapsible
+                      open={!!collapsibleState[collapsibleKey([item.title])]}
+                      onOpenChange={(open) => setSectionOpen(collapsibleKey([item.title]), open)}
+                      className="group/collapsible"
+                    >
                       <CollapsibleTrigger asChild>
                         <SidebarMenuButton>
                           <item.icon />
@@ -310,7 +352,13 @@ export function AdminSidebar() {
                           {item.items.map((subItem) => (
                             <SidebarMenuSubItem key={subItem.title}>
                               {subItem.items ? (
-                                <Collapsible defaultOpen className="group/collapsible">
+                                <Collapsible
+                                  open={!!collapsibleState[collapsibleKey([item.title, subItem.title])]}
+                                  onOpenChange={(open) =>
+                                    setSectionOpen(collapsibleKey([item.title, subItem.title]), open)
+                                  }
+                                  className="group/collapsible"
+                                >
                                   <CollapsibleTrigger asChild>
                                     <SidebarMenuSubButton>
                                       {subItem.icon && <subItem.icon />}
@@ -363,7 +411,9 @@ export function AdminSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton>
-              <Users />
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5" className="mr-2 h-5 w-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 7.5a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 19.25a7.75 7.75 0 1115.5 0v.25a.75.75 0 01-.75.75h-14a.75.75 0 01-.75-.75v-.25z" />
+              </svg>
               <span>{user?.name || "Admin"}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>

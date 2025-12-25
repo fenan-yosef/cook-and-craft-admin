@@ -40,14 +40,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setToken(storedToken)
       apiService.setAuthToken(storedToken)
     }
-    if (storedUser) {
+    if (storedUser && storedToken) {
       try {
         setUser(JSON.parse(storedUser))
         setIsLoading(false)
       } catch {
         setUser(null)
+        localStorage.removeItem(AUTH_USER_KEY)
         setIsLoading(false)
       }
+    } else if (storedUser && !storedToken) {
+      // Don't consider a cached user valid without a token
+      localStorage.removeItem(AUTH_USER_KEY)
+      setUser(null)
+      setIsLoading(false)
     } else if (storedToken) {
       // Fetch profile only once if user not in cache
       fetchProfile(storedToken)
@@ -126,6 +132,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem(AUTH_USER_KEY)
     apiService.setAuthToken(null)
   }, [])
+
+  // If any request detects an unauthorized token, force logout and redirect via guards
+  useEffect(() => {
+    const handler = () => {
+      logout()
+    }
+    window.addEventListener("auth:unauthorized", handler as EventListener)
+    return () => window.removeEventListener("auth:unauthorized", handler as EventListener)
+  }, [logout])
 
   const updateUser = useCallback((updatedUser: User) => {
     setUser(updatedUser)

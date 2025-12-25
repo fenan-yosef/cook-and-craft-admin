@@ -1,6 +1,8 @@
 import AddonsPage from "@/pages/dashboard/addons/AddonsPage"
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom"
 import { AuthProvider } from "@/contexts/auth-context"
+import { AuthGuard } from "@/components/auth-guard"
+import { useAuth } from "@/contexts/auth-context"
 import WalletsPage from "@/pages/dashboard/wallets/WalletsPage"
 import ShopRedemptionPage from "@/pages/dashboard/wallets/ShopRedemptionPage"
 import { Toaster } from "@/components/ui/toaster"
@@ -33,14 +35,40 @@ import CategoriesPage from "./pages/dashboard/categories/CategoriesPage"
 import NotificationsPage from "./pages/dashboard/notifications/NotificationsPage"
 import CommunityNotifications from "@/pages/dashboard/community-notifications/CommunityNotifications"
 
+function IndexRedirect() {
+  const { user, token, isLoading } = useAuth()
+
+  if (isLoading) return null
+
+  if (user || token) {
+    return <Navigate to="/dashboard" replace />
+  }
+
+  return <Navigate to="/login" replace />
+}
+
 function App() {
   return (
     <AuthProvider>
       <Router>
         <Routes>
-          <Route path="/" element={<Navigate to="/login" replace />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/dashboard" element={<DashboardLayout />}>
+          <Route path="/" element={<IndexRedirect />} />
+          <Route
+            path="/login"
+            element={
+              <AuthGuard requireAuth={false}>
+                <LoginPage />
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/dashboard"
+            element={
+              <AuthGuard>
+                <DashboardLayout />
+              </AuthGuard>
+            }
+          >
             <Route index element={<DashboardHomePage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="products" element={<ProductsPage />} />
