@@ -18,7 +18,9 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Search, MoreHorizontal, UserCheck, UserX, Plus, Trash2 } from "lucide-react"
 import { apiService } from "@/lib/api-service"
+import { firestore, isFirebaseConfigured } from "@/lib/firebase"
 import { useToast } from "@/hooks/use-toast"
+import { doc, getDoc } from "firebase/firestore"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -116,42 +118,6 @@ export default function UsersPage() {
   const [locLoading, setLocLoading] = useState(false)
   const [locError, setLocError] = useState<string | null>(null)
   const locReqRef = useRef(0)
-  // Mocking helper: show sample data when backend returns none
-  // Set to `false` or remove before production — kept for development/demo.
-  const USE_MOCK_LOCATIONS = true
-  const MOCK_LOCATIONS: UserLocation[] = [
-    {
-      id: 30,
-      user_id: 70,
-      first_name: "Omar",
-      last_name: "Ahmed",
-      country_code: "+20",
-      phone: "105139665",
-      location: { lat: 30.8, lng: 29.4 },
-      city: "Banha",
-      country: "Egypt",
-      zip_code: "13772",
-      street: "Abuelkhier Street",
-      apartment: "12",
-      delivery_instructions: ["221212", "21212122", "2123434545"],
-      versions: [
-        {
-          id: 43,
-          user_location_id: 30,
-          version: 1,
-          first_name: "Omar",
-          last_name: "Ahmed",
-          country_code: "+20",
-          phone: "105139665",
-          location: { lat: 30.8, lng: 29.4 },
-          city: "Banha",
-          street: "Abuelkhier Street",
-          apartment: "12",
-          delivery_instructions: ["221212", "21212122", "2123434545"],
-        },
-      ],
-    },
-  ]
   const { toast } = useToast()
 
   // Pagination state
@@ -457,38 +423,40 @@ export default function UsersPage() {
 
   // Fetch preference answers for a user (grouped by question)
   const fetchAndFilterUserAnswers = async (userId: number) => {
-  const reqId = ++answersReqRef.current;
-  setAnswersLoading(true);
-  setAnswersError(null);
-  setUserAnswers([]);
-  try {
-    const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
-    if (token) apiService.setAuthToken(token);
-    const res = await apiService.get(`/admins/users_preference_answers/${userId}`);
-    // Updated API shape:
-    // { data: [ { question_id, question_text, answers: [{ id, answer_id, answer_text, answered_at }, ...] } ], ... }
-    const groupsRaw = Array.isArray(res?.data) ? res.data : [];
-    const groups: UserAnswerGroup[] = groupsRaw.map((g: any) => ({
-      question_id: Number(g?.question_id),
-      question_text: String(g?.question_text ?? "Question"),
-      answers: Array.isArray(g?.answers)
-        ? g.answers.map((a: any) => ({
-            id: Number(a?.id),
-            answer_id: Number(a?.answer_id),
-            answer_text: String(a?.answer_text ?? "—"),
-            answered_at: a?.answered_at ? String(a.answered_at) : undefined,
-          }))
-        : [],
-    }));
-    // If a newer request started, ignore this result
-    if (reqId !== answersReqRef.current) return;
-    lastAnswersUserIdRef.current = userId;
-    setUserAnswers(groups);
-  } catch (err: any) {
-    if (reqId !== answersReqRef.current) return;
-    setAnswersError(err?.message || 'Failed to load answers');
-  } finally {
-    if (reqId === answersReqRef.current) setAnswersLoading(false);
+    const reqId = ++answersReqRef.current
+    setAnswersLoading(true)
+    setAnswersError(null)
+    setUserAnswers([])
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
+      if (token) apiService.setAuthToken(token)
+      const res = await apiService.get(`/admins/users_preference_answers/${userId}`)
+      // Updated API shape:
+      // { data: [ { question_id, question_text, answers: [{ id, answer_id, answer_text, answered_at }, ...] } ], ... }
+      const groupsRaw = Array.isArray(res?.data) ? res.data : []
+      const groups: UserAnswerGroup[] = groupsRaw.map((g: any) => ({
+        question_id: Number(g?.question_id),
+        question_text: String(g?.question_text ?? "Question"),
+        answers: Array.isArray(g?.answers)
+          ? g.answers.map((a: any) => ({
+              id: Number(a?.id),
+              answer_id: Number(a?.answer_id),
+              answer_text: String(a?.answer_text ?? "—"),
+              answered_at: a?.answered_at ? String(a.answered_at) : undefined,
+            }))
+          : [],
+      }))
+
+      // If a newer request started, ignore this result
+      if (reqId !== answersReqRef.current) return
+      lastAnswersUserIdRef.current = userId
+      setUserAnswers(groups)
+    } catch (err: any) {
+      if (reqId !== answersReqRef.current) return
+      setAnswersError(err?.message || "Failed to load answers")
+    } finally {
+      if (reqId === answersReqRef.current) setAnswersLoading(false)
+    }
   }
 
   const fetchUserLocations = async (userId: number) => {
@@ -496,37 +464,60 @@ export default function UsersPage() {
     setLocLoading(true)
     setLocError(null)
     setUserLocations([])
+
     try {
-      const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
-      if (token) apiService.setAuthToken(token)
-      // Try passing user_id as a query param; backend may ignore and return all
-      const res = await apiService.get(`/user-locations?user_id=${userId}`)
-      const data = Array.isArray(res?.data) ? res.data : []
+      if (!isFirebaseConfigured || !firestore) {
+        throw new Error(
+          "Firebase is not configured. Set VITE_FIREBASE_* env vars and redeploy/restart the dev server.",
+        )
+      }
+
+      const ref = doc(firestore, "user-locations", String(userId))
+      const snap = await getDoc(ref)
       if (reqId !== locReqRef.current) return
-      const mapped: UserLocation[] = data.map((l: any) => ({
-        id: Number(l.id),
-        user_id: Number(l.user_id),
-        first_name: l.first_name,
-        last_name: l.last_name,
-        country_code: l.country_code,
-        phone: l.phone,
-        location: l.location,
-        city: l.city,
-        country: l.country,
-        zip_code: l.zip_code,
-        street: l.street,
-        apartment: l.apartment,
-        delivery_instructions: Array.isArray(l.delivery_instructions) ? l.delivery_instructions : [],
-        versions: Array.isArray(l.versions) ? l.versions : [],
-      }))
-      setUserLocations(mapped)
+
+      if (!snap.exists()) {
+        setUserLocations([])
+        return
+      }
+
+      const data: any = snap.data() ?? {}
+      const toNumber = (v: any): number | undefined => {
+        if (typeof v === "number" && Number.isFinite(v)) return v
+        if (typeof v === "string") {
+          const n = Number(v)
+          return Number.isFinite(n) ? n : undefined
+        }
+        return undefined
+      }
+
+      const lat = toNumber(data.location_lat ?? data.locationLat ?? data.lat ?? data?.location?.lat)
+      const lng = toNumber(data.location_lng ?? data.locationLng ?? data.lng ?? data?.location?.lng)
+
+      const loc: UserLocation = {
+        id: Number(userId),
+        user_id: Number(userId),
+        first_name: data.first_name,
+        last_name: data.last_name,
+        country_code: data.country_code,
+        phone: data.phone,
+        location: (lat != null || lng != null) ? { lat, lng } : undefined,
+        city: data.city,
+        country: data.country,
+        zip_code: data.zip_code,
+        street: data.street_name ?? data.street,
+        apartment: data.apartment,
+        delivery_instructions: Array.isArray(data.delivery_instructions) ? data.delivery_instructions : [],
+        versions: Array.isArray(data.versions) ? data.versions : [],
+      }
+
+      setUserLocations([loc])
     } catch (err: any) {
       if (reqId !== locReqRef.current) return
-      setLocError(err?.message || 'Failed to load locations')
+      setLocError(err?.message || "Failed to load locations")
     } finally {
       if (reqId === locReqRef.current) setLocLoading(false)
     }
-  }
   }
 
   const filteredUsers = users.filter(
@@ -854,59 +845,8 @@ export default function UsersPage() {
                   {!locLoading && locError && (
                     <div className="text-xs text-red-500">{locError}</div>
                   )}
-                  {!locLoading && !locError && userLocations.length === 0 && !USE_MOCK_LOCATIONS && (
+                  {!locLoading && !locError && userLocations.length === 0 && (
                     <div className="text-xs text-muted-foreground">No locations found.</div>
-                  )}
-                  {!locLoading && !locError && userLocations.length === 0 && USE_MOCK_LOCATIONS && (
-                    <div>
-                      <div className="text-xs text-muted-foreground mb-2">Showing mocked location data (development only)</div>
-                      <ul className="space-y-3 max-h-60 overflow-auto pr-1">
-                        {MOCK_LOCATIONS.map((loc) => (
-                          <li key={`mock-${loc.id}`} className="rounded-md border p-3 text-sm">
-                            <div className="flex items-center justify-between">
-                              <div className="font-medium">{(loc.first_name || '') + (loc.last_name ? ` ${loc.last_name}` : '') || 'Location'}</div>
-                              <div className="text-muted-foreground text-xs">ID: {loc.id}</div>
-                            </div>
-                            <div className="mt-1 text-muted-foreground text-xs">
-                              {loc.street ? `${loc.street}` : ''}{loc.apartment ? `, Apt ${loc.apartment}` : ''}{loc.city ? ` • ${loc.city}` : ''}{loc.country ? ` • ${loc.country}` : ''}{loc.zip_code ? ` • ${loc.zip_code}` : ''}
-                            </div>
-                            <div className="mt-1 text-xs">Phone: {loc.country_code || ''}{loc.phone || '-'}</div>
-                            {loc.location && (loc.location.lat || loc.location.lng) ? (
-                              <div className="mt-1 text-xs">Lat/Lng: {loc.location.lat ?? '-'} / {loc.location.lng ?? '-'}</div>
-                            ) : null}
-                            {Array.isArray(loc.delivery_instructions) && loc.delivery_instructions.length > 0 ? (
-                              <div className="mt-2 text-xs">
-                                <div className="font-medium text-xs">Delivery Instructions</div>
-                                <ul className="list-disc ml-4 text-xs">
-                                  {loc.delivery_instructions.map((d, i) => (
-                                    <li key={i} className="text-xs">{d}</li>
-                                  ))}
-                                </ul>
-                              </div>
-                            ) : null}
-
-                            {/* Versions */}
-                            {Array.isArray(loc.versions) && loc.versions.length > 0 ? (
-                              <div className="mt-2 border-t pt-2">
-                                <div className="text-xs font-medium mb-1">Versions</div>
-                                <ul className="space-y-1">
-                                  {loc.versions.map((v: any) => (
-                                    <li key={`mv-${v.id}`} className="text-xs rounded p-2 bg-muted/10">
-                                      <div className="flex items-center justify-between">
-                                        <div>v{v.version ?? v.id}</div>
-                                        <div className="text-muted-foreground text-[11px]">ID: {v.id}</div>
-                                      </div>
-                                      <div className="mt-1 text-xs">{v.street ?? ''}{v.apartment ? `, Apt ${v.apartment}` : ''}{v.city ? ` • ${v.city}` : ''}</div>
-                                      {v.location ? <div className="text-[11px] text-muted-foreground">Lat/Lng: {v.location.lat ?? '-'} / {v.location.lng ?? '-'}</div> : null}
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            ) : null}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
                   )}
                   {!locLoading && !locError && userLocations.length > 0 && (
                     <ul className="space-y-3 max-h-60 overflow-auto pr-1">

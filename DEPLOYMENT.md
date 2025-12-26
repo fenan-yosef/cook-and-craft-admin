@@ -45,6 +45,12 @@ Important build settings
 Environment variables
 - The app uses an API base URL constant `API_BASE_URL` set to `https://cook-craft.dhcb.io/api` in `SubscriptionsPage.tsx`. For different environments, keep environment variables instead of hardcoding. Suggested variables:
   - `VITE_API_BASE_URL` — base API URL used by the frontend
+  - `VITE_FIREBASE_API_KEY` — Firebase web API key
+  - `VITE_FIREBASE_AUTH_DOMAIN` — Firebase auth domain
+  - `VITE_FIREBASE_PROJECT_ID` — Firebase project id (required)
+  - `VITE_FIREBASE_STORAGE_BUCKET` — (optional) storage bucket
+  - `VITE_FIREBASE_MESSAGING_SENDER_ID` — (optional) messaging sender id
+  - `VITE_FIREBASE_APP_ID` — (optional) Firebase app id
   - `VITE_SENTRY_DSN` — (optional) Sentry DSN for error reporting
   - `VITE_FEATURE_FLAG_X` — any runtime feature flags
 
