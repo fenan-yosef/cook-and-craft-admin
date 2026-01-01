@@ -7,6 +7,7 @@ import WalletsPage from "@/pages/dashboard/wallets/WalletsPage"
 import ShopRedemptionPage from "@/pages/dashboard/wallets/ShopRedemptionPage"
 import { Toaster } from "@/components/ui/toaster"
 import RecipesPage from "@/pages/dashboard/recipes/RecipesPage"
+import RecipeSuggestionsPage from "./pages/dashboard/recipes/RecipeSuggestionsPage"
 import ReportsPage from "@/pages/dashboard/reports/ReportsPage"
 import SubscriptionsPage from "@/pages/dashboard/subscriptions/SubscriptionsPage"
 import UsersPage from "@/pages/dashboard/users/UsersPage"
@@ -81,6 +82,7 @@ function App() {
             <Route path="reports" element={<ReportsPage />} />
             <Route path="metrics" element={<MetricsPage />} />
             <Route path="recipes" element={<RecipesPage />} />
+            <Route path="recipes/suggestions" element={<RecipeSuggestionsPage />} />
             <Route path="meals" element={<MealsPage />} />
             <Route path="answers" element={<AnswersPage />} />
             <Route path="subscriptions" element={<SubscriptionsPage />} />

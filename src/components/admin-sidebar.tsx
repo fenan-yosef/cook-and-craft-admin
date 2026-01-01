@@ -192,6 +192,11 @@ const menuItems = [
     icon: Cookie,
   },
   {
+    title: "Recipe Suggestions",
+    url: "/dashboard/recipes/suggestions",
+    icon: Cookie,
+  },
+  {
     title: "Meals",
     url: "/dashboard/meals",
     icon: CookieIcon,
