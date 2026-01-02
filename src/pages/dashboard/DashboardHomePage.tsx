@@ -31,6 +31,7 @@ export default function DashboardHomePage() {
   const [isSyncingProducts, setIsSyncingProducts] = useState(false)
   const [isSyncingRecipes, setIsSyncingRecipes] = useState(false)
   const [isSyncingAddons, setIsSyncingAddons] = useState(false)
+  const [isAutoAssigningMeals, setIsAutoAssigningMeals] = useState(false)
   const [foodicsAuthCode, setFoodicsAuthCode] = useState("")
   const [isAuthorizingFoodics, setIsAuthorizingFoodics] = useState(false)
 
@@ -125,6 +126,27 @@ export default function DashboardHomePage() {
       })
     } finally {
       setIsSendingIntervals(false)
+    }
+  }
+
+  const handleAutoAssignMeals = async () => {
+    if (!ensureAuthToken()) return
+    setIsAutoAssigningMeals(true)
+    try {
+      await apiService.post("/test/auto-assign-meals", {})
+      toast({
+        title: "Auto-assign meals started",
+        description: "Backend job queued successfully.",
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unexpected error"
+      toast({
+        title: "Failed to start auto-assign",
+        description: message,
+        variant: "destructive",
+      })
+    } finally {
+      setIsAutoAssigningMeals(false)
     }
   }
 
@@ -386,6 +408,14 @@ export default function DashboardHomePage() {
                 disabled={isSendingIntervals}
               >
                 {isSendingIntervals ? "Sending..." : "Send Intervals to Foodics"}
+              </Button>
+
+              <Button
+                variant="outline"
+                onClick={handleAutoAssignMeals}
+                disabled={isAutoAssigningMeals}
+              >
+                {isAutoAssigningMeals ? "Auto-assigning..." : "Auto-assign Meals"}
               </Button>
 
               <div className="flex flex-col gap-3 sm:flex-row">
