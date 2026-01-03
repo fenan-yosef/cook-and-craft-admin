@@ -2558,6 +2558,7 @@ export default function RecipesPage() {
                             .slice(0, 50)
                             .map((t) => (
                               <div
+                     
                                 key={t.id}
                                 className="px-3 py-2 hover:bg-muted cursor-pointer text-sm"
                                 onClick={() => {

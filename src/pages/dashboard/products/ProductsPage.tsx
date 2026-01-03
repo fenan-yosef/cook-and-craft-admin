@@ -1,4 +1,4 @@
-  import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -706,7 +706,8 @@ export default function ProductsPage() {
       }
 
       // Ingredients main (use snake_case per Postman and include optional image)
-      addForm.ingredientsMain.forEach((ing, i) => {
+      const cleanIngredientsMain = addForm.ingredientsMain.filter(ing => ing.name.trim() !== "")
+      cleanIngredientsMain.forEach((ing, i) => {
         if (ing.name !== "") formData.append(`ingredients_main[${i}][name]`, ing.name)
         if (ing.emoji !== "") formData.append(`ingredients_main[${i}][emoji]`, ing.emoji)
         if (ing.amount !== "") formData.append(`ingredients_main[${i}][amount]`, ing.amount)
@@ -714,7 +715,8 @@ export default function ProductsPage() {
       })
 
       // Ingredients extra (snake_case + image)
-      addForm.ingredientsExtra.forEach((ing, i) => {
+      const cleanIngredientsExtra = addForm.ingredientsExtra.filter(ing => ing.name.trim() !== "")
+      cleanIngredientsExtra.forEach((ing, i) => {
         if (ing.name !== "") formData.append(`ingredients_extra[${i}][name]`, ing.name)
         if (ing.emoji !== "") formData.append(`ingredients_extra[${i}][emoji]`, ing.emoji)
         if (ing.amount !== "") formData.append(`ingredients_extra[${i}][amount]`, ing.amount)
@@ -722,12 +724,14 @@ export default function ProductsPage() {
       })
 
       // Ingredients not included (snake_case)
-      addForm.ingredientsNotIncluded.forEach((val, i) => {
+      const cleanIngredientsNotIncluded = addForm.ingredientsNotIncluded.filter(val => val.trim() !== "")
+      cleanIngredientsNotIncluded.forEach((val, i) => {
         if (val !== "") formData.append(`ingredients_not_included[${i}]`, val)
       })
 
       // Utensils
-      addForm.utensils.forEach((val, i) => {
+      const cleanUtensils = addForm.utensils.filter(val => val.trim() !== "")
+      cleanUtensils.forEach((val, i) => {
         if (val !== "") formData.append(`utensils[${i}]`, val)
       })
 
@@ -1067,7 +1071,8 @@ export default function ProductsPage() {
       }
 
       // Ingredients main (snake_case + optional image)
-      editForm.ingredientsMain.forEach((ing, i) => {
+      const cleanIngredientsMain = editForm.ingredientsMain.filter(ing => ing.name.trim() !== "")
+      cleanIngredientsMain.forEach((ing, i) => {
         if (ing.name !== "") formData.append(`ingredients_main[${i}][name]`, ing.name)
         if (ing.emoji !== "") formData.append(`ingredients_main[${i}][emoji]`, ing.emoji)
         if (ing.amount !== "") formData.append(`ingredients_main[${i}][amount]`, ing.amount)
@@ -1075,7 +1080,8 @@ export default function ProductsPage() {
       })
 
       // Ingredients extra (snake_case + optional image)
-      editForm.ingredientsExtra.forEach((ing, i) => {
+      const cleanIngredientsExtra = editForm.ingredientsExtra.filter(ing => ing.name.trim() !== "")
+      cleanIngredientsExtra.forEach((ing, i) => {
         if (ing.name !== "") formData.append(`ingredients_extra[${i}][name]`, ing.name)
         if (ing.emoji !== "") formData.append(`ingredients_extra[${i}][emoji]`, ing.emoji)
         if (ing.amount !== "") formData.append(`ingredients_extra[${i}][amount]`, ing.amount)
@@ -1083,12 +1089,14 @@ export default function ProductsPage() {
       })
 
       // Ingredients not included (snake_case)
-      editForm.ingredientsNotIncluded.forEach((val, i) => {
+      const cleanIngredientsNotIncluded = editForm.ingredientsNotIncluded.filter(val => val.trim() !== "")
+      cleanIngredientsNotIncluded.forEach((val, i) => {
         if (val !== "") formData.append(`ingredients_not_included[${i}]`, val)
       })
 
       // Utensils
-      editForm.utensils.forEach((val, i) => {
+      const cleanUtensils = editForm.utensils.filter(val => val.trim() !== "")
+      cleanUtensils.forEach((val, i) => {
         if (val !== "") formData.append(`utensils[${i}]`, val)
       })
 
