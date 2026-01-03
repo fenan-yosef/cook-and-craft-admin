@@ -34,6 +34,8 @@ type ApiRecipe = {
   Utensils?: Array<string | { name?: string }>
 }
 
+type TagContext = "frontend" | "auto_assignment" | "both"
+
 // Pending recipe requests (waiting for admin approval)
 type PendingRecipe = ApiRecipe & {
   Requested_By?: string
@@ -93,6 +95,8 @@ export default function RecipesPage() {
   const [tagsLoading, setTagsLoading] = useState(false)
   const [selectedEditTagIds, setSelectedEditTagIds] = useState<number[]>([])
   const [selectedCreateTagIds, setSelectedCreateTagIds] = useState<number[]>([])
+  const [createTagContexts, setCreateTagContexts] = useState<Record<string, TagContext>>({})
+  const [editTagContexts, setEditTagContexts] = useState<Record<string, TagContext>>({})
   // Simple search query states for tag dropdowns in Create/Edit dialogs
   const [createTagQuery, setCreateTagQuery] = useState<string>("")
   const [editTagQuery, setEditTagQuery] = useState<string>("")
@@ -377,6 +381,7 @@ export default function RecipesPage() {
     setNewImages([])
     setNewImagePreviews([])
     setSelectedCreateTagIds([])
+    setCreateTagContexts({})
   }
 
   const createRecipe = async () => {
@@ -444,17 +449,20 @@ export default function RecipesPage() {
       // Best choice flag
       fd.append("is_best_choice", newRecipe.isBestChoice ? "1" : "0")
 
-      // Tags on create: combine selected catalog tag NAMES with any manually entered tags
-      const selectedNames = Array.isArray(selectedCreateTagIds)
-        ? selectedCreateTagIds
-            .map((id) => tagOptions.find((t) => t.id === id)?.name)
-            .filter((n): n is string => typeof n === 'string' && n.trim().length > 0)
+      // Tags on create:
+      // - for catalog tags, send the tag ID in tags[i][name]
+      // - for custom tags, send the custom string in tags[i][name]
+      const selectedKeys = Array.isArray(selectedCreateTagIds)
+        ? selectedCreateTagIds.map((id) => String(id))
         : []
-      const manualNames = Array.isArray(newRecipe.Tags)
+      const manualKeys = Array.isArray(newRecipe.Tags)
         ? newRecipe.Tags.filter((t) => t && String(t).trim()).map((t) => String(t).trim())
         : []
-      const uniqueNames = Array.from(new Set([...selectedNames, ...manualNames]))
-      uniqueNames.forEach((name, i) => fd.append(`tags[${i}]`, name))
+      const uniqueKeys = Array.from(new Set([...selectedKeys, ...manualKeys]))
+      uniqueKeys.forEach((key, i) => {
+        fd.append(`tags[${i}][name]`, key)
+        fd.append(`tags[${i}][context]`, createTagContexts[key] ?? "frontend")
+      })
 
       const res: any = await apiService.postMultipart("/recipes", fd)
       const created = Array.isArray(res?.data) && res.data.length > 0 ? (res.data[0] as ApiRecipe) : null
@@ -575,6 +583,25 @@ export default function RecipesPage() {
       initialEditSteps = stepsArr.length > 0
         ? stepsArr.map((txt) => ({ instructions: txt, prep: 1, ingredientIndices: [], image: null, imageUrl: null, imageUrls: [] }))
         : [{ instructions: "", prep: 1, ingredientIndices: [], image: null, imageUrl: null, imageUrls: [] }]
+    }
+
+    // Initialize per-tag context mapping from API response
+    try {
+      const recTags: any[] = (recipe as any).Tags ?? (recipe as any).tags ?? []
+      const next: Record<string, TagContext> = {}
+      if (Array.isArray(recTags)) {
+        recTags.forEach((t: any) => {
+          const idKey = (typeof t?.id !== "undefined" && t?.id !== null) ? String(t.id) : ""
+          const nameKey = String(t?.name ?? t?.slug ?? t ?? "").trim()
+          const key = idKey || nameKey
+          if (!key) return
+          const ctx = String(t?.context ?? "").trim() as TagContext
+          next[key] = (ctx === "frontend" || ctx === "auto_assignment" || ctx === "both") ? ctx : "frontend"
+        })
+      }
+      setEditTagContexts(next)
+    } catch {
+      setEditTagContexts({})
     }
 
     setEditRecipe({
@@ -723,17 +750,28 @@ export default function RecipesPage() {
   // Best choice flag
   fd.append("is_best_choice", editRecipe.isBestChoice ? "1" : "0")
 
-      // Tags for edit: combine selected catalog tag NAMES and any custom tag inputs
-      const selectedNames: string[] = (Array.isArray(selectedEditTagIds) && Array.isArray(tagOptions) && tagOptions.length > 0)
-        ? (selectedEditTagIds
-            .map(id => tagOptions.find(t => t.id === id)?.name)
-            .filter((n): n is string => typeof n === 'string' && n.trim().length > 0))
+      // Tags for edit:
+      // - for catalog tags, send tag ID in tags[i][name]
+      // - for custom tags, send the custom string
+      const selectedKeys: string[] = Array.isArray(selectedEditTagIds)
+        ? selectedEditTagIds.map((id) => String(id))
         : []
-      const manualNames: string[] = Array.isArray(editRecipe.Tags)
-        ? editRecipe.Tags.filter((t) => t && String(t).trim()).map((t) => String(t).trim())
+      // Filter out catalog tag names from the manual list to avoid sending both the ID and the name.
+      const manualKeys: string[] = Array.isArray(editRecipe.Tags)
+        ? editRecipe.Tags
+            .filter((t) => t && String(t).trim())
+            .map((t) => String(t).trim())
+            .filter((label) => {
+              const lower = label.toLowerCase()
+              const match = tagOptions.find((o) => o.name.toLowerCase() === lower || (o.slug && o.slug.toLowerCase() === lower))
+              return !match
+            })
         : []
-      const uniqueNames = Array.from(new Set([...selectedNames, ...manualNames]))
-      uniqueNames.forEach((name, i) => fd.append(`tags[${i}]`, name))
+      const uniqueKeys = Array.from(new Set([...selectedKeys, ...manualKeys]))
+      uniqueKeys.forEach((key, i) => {
+        fd.append(`tags[${i}][name]`, key)
+        fd.append(`tags[${i}][context]`, editTagContexts[key] ?? "frontend")
+      })
 
       // Do NOT send existing images; backend will keep them if no new images replace them.
       // Only append newly added image files.
@@ -1049,7 +1087,14 @@ export default function RecipesPage() {
                             <button
                               type="button"
                               aria-label="Remove tag"
-                              onClick={() => setSelectedCreateTagIds((prev) => prev.filter((x) => x !== id))}
+                              onClick={() => {
+                                setSelectedCreateTagIds((prev) => prev.filter((x) => x !== id))
+                                setCreateTagContexts((prev) => {
+                                  const next = { ...prev }
+                                  delete next[String(id)]
+                                  return next
+                                })
+                              }}
                               className="ml-1 text-xs leading-none"
                             >
                               ×
@@ -1064,7 +1109,16 @@ export default function RecipesPage() {
                           <button
                             type="button"
                             aria-label="Remove custom tag"
-                            onClick={() => setNewRecipe((s) => ({ ...s, Tags: (s.Tags || []).filter((_, i) => i !== idx) }))}
+                            onClick={() => {
+                              setNewRecipe((s) => ({ ...s, Tags: (s.Tags || []).filter((_, i) => i !== idx) }))
+                              const name = String(t || "").trim()
+                              if (!name) return
+                              setCreateTagContexts((prev) => {
+                                const next = { ...prev }
+                                delete next[name]
+                                return next
+                              })
+                            }}
                             className="ml-1 text-xs leading-none"
                           >
                             ×
@@ -1072,6 +1126,48 @@ export default function RecipesPage() {
                         </Badge>
                       ))}
                     </div>
+
+                    {/* Context per tag */}
+                    {(() => {
+                      const selectedEntries = selectedCreateTagIds
+                        .map((id) => ({ key: String(id), label: tagOptions.find((x) => x.id === id)?.name ?? String(id) }))
+                      const manualEntries = (newRecipe.Tags || [])
+                        .map((t) => String(t || "").trim())
+                        .filter(Boolean)
+                        .map((name) => ({ key: name, label: name }))
+                      const all = [...selectedEntries, ...manualEntries]
+                      const seen = new Set<string>()
+                      const entries = all.filter((e) => {
+                        if (seen.has(e.key)) return false
+                        seen.add(e.key)
+                        return true
+                      })
+                      if (entries.length === 0) return null
+                      return (
+                        <div className="grid gap-2">
+                          {entries.map((t) => (
+                            <div key={t.key} className="flex items-center gap-3">
+                              <div className="text-sm flex-1 truncate">{t.label}</div>
+                              <div className="w-[190px]">
+                                <Select
+                                  value={createTagContexts[t.key] ?? "frontend"}
+                                  onValueChange={(v) => setCreateTagContexts((prev) => ({ ...prev, [t.key]: v as TagContext }))}
+                                >
+                                  <SelectTrigger className="h-8">
+                                    <SelectValue placeholder="Select context" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="frontend">frontend</SelectItem>
+                                    <SelectItem value="auto_assignment">auto_assignment</SelectItem>
+                                    <SelectItem value="both">both</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    })()}
 
                     {/* Searchable dropdown input */}
                     <div className="relative">
@@ -1089,8 +1185,10 @@ export default function RecipesPage() {
                               const match = tagOptions.find((x) => x.name.toLowerCase() === q.toLowerCase())
                               if (match) {
                                 setSelectedCreateTagIds((prev) => Array.from(new Set([...prev, match.id])))
+                                setCreateTagContexts((prev) => ({ ...prev, [String(match.id)]: prev[String(match.id)] ?? "frontend" }))
                               } else {
                                 setNewRecipe((s) => ({ ...s, Tags: [...(s.Tags || []), q] }))
+                                setCreateTagContexts((prev) => ({ ...prev, [q]: prev[q] ?? "frontend" }))
                               }
                               setCreateTagQuery("")
                               setShowCreateDropdown(false)
@@ -1122,6 +1220,7 @@ export default function RecipesPage() {
                                 className="px-3 py-2 hover:bg-muted cursor-pointer text-sm"
                                 onClick={() => {
                                   setSelectedCreateTagIds((prev) => Array.from(new Set([...prev, t.id])))
+                                  setCreateTagContexts((prev) => ({ ...prev, [String(t.id)]: prev[String(t.id)] ?? "frontend" }))
                                   setCreateTagQuery("")
                                   setShowCreateDropdown(false)
                                 }}
@@ -1142,15 +1241,44 @@ export default function RecipesPage() {
                         placeholder="Type a custom tag name"
                         value={t}
                         onChange={(e) => {
+                          const prevVal = String((newRecipe.Tags || [])[idx] ?? "").trim()
                           const arr = [...(newRecipe.Tags || [])]
                           arr[idx] = e.target.value
                           setNewRecipe((s) => ({ ...s, Tags: arr }))
+
+                          const nextVal = String(e.target.value ?? "").trim()
+                          if (!prevVal && nextVal) {
+                            setCreateTagContexts((prev) => ({ ...prev, [nextVal]: prev[nextVal] ?? "frontend" }))
+                          } else if (prevVal && nextVal && prevVal !== nextVal) {
+                            setCreateTagContexts((prev) => {
+                              const next = { ...prev }
+                              const ctx = next[prevVal] ?? "frontend"
+                              delete next[prevVal]
+                              next[nextVal] = ctx
+                              return next
+                            })
+                          } else if (prevVal && !nextVal) {
+                            setCreateTagContexts((prev) => {
+                              const next = { ...prev }
+                              delete next[prevVal]
+                              return next
+                            })
+                          }
                         }}
                       />
                       <button
                         type="button"
                         className="px-2 rounded border text-sm hover:bg-muted"
-                        onClick={() => setNewRecipe((s) => ({ ...s, Tags: (s.Tags || []).filter((_, i) => i !== idx) }))}
+                        onClick={() => {
+                          const name = String((newRecipe.Tags || [])[idx] ?? "").trim()
+                          setNewRecipe((s) => ({ ...s, Tags: (s.Tags || []).filter((_, i) => i !== idx) }))
+                          if (!name) return
+                          setCreateTagContexts((prev) => {
+                            const next = { ...prev }
+                            delete next[name]
+                            return next
+                          })
+                        }}
                         aria-label="Remove tag"
                         title="Remove"
                       >
@@ -1159,7 +1287,7 @@ export default function RecipesPage() {
                     </div>
                   ))}
                 </div>
-                <p className="text-xs text-muted-foreground">Sent as tags[i] (names from catalog and custom).</p>
+                <p className="text-xs text-muted-foreground">Sent as tags[i][name] + tags[i][context].</p>
               </div>
 
               {/* Steps builder */}
@@ -1813,7 +1941,10 @@ export default function RecipesPage() {
                             <h3 className="font-semibold mb-2">Tags</h3>
                             <div className="flex flex-wrap gap-2">
                               {tags.map((t: any, i: number) => (
-                                <Badge key={i} variant="secondary">{t?.name || t?.slug || `#${t?.id ?? i+1}`}</Badge>
+                                <Badge key={i} variant="secondary">
+                                  {t?.name || t?.slug || `#${t?.id ?? i + 1}`}
+                                  {t?.context ? ` · ${String(t.context)}` : ""}
+                                </Badge>
                               ))}
                             </div>
                           </div>
@@ -2294,7 +2425,14 @@ export default function RecipesPage() {
                             <button
                               type="button"
                               aria-label="Remove tag"
-                              onClick={() => setSelectedEditTagIds((prev) => prev.filter((x) => x !== id))}
+                              onClick={() => {
+                                setSelectedEditTagIds((prev) => prev.filter((x) => x !== id))
+                                setEditTagContexts((prev) => {
+                                  const next = { ...prev }
+                                  delete next[String(id)]
+                                  return next
+                                })
+                              }}
                               className="ml-1 text-xs leading-none"
                             >
                               ×
@@ -2309,7 +2447,16 @@ export default function RecipesPage() {
                           <button
                             type="button"
                             aria-label="Remove custom tag"
-                            onClick={() => setEditRecipe((s) => ({ ...s, Tags: (Array.isArray(s.Tags) ? s.Tags : []).filter((_, i) => i !== idx) }))}
+                            onClick={() => {
+                              setEditRecipe((s) => ({ ...s, Tags: (Array.isArray(s.Tags) ? s.Tags : []).filter((_, i) => i !== idx) }))
+                              const name = String(t || "").trim()
+                              if (!name) return
+                              setEditTagContexts((prev) => {
+                                const next = { ...prev }
+                                delete next[name]
+                                return next
+                              })
+                            }}
                             className="ml-1 text-xs leading-none"
                           >
                             ×
@@ -2317,6 +2464,53 @@ export default function RecipesPage() {
                         </Badge>
                       ))}
                     </div>
+
+                    {/* Context per tag */}
+                    {(() => {
+                      const selectedEntries = selectedEditTagIds
+                        .map((id) => ({ key: String(id), label: tagOptions.find((x) => x.id === id)?.name ?? String(id) }))
+                      const manualEntries = (Array.isArray(editRecipe.Tags) ? editRecipe.Tags : [])
+                        .map((t) => String(t || "").trim())
+                        .filter(Boolean)
+                        .filter((label) => {
+                          const lower = label.toLowerCase()
+                          const match = tagOptions.find((o) => o.name.toLowerCase() === lower || (o.slug && o.slug.toLowerCase() === lower))
+                          return !match
+                        })
+                        .map((name) => ({ key: name, label: name }))
+                      const all = [...selectedEntries, ...manualEntries]
+                      const seen = new Set<string>()
+                      const entries = all.filter((e) => {
+                        if (seen.has(e.key)) return false
+                        seen.add(e.key)
+                        return true
+                      })
+                      if (entries.length === 0) return null
+                      return (
+                        <div className="grid gap-2">
+                          {entries.map((t) => (
+                            <div key={t.key} className="flex items-center gap-3">
+                              <div className="text-sm flex-1 truncate">{t.label}</div>
+                              <div className="w-[190px]">
+                                <Select
+                                  value={editTagContexts[t.key] ?? "frontend"}
+                                  onValueChange={(v) => setEditTagContexts((prev) => ({ ...prev, [t.key]: v as TagContext }))}
+                                >
+                                  <SelectTrigger className="h-8">
+                                    <SelectValue placeholder="Select context" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="frontend">frontend</SelectItem>
+                                    <SelectItem value="auto_assignment">auto_assignment</SelectItem>
+                                    <SelectItem value="both">both</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    })()}
 
                     <div className="relative">
                       <div className="flex items-center">
@@ -2333,8 +2527,10 @@ export default function RecipesPage() {
                               const match = tagOptions.find((x) => x.name.toLowerCase() === q.toLowerCase())
                               if (match) {
                                 setSelectedEditTagIds((prev) => Array.from(new Set([...prev, match.id])))
+                                setEditTagContexts((prev) => ({ ...prev, [String(match.id)]: prev[String(match.id)] ?? "frontend" }))
                               } else {
                                 setEditRecipe((s) => ({ ...s, Tags: [...(Array.isArray(s.Tags) ? s.Tags : []), q] }))
+                                setEditTagContexts((prev) => ({ ...prev, [q]: prev[q] ?? "frontend" }))
                               }
                               setEditTagQuery("")
                               setShowEditDropdown(false)
@@ -2366,6 +2562,7 @@ export default function RecipesPage() {
                                 className="px-3 py-2 hover:bg-muted cursor-pointer text-sm"
                                 onClick={() => {
                                   setSelectedEditTagIds((prev) => Array.from(new Set([...prev, t.id])))
+                                  setEditTagContexts((prev) => ({ ...prev, [String(t.id)]: prev[String(t.id)] ?? "frontend" }))
                                   setEditTagQuery("")
                                   setShowEditDropdown(false)
                                 }}
@@ -2386,15 +2583,44 @@ export default function RecipesPage() {
                         placeholder="Type a custom tag name"
                         value={t}
                         onChange={(e) => {
+                          const prevVal = String((editRecipe.Tags || [])[idx] ?? "").trim()
                           const arr = [...(editRecipe.Tags || [])]
                           arr[idx] = e.target.value
                           setEditRecipe((s) => ({ ...s, Tags: arr }))
+
+                          const nextVal = String(e.target.value ?? "").trim()
+                          if (!prevVal && nextVal) {
+                            setEditTagContexts((prev) => ({ ...prev, [nextVal]: prev[nextVal] ?? "frontend" }))
+                          } else if (prevVal && nextVal && prevVal !== nextVal) {
+                            setEditTagContexts((prev) => {
+                              const next = { ...prev }
+                              const ctx = next[prevVal] ?? "frontend"
+                              delete next[prevVal]
+                              next[nextVal] = ctx
+                              return next
+                            })
+                          } else if (prevVal && !nextVal) {
+                            setEditTagContexts((prev) => {
+                              const next = { ...prev }
+                              delete next[prevVal]
+                              return next
+                            })
+                          }
                         }}
                       />
                       <button
                         type="button"
                         className="px-2 rounded border text-sm hover:bg-muted"
-                        onClick={() => setEditRecipe((s) => ({ ...s, Tags: (s.Tags || []).filter((_, i) => i !== idx) }))}
+                        onClick={() => {
+                          const name = String((editRecipe.Tags || [])[idx] ?? "").trim()
+                          setEditRecipe((s) => ({ ...s, Tags: (s.Tags || []).filter((_, i) => i !== idx) }))
+                          if (!name) return
+                          setEditTagContexts((prev) => {
+                            const next = { ...prev }
+                            delete next[name]
+                            return next
+                          })
+                        }}
                         aria-label="Remove tag"
                         title="Remove"
                       >
@@ -2403,7 +2629,7 @@ export default function RecipesPage() {
                     </div>
                   ))}
                 </div>
-                <p className="text-xs text-muted-foreground">Sent as tags[i] (names from catalog and custom).</p>
+                <p className="text-xs text-muted-foreground">Sent as tags[i][name] + tags[i][context].</p>
               </div>
 
               {/* Steps builder (edit) */}
