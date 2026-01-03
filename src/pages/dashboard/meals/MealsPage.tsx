@@ -112,7 +112,7 @@ export default function MealsPage() {
   const fetchRecipesOptions = async () => {
     try {
       setRecipesLoading(true)
-      const res = await apiService.get("/recipes")
+      const res = await apiService.get("/admins/recipes")
       const items: any[] = Array.isArray(res?.data) ? res.data : []
       const opts = items.map((r) => ({ id: r.Recipe_ID ?? r.id ?? r.recipe_id, name: r.Name ?? r.name ?? "Unnamed" })).filter((o) => o.id)
       setRecipesOptions(opts)

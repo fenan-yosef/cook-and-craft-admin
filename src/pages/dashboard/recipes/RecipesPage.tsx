@@ -319,7 +319,7 @@ export default function RecipesPage() {
       }
 
       const query = [`page=${page}`, `per_Page=${size}`, ...filterParts].join("&")
-      const res = await apiService.get(`/recipes?${query}`)
+      const res = await apiService.get(`/admins/recipes?${query}`)
       const items: ApiRecipe[] = Array.isArray(res?.data) ? res.data : []
       setRecipes(items)
 
@@ -337,7 +337,7 @@ export default function RecipesPage() {
     } catch (error: any) {
       // Fallback: try a minimal query if per_page unsupported
       try {
-        const res2 = await apiService.get(`/recipes?page=${page}&limit=${size}`)
+        const res2 = await apiService.get(`/admins/recipes?page=${page}&limit=${size}`)
         const items2: ApiRecipe[] = Array.isArray(res2?.data) ? res2.data : []
         setRecipes(items2)
         // Best-effort meta from fallback
@@ -487,9 +487,22 @@ export default function RecipesPage() {
     }
   }
 
-  const viewRecipe = (recipe: ApiRecipe) => {
-    setSelectedRecipe(recipe)
+  const viewRecipe = async (recipe: ApiRecipe) => {
+    // Open dialog immediately and fetch detailed recipe from admin endpoint
+    setSelectedRecipe(null)
     setIsViewDialogOpen(true)
+    try {
+      const res: any = await apiService.get(`/admins/recipes/${recipe.Recipe_ID}`)
+      // API may return { data: { ... } } or { ... }
+      const payload = res?.data?.data ?? res?.data ?? res
+      // If payload is an array, take first element
+      const detail = Array.isArray(payload) && payload.length > 0 ? payload[0] : payload
+      setSelectedRecipe(detail as ApiRecipe)
+    } catch (error: any) {
+      // Fallback to using the passed recipe if fetch fails
+      setSelectedRecipe(recipe)
+      toast({ title: "Error", description: error?.message || "Failed to load recipe details", variant: "destructive" })
+    }
   }
 
   const deleteRecipe = async (recipe: ApiRecipe) => {
